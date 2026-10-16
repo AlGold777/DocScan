@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX RecentDocument_export ON RecentDocument(export_artifact_id);
+ALTER TABLE ExternalExportPackage ADD COLUMN ocr_status TEXT NOT NULL DEFAULT 'NONE';

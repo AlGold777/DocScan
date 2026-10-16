@@ -1,0 +1,8 @@
+CREATE TABLE SavedPdfEditComposition (
+  save_manifest_id TEXT NOT NULL PRIMARY KEY REFERENCES SaveManifest(save_manifest_id),
+  source_export_artifact_id TEXT NOT NULL REFERENCES ExportArtifact(export_artifact_id),
+  source_pdf_artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  source_pdf_sha256 TEXT NOT NULL CHECK (length(source_pdf_sha256) = 64),
+  source_page_count INTEGER NOT NULL CHECK (source_page_count > 0),
+  output_page_order TEXT NOT NULL
+);

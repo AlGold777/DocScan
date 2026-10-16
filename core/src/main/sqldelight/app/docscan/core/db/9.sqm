@@ -1,0 +1,12 @@
+CREATE TABLE SaveOutputPublicationIntent (
+  artifact_id TEXT NOT NULL PRIMARY KEY,
+  save_manifest_id TEXT NOT NULL REFERENCES SaveManifest(save_manifest_id),
+  output_ordinal INTEGER NOT NULL CHECK (output_ordinal >= 0),
+  extension TEXT NOT NULL CHECK (extension IN ('pdf', 'jpg')),
+  relative_storage_path TEXT NOT NULL UNIQUE,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+  checksum TEXT NOT NULL CHECK (length(checksum) = 64),
+  artifact_format_version INTEGER NOT NULL CHECK (artifact_format_version > 0),
+  producer_epoch TEXT NOT NULL,
+  UNIQUE(save_manifest_id, output_ordinal)
+);

@@ -1,0 +1,6 @@
+CREATE TABLE DestinationGrant (
+  grant_id TEXT NOT NULL PRIMARY KEY CHECK (grant_id = 'ACTIVE'),
+  tree_uri TEXT NOT NULL CHECK (length(tree_uri) > 0),
+  granted_wall INTEGER NOT NULL CHECK (granted_wall >= 0),
+  last_verified_wall INTEGER NOT NULL CHECK (last_verified_wall >= granted_wall)
+);

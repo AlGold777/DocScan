@@ -1,0 +1,24 @@
+ALTER TABLE ExportAttempt ADD COLUMN output_artifact_id TEXT REFERENCES ArtifactRecord(artifact_id);
+
+CREATE TABLE ExternalExportPackage (
+  export_artifact_id TEXT NOT NULL PRIMARY KEY REFERENCES ExportArtifact(export_artifact_id),
+  destination_tree_uri TEXT NOT NULL,
+  common_basename TEXT NOT NULL,
+  provider_qualification_id TEXT NOT NULL REFERENCES ProviderQualification(qualification_id),
+  adapter_id TEXT NOT NULL,
+  provider_version TEXT NOT NULL,
+  os_version TEXT NOT NULL,
+  destination_access_class TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('READY', 'WRITING_EXTERNAL', 'UNKNOWN_OUTCOME', 'PARTIAL', 'SUCCEEDED', 'FAILED_KNOWN')),
+  last_error TEXT
+);
+
+CREATE TABLE ExternalExportPackageOutput (
+  export_artifact_id TEXT NOT NULL REFERENCES ExternalExportPackage(export_artifact_id),
+  output_artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  display_name TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  PRIMARY KEY (export_artifact_id, output_artifact_id),
+  UNIQUE (export_artifact_id, display_name),
+  UNIQUE (export_artifact_id, ordinal)
+);

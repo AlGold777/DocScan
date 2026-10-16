@@ -1,0 +1,1254 @@
+CREATE TABLE Workspace (
+  workspace_id TEXT NOT NULL PRIMARY KEY,
+  order_revision INTEGER NOT NULL CHECK (order_revision >= 0),
+  active_page_id TEXT,
+  last_user_activity_wall INTEGER NOT NULL CHECK (last_user_activity_wall >= 0),
+  last_user_activity_monotonic INTEGER NOT NULL CHECK (last_user_activity_monotonic >= 0),
+  monotonic_epoch_token TEXT NOT NULL CHECK (length(monotonic_epoch_token) > 0),
+  retention_time_uncertain INTEGER NOT NULL CHECK (retention_time_uncertain IN (0, 1))
+);
+
+CREATE TABLE WorkspaceSession (
+  workspace_session_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  state TEXT NOT NULL CHECK (state IN ('OPEN', 'CLOSED'))
+);
+
+CREATE UNIQUE INDEX WorkspaceSession_one_open_per_workspace
+ON WorkspaceSession(workspace_id) WHERE state = 'OPEN';
+
+CREATE TABLE ArtifactRecord (
+  artifact_id TEXT NOT NULL PRIMARY KEY,
+  relative_storage_path TEXT NOT NULL UNIQUE,
+  artifact_kind TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+  checksum TEXT,
+  artifact_format_version INTEGER NOT NULL CHECK (artifact_format_version > 0),
+  creation_revision INTEGER,
+  state TEXT NOT NULL CHECK (state IN ('STAGED_DURABLE', 'COMMITTED', 'GC_CLAIMED', 'QUARANTINED')),
+  producer_epoch TEXT,
+  gc_claim_token TEXT,
+  storage_state TEXT NOT NULL DEFAULT 'PRESENT'
+);
+
+CREATE TABLE ArtifactReference (
+  artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  ref_kind TEXT NOT NULL,
+  ref_owner_id TEXT NOT NULL,
+  protection_class TEXT NOT NULL CHECK (protection_class IN ('AUTHORITATIVE', 'RECOVERY', 'UNDO', 'SAVE', 'EXPORT')),
+  PRIMARY KEY (artifact_id, ref_kind, ref_owner_id)
+);
+
+CREATE TABLE ImageVersion (
+  image_version_id TEXT NOT NULL PRIMARY KEY,
+  page_id TEXT NOT NULL,
+  artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  parent_version_id TEXT REFERENCES ImageVersion(image_version_id),
+  coordinate_space TEXT NOT NULL,
+  transform_provenance TEXT NOT NULL,
+  artifact_format_version INTEGER NOT NULL CHECK (artifact_format_version > 0)
+);
+
+CREATE TABLE Page (
+  page_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  workspace_session_id TEXT NOT NULL REFERENCES WorkspaceSession(workspace_session_id),
+  order_index INTEGER NOT NULL CHECK (order_index >= 0),
+  selected INTEGER NOT NULL CHECK (selected IN (0, 1)),
+  content_revision INTEGER NOT NULL CHECK (content_revision > 0),
+  current_image_version_id TEXT NOT NULL REFERENCES ImageVersion(image_version_id),
+  undo_image_version_id TEXT REFERENCES ImageVersion(image_version_id),
+  undo_workspace_session_id TEXT REFERENCES WorkspaceSession(workspace_session_id),
+  processing_desired_state TEXT NOT NULL,
+  current_recognition_id TEXT REFERENCES Recognition(recognition_id),
+  tombstone INTEGER NOT NULL CHECK (tombstone IN (0, 1)),
+  tombstone_at_wall INTEGER CHECK (tombstone_at_wall IS NULL OR tombstone_at_wall >= 0),
+  import_session_id TEXT,
+  source_page_index INTEGER CHECK (source_page_index IS NULL OR source_page_index >= 0),
+  source_provenance TEXT NOT NULL,
+  select_when_ready INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX Page_visible_order
+ON Page(workspace_id, order_index) WHERE tombstone = 0;
+
+CREATE UNIQUE INDEX Page_import_tuple
+ON Page(import_session_id, source_page_index)
+WHERE import_session_id IS NOT NULL AND source_page_index IS NOT NULL;
+
+CREATE TABLE DeleteUndo (
+  page_id TEXT NOT NULL PRIMARY KEY REFERENCES Page(page_id),
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  previous_order_index INTEGER NOT NULL CHECK (previous_order_index >= 0),
+  was_selected INTEGER NOT NULL CHECK (was_selected IN (0, 1)),
+  was_active INTEGER NOT NULL CHECK (was_active IN (0, 1)),
+  deleted_wall INTEGER NOT NULL CHECK (deleted_wall >= 0),
+  undo_until_wall INTEGER NOT NULL CHECK (undo_until_wall >= deleted_wall),
+  undo_until_monotonic INTEGER NOT NULL CHECK (undo_until_monotonic >= 0),
+  monotonic_epoch_token TEXT NOT NULL,
+  undo_workspace_session_id TEXT NOT NULL REFERENCES WorkspaceSession(workspace_session_id),
+  undo_batch_id TEXT
+);
+
+CREATE TABLE Recognition (
+  recognition_id TEXT NOT NULL PRIMARY KEY,
+  page_id TEXT NOT NULL REFERENCES Page(page_id),
+  image_version_id TEXT NOT NULL REFERENCES ImageVersion(image_version_id),
+  payload TEXT NOT NULL
+);
+
+CREATE TABLE ProcessingResult (
+  processing_result_id TEXT NOT NULL PRIMARY KEY,
+  page_id TEXT NOT NULL REFERENCES Page(page_id),
+  image_version_id TEXT NOT NULL REFERENCES ImageVersion(image_version_id),
+  operation_key TEXT NOT NULL,
+  result_kind TEXT NOT NULL,
+  payload TEXT,
+  artifact_id TEXT REFERENCES ArtifactRecord(artifact_id)
+);
+
+CREATE TABLE SaveManifest (
+  save_manifest_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  manifest_format_version INTEGER NOT NULL CHECK (manifest_format_version > 0),
+  frozen_payload TEXT NOT NULL
+);
+
+CREATE TABLE SaveOutputPublicationIntent (
+  artifact_id TEXT NOT NULL PRIMARY KEY,
+  save_manifest_id TEXT NOT NULL REFERENCES SaveManifest(save_manifest_id),
+  output_ordinal INTEGER NOT NULL CHECK (output_ordinal >= 0),
+  extension TEXT NOT NULL CHECK (extension IN ('pdf', 'jpg')),
+  relative_storage_path TEXT NOT NULL UNIQUE,
+  size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+  checksum TEXT NOT NULL CHECK (length(checksum) = 64),
+  artifact_format_version INTEGER NOT NULL CHECK (artifact_format_version > 0),
+  producer_epoch TEXT NOT NULL,
+  UNIQUE(save_manifest_id, output_ordinal)
+);
+
+CREATE TABLE SaveDependencyResult (
+  save_dependency_result_id TEXT NOT NULL PRIMARY KEY,
+  save_manifest_id TEXT NOT NULL REFERENCES SaveManifest(save_manifest_id),
+  image_version_id TEXT NOT NULL REFERENCES ImageVersion(image_version_id),
+  dependency_kind TEXT NOT NULL,
+  dependency_spec TEXT NOT NULL,
+  payload TEXT,
+  artifact_id TEXT REFERENCES ArtifactRecord(artifact_id)
+);
+
+CREATE TABLE ExportArtifact (
+  export_artifact_id TEXT NOT NULL PRIMARY KEY,
+  save_manifest_id TEXT NOT NULL REFERENCES SaveManifest(save_manifest_id),
+  output_kind TEXT NOT NULL,
+  artifact_set_payload TEXT NOT NULL,
+  artifact_format_version INTEGER NOT NULL CHECK (artifact_format_version > 0),
+  structural_validation_version INTEGER NOT NULL CHECK (structural_validation_version > 0)
+);
+
+CREATE TABLE SavedPdfEditComposition (
+  save_manifest_id TEXT NOT NULL PRIMARY KEY REFERENCES SaveManifest(save_manifest_id),
+  source_export_artifact_id TEXT NOT NULL REFERENCES ExportArtifact(export_artifact_id),
+  source_pdf_artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  source_pdf_sha256 TEXT NOT NULL CHECK (length(source_pdf_sha256) = 64),
+  source_page_count INTEGER NOT NULL CHECK (source_page_count > 0),
+  output_page_order TEXT NOT NULL
+);
+
+CREATE TABLE ExportAttempt (
+  export_attempt_id TEXT NOT NULL PRIMARY KEY,
+  export_artifact_id TEXT NOT NULL REFERENCES ExportArtifact(export_artifact_id),
+  durable_workflow_payload_version INTEGER NOT NULL CHECK (durable_workflow_payload_version > 0),
+  destination_descriptor TEXT NOT NULL,
+  frozen_provider_parameters TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('WRITING_EXTERNAL', 'UNKNOWN_OUTCOME', 'SUCCEEDED', 'FAILED_KNOWN')),
+  external_identity TEXT,
+  operation_observation_id TEXT,
+  known_error TEXT,
+  output_artifact_id TEXT REFERENCES ArtifactRecord(artifact_id)
+);
+
+CREATE TABLE ImportSession (
+  import_session_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  durable_workflow_payload_version INTEGER NOT NULL CHECK (durable_workflow_payload_version > 0),
+  frozen_operation_parameters TEXT NOT NULL,
+  source_snapshot_artifact_id TEXT REFERENCES ArtifactRecord(artifact_id),
+  persistent_access_descriptor TEXT,
+  state TEXT NOT NULL CHECK (state IN ('OPEN', 'COMPLETED', 'CANCELLED', 'SOURCE_UNAVAILABLE', 'UNSUPPORTED_LEGACY_WORKFLOW')),
+  source_page_count INTEGER CHECK (source_page_count IS NULL OR source_page_count >= 0),
+  order_policy TEXT NOT NULL CHECK (order_policy = 'APPEND_ON_COMMIT'),
+  source_display_name TEXT NOT NULL DEFAULT '',
+  last_error TEXT
+);
+
+CREATE TABLE PdfImportPublicationIntent (
+  import_session_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  source_display_name TEXT NOT NULL
+);
+
+CREATE TABLE ImageImportPublicationIntent (
+  import_session_id TEXT NOT NULL PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES Workspace(workspace_id),
+  source_display_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  artifact_id TEXT NOT NULL UNIQUE,
+  page_id TEXT NOT NULL UNIQUE,
+  image_version_id TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE ProviderQualification (
+  qualification_id TEXT NOT NULL PRIMARY KEY,
+  adapter_id TEXT NOT NULL,
+  provider_version TEXT NOT NULL,
+  os_version TEXT NOT NULL,
+  destination_access_class TEXT NOT NULL,
+  validation_suite_version TEXT NOT NULL,
+  qualified_capabilities_payload TEXT NOT NULL
+);
+
+CREATE TABLE ExternalExportPackage (
+  export_artifact_id TEXT NOT NULL PRIMARY KEY REFERENCES ExportArtifact(export_artifact_id),
+  destination_tree_uri TEXT NOT NULL,
+  common_basename TEXT NOT NULL,
+  provider_qualification_id TEXT NOT NULL REFERENCES ProviderQualification(qualification_id),
+  adapter_id TEXT NOT NULL,
+  provider_version TEXT NOT NULL,
+  os_version TEXT NOT NULL,
+  destination_access_class TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('READY', 'WRITING_EXTERNAL', 'UNKNOWN_OUTCOME', 'PARTIAL', 'SUCCEEDED', 'FAILED_KNOWN')),
+  last_error TEXT,
+  ocr_status TEXT NOT NULL DEFAULT 'NONE'
+);
+
+CREATE TABLE ExternalExportPackageOutput (
+  export_artifact_id TEXT NOT NULL REFERENCES ExternalExportPackage(export_artifact_id),
+  output_artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+  display_name TEXT NOT NULL,
+  ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+  PRIMARY KEY (export_artifact_id, output_artifact_id),
+  UNIQUE (export_artifact_id, display_name),
+  UNIQUE (export_artifact_id, ordinal)
+);
+
+CREATE TABLE DestinationGrant (
+  grant_id TEXT NOT NULL PRIMARY KEY CHECK (grant_id = 'ACTIVE'),
+  tree_uri TEXT NOT NULL CHECK (length(tree_uri) > 0),
+  granted_wall INTEGER NOT NULL CHECK (granted_wall >= 0),
+  last_verified_wall INTEGER NOT NULL CHECK (last_verified_wall >= granted_wall)
+);
+
+CREATE TABLE ProviderOperationObservation (
+  observation_id TEXT NOT NULL PRIMARY KEY,
+  export_attempt_id TEXT NOT NULL REFERENCES ExportAttempt(export_attempt_id),
+  identity_evidence TEXT,
+  existence_evidence TEXT,
+  integrity_evidence TEXT,
+  readability_evidence TEXT,
+  name_evidence TEXT,
+  access_evidence TEXT
+);
+
+CREATE TABLE MaintenanceCursor (
+  domain TEXT NOT NULL PRIMARY KEY,
+  cursor_payload TEXT NOT NULL,
+  cursor_format_version INTEGER NOT NULL CHECK (cursor_format_version > 0)
+);
+
+CREATE TABLE RecentDocument (
+  recent_id TEXT NOT NULL PRIMARY KEY,
+  export_artifact_id TEXT NOT NULL REFERENCES ExportArtifact(export_artifact_id),
+  document_uri TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  page_count INTEGER NOT NULL CHECK (page_count > 0),
+  saved_wall INTEGER NOT NULL CHECK (saved_wall >= 0),
+  ocr_status TEXT NOT NULL CHECK (ocr_status IN ('FULL', 'PARTIAL', 'NONE'))
+);
+
+workspaceBootstrapState:
+SELECT CASE
+  WHEN EXISTS (SELECT 1 FROM Workspace) THEN 'EXISTING'
+  WHEN EXISTS (SELECT 1 FROM WorkspaceSession)
+    OR EXISTS (SELECT 1 FROM ArtifactRecord)
+    OR EXISTS (SELECT 1 FROM ArtifactReference)
+    OR EXISTS (SELECT 1 FROM ImageVersion)
+    OR EXISTS (SELECT 1 FROM Page)
+    OR EXISTS (SELECT 1 FROM DeleteUndo)
+    OR EXISTS (SELECT 1 FROM Recognition)
+    OR EXISTS (SELECT 1 FROM ProcessingResult)
+    OR EXISTS (SELECT 1 FROM SaveManifest)
+    OR EXISTS (SELECT 1 FROM SaveOutputPublicationIntent)
+    OR EXISTS (SELECT 1 FROM SaveDependencyResult)
+    OR EXISTS (SELECT 1 FROM ExportArtifact)
+    OR EXISTS (SELECT 1 FROM SavedPdfEditComposition)
+    OR EXISTS (SELECT 1 FROM ExportAttempt)
+    OR EXISTS (SELECT 1 FROM ImportSession)
+    OR EXISTS (SELECT 1 FROM ProviderQualification)
+    OR EXISTS (SELECT 1 FROM ExternalExportPackage)
+    OR EXISTS (SELECT 1 FROM ExternalExportPackageOutput)
+    OR EXISTS (SELECT 1 FROM DestinationGrant)
+    OR EXISTS (SELECT 1 FROM ProviderOperationObservation)
+    OR EXISTS (SELECT 1 FROM MaintenanceCursor)
+    OR EXISTS (SELECT 1 FROM RecentDocument) THEN 'ORPHANED'
+  ELSE 'EMPTY'
+END;
+CREATE UNIQUE INDEX RecentDocument_export ON RecentDocument(export_artifact_id);
+
+insertWorkspace:
+INSERT INTO Workspace(workspace_id, order_revision, active_page_id,
+  last_user_activity_wall, last_user_activity_monotonic, monotonic_epoch_token,
+  retention_time_uncertain)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+workspaceById:
+SELECT * FROM Workspace WHERE workspace_id = ?;
+
+firstWorkspace:
+SELECT * FROM Workspace ORDER BY workspace_id LIMIT 1;
+
+updateWorkspaceActivity:
+UPDATE Workspace SET last_user_activity_wall = ?, last_user_activity_monotonic = ?,
+  monotonic_epoch_token = ?, retention_time_uncertain = 0
+WHERE workspace_id = ?;
+
+insertWorkspaceSession:
+INSERT INTO WorkspaceSession(workspace_session_id, workspace_id, state)
+VALUES (?, ?, ?);
+
+openSessionForWorkspace:
+SELECT * FROM WorkspaceSession WHERE workspace_id = ? AND state = 'OPEN';
+
+insertStagedArtifact:
+INSERT INTO ArtifactRecord(artifact_id, relative_storage_path, artifact_kind, size_bytes,
+  checksum, artifact_format_version, creation_revision, state, producer_epoch, gc_claim_token)
+VALUES (?, ?, ?, ?, ?, ?, ?, 'STAGED_DURABLE', ?, NULL);
+
+artifactById:
+SELECT * FROM ArtifactRecord WHERE artifact_id = ?;
+
+imageVersionById:
+SELECT * FROM ImageVersion WHERE image_version_id = ?;
+
+commitArtifact:
+UPDATE ArtifactRecord SET state = 'COMMITTED'
+WHERE artifact_id = ? AND state = 'STAGED_DURABLE';
+
+insertImageVersion:
+INSERT INTO ImageVersion(image_version_id, page_id, artifact_id, parent_version_id,
+  coordinate_space, transform_provenance, artifact_format_version)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+insertPage:
+INSERT INTO Page(page_id, workspace_id, workspace_session_id, order_index, selected, select_when_ready,
+  content_revision, current_image_version_id, undo_image_version_id,
+  undo_workspace_session_id, processing_desired_state, current_recognition_id,
+  tombstone, import_session_id, source_page_index, source_provenance)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, 0, NULL, NULL, ?);
+
+visiblePages:
+SELECT * FROM Page WHERE workspace_id = ? AND tombstone = 0 ORDER BY order_index ASC;
+
+nextVisibleOrder:
+SELECT COALESCE(MAX(order_index) + 1, 0) FROM Page WHERE workspace_id = ? AND tombstone = 0;
+
+pageById:
+SELECT * FROM Page WHERE page_id = ?;
+
+markPageDeleted:
+UPDATE Page SET tombstone = 1, tombstone_at_wall = ?, content_revision = content_revision + 1,
+  selected = 0, undo_image_version_id = NULL, undo_workspace_session_id = NULL
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 0 AND content_revision = ?;
+
+restoreDeletedPage:
+UPDATE Page SET tombstone = 0, tombstone_at_wall = NULL, content_revision = content_revision + 1,
+  order_index = ?, selected = ?
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 1;
+
+setPageOrderAnyVisible:
+UPDATE Page SET order_index = ? WHERE page_id = ? AND workspace_id = ? AND tombstone = 0;
+
+insertDeleteUndo:
+INSERT INTO DeleteUndo(page_id, workspace_id, previous_order_index, was_selected, was_active,
+  deleted_wall, undo_until_wall, undo_until_monotonic, monotonic_epoch_token, undo_workspace_session_id,
+  undo_batch_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteUndoByPage:
+SELECT * FROM DeleteUndo WHERE page_id = ? AND workspace_id = ?;
+
+deleteUndosByBatch:
+SELECT * FROM DeleteUndo WHERE undo_batch_id = ? AND workspace_id = ? ORDER BY previous_order_index ASC;
+
+deleteUndosForWorkspace:
+SELECT * FROM DeleteUndo WHERE workspace_id = ? ORDER BY deleted_wall ASC, previous_order_index ASC;
+
+clearPreviousDeleteUndo:
+DELETE FROM DeleteUndo WHERE workspace_id = ?;
+
+deleteUndoRecord:
+DELETE FROM DeleteUndo WHERE page_id = ? AND workspace_id = ?;
+
+setActivePage:
+UPDATE Workspace SET active_page_id = ?
+WHERE workspace_id = ?;
+
+advanceOrderRevision:
+UPDATE Workspace SET order_revision = order_revision + 1 WHERE workspace_id = ?;
+
+addArtifactReference:
+INSERT INTO ArtifactReference(artifact_id, ref_kind, ref_owner_id, protection_class)
+VALUES (?, ?, ?, ?);
+
+referenceCountForArtifact:
+SELECT COUNT(*) FROM ArtifactReference WHERE artifact_id = ?;
+
+artifactReferenceProtection:
+SELECT protection_class FROM ArtifactReference
+WHERE ref_kind = 'IMAGE_VERSION' AND ref_owner_id = ?;
+
+workspaceImageReferenceIntegrityFindings:
+SELECT 'CURRENT_IMAGE_VERSION_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+LEFT JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+WHERE p.workspace_id = ? AND p.tombstone = 0 AND iv.image_version_id IS NULL
+UNION ALL
+SELECT 'CURRENT_IMAGE_VERSION_PAGE_MISMATCH' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+WHERE p.workspace_id = ? AND p.tombstone = 0 AND iv.page_id != p.page_id
+UNION ALL
+SELECT 'CURRENT_IMAGE_ARTIFACT_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+LEFT JOIN ArtifactRecord a ON a.artifact_id = iv.artifact_id
+WHERE p.workspace_id = ? AND p.tombstone = 0 AND a.artifact_id IS NULL
+UNION ALL
+SELECT 'CURRENT_IMAGE_ARTIFACT_UNAVAILABLE' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+JOIN ArtifactRecord a ON a.artifact_id = iv.artifact_id
+WHERE p.workspace_id = ? AND p.tombstone = 0
+  AND (a.state != 'COMMITTED' OR a.storage_state != 'PRESENT')
+UNION ALL
+SELECT 'CURRENT_IMAGE_VERSION_REFERENCE_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+LEFT JOIN ArtifactReference ar
+  ON ar.artifact_id = iv.artifact_id
+  AND ar.ref_kind = 'IMAGE_VERSION'
+  AND ar.ref_owner_id = iv.image_version_id
+  AND ar.protection_class = 'AUTHORITATIVE'
+WHERE p.workspace_id = ? AND p.tombstone = 0
+  AND iv.image_version_id IS NOT NULL AND ar.artifact_id IS NULL
+UNION ALL
+SELECT 'CURRENT_IMAGE_VERSION_REFERENCE_MISMATCH' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id
+WHERE p.workspace_id = ? AND p.tombstone = 0 AND EXISTS (
+  SELECT 1 FROM ArtifactReference ar
+  WHERE ar.ref_kind = 'IMAGE_VERSION' AND ar.ref_owner_id = iv.image_version_id
+    AND (ar.artifact_id != iv.artifact_id OR ar.protection_class != 'AUTHORITATIVE')
+)
+UNION ALL
+SELECT 'UNDO_IMAGE_VERSION_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+LEFT JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL AND iv.image_version_id IS NULL
+UNION ALL
+SELECT 'UNDO_IMAGE_VERSION_PAGE_MISMATCH' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL AND iv.page_id != p.page_id
+UNION ALL
+SELECT 'UNDO_IMAGE_ARTIFACT_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+LEFT JOIN ArtifactRecord a ON a.artifact_id = iv.artifact_id
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL AND a.artifact_id IS NULL
+UNION ALL
+SELECT 'UNDO_IMAGE_ARTIFACT_UNAVAILABLE' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+JOIN ArtifactRecord a ON a.artifact_id = iv.artifact_id
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL
+  AND (a.state != 'COMMITTED' OR a.storage_state != 'PRESENT')
+UNION ALL
+SELECT 'UNDO_IMAGE_VERSION_REFERENCE_MISSING' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+LEFT JOIN ArtifactReference ar
+  ON ar.artifact_id = iv.artifact_id
+  AND ar.ref_kind = 'IMAGE_VERSION'
+  AND ar.ref_owner_id = iv.image_version_id
+  AND ar.protection_class = 'UNDO'
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL
+  AND iv.image_version_id IS NOT NULL AND ar.artifact_id IS NULL
+UNION ALL
+SELECT 'UNDO_IMAGE_VERSION_REFERENCE_MISMATCH' AS finding_code, p.page_id AS page_id
+FROM Page p
+JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id
+WHERE p.workspace_id = ? AND p.undo_image_version_id IS NOT NULL AND EXISTS (
+  SELECT 1 FROM ArtifactReference ar
+  WHERE ar.ref_kind = 'IMAGE_VERSION' AND ar.ref_owner_id = iv.image_version_id
+    AND (ar.artifact_id != iv.artifact_id OR ar.protection_class != 'UNDO')
+)
+ORDER BY finding_code, page_id
+LIMIT ?;
+
+artifactReferenceOwnerIntegrityFindings:
+WITH findings AS (
+  SELECT ar.artifact_id, ar.ref_kind, ar.ref_owner_id,
+    CASE
+      WHEN ar.ref_kind = 'IMAGE_VERSION' AND NOT EXISTS (
+        SELECT 1 FROM ImageVersion iv WHERE iv.image_version_id = ar.ref_owner_id
+      ) THEN 'IMAGE_VERSION_OWNER_MISSING'
+      WHEN ar.ref_kind = 'IMAGE_VERSION' AND NOT EXISTS (
+        SELECT 1 FROM ImageVersion iv
+        WHERE iv.image_version_id = ar.ref_owner_id AND iv.artifact_id = ar.artifact_id
+      ) THEN 'IMAGE_VERSION_ARTIFACT_MISMATCH'
+      WHEN ar.ref_kind = 'IMAGE_VERSION' AND ar.protection_class NOT IN ('AUTHORITATIVE', 'UNDO')
+        THEN 'IMAGE_VERSION_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind = 'SAVE_MANIFEST' AND NOT EXISTS (
+        SELECT 1 FROM SaveManifest sm WHERE sm.save_manifest_id = ar.ref_owner_id
+      ) THEN 'SAVE_MANIFEST_OWNER_MISSING'
+      WHEN ar.ref_kind = 'SAVE_MANIFEST' AND ar.protection_class != 'SAVE'
+        THEN 'SAVE_MANIFEST_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind = 'SAVE_MANIFEST' AND NOT EXISTS (
+        SELECT 1 FROM ArtifactRecord a JOIN SaveManifest sm ON sm.save_manifest_id = ar.ref_owner_id
+        WHERE a.artifact_id = ar.artifact_id AND a.artifact_kind = 'EXPORT_OUTPUT'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM SaveManifest sm
+        WHERE sm.save_manifest_id = ar.ref_owner_id
+          AND (instr(sm.frozen_payload, '"artifactId":"' || ar.artifact_id || '"') > 0
+            OR instr(sm.frozen_payload, '"sourcePdfArtifactId":"' || ar.artifact_id || '"') > 0)
+      ) THEN 'SAVE_MANIFEST_ARTIFACT_NOT_IN_FROZEN_PAYLOAD'
+      WHEN ar.ref_kind = 'EXPORT_ARTIFACT' AND NOT EXISTS (
+        SELECT 1 FROM ExportArtifact ea WHERE ea.export_artifact_id = ar.ref_owner_id
+      ) THEN 'EXPORT_ARTIFACT_OWNER_MISSING'
+      WHEN ar.ref_kind = 'EXPORT_ARTIFACT' AND ar.protection_class != 'EXPORT'
+        THEN 'EXPORT_ARTIFACT_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind = 'EXPORT_ARTIFACT' AND NOT EXISTS (
+        SELECT 1 FROM ExportArtifact ea
+        WHERE ea.export_artifact_id = ar.ref_owner_id
+          AND instr(ea.artifact_set_payload, '"artifactId":"' || ar.artifact_id || '"') > 0
+      ) THEN 'EXPORT_ARTIFACT_ARTIFACT_NOT_IN_PAYLOAD'
+      WHEN ar.ref_kind = 'EXPORT_ATTEMPT' AND NOT EXISTS (
+        SELECT 1 FROM ExportAttempt ea WHERE ea.export_attempt_id = ar.ref_owner_id
+      ) THEN 'EXPORT_ATTEMPT_OWNER_MISSING'
+      WHEN ar.ref_kind = 'EXPORT_ATTEMPT' AND NOT EXISTS (
+        SELECT 1 FROM ExportAttempt ea
+        WHERE ea.export_attempt_id = ar.ref_owner_id AND ea.output_artifact_id = ar.artifact_id
+      ) THEN 'EXPORT_ATTEMPT_ARTIFACT_MISMATCH'
+      WHEN ar.ref_kind = 'EXPORT_ATTEMPT' AND ar.protection_class != 'RECOVERY'
+        THEN 'EXPORT_ATTEMPT_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind = 'IMPORT_SESSION' AND NOT EXISTS (
+        SELECT 1 FROM ImportSession i WHERE i.import_session_id = ar.ref_owner_id
+      ) THEN 'IMPORT_SESSION_OWNER_MISSING'
+      WHEN ar.ref_kind = 'IMPORT_SESSION' AND NOT EXISTS (
+        SELECT 1 FROM ImportSession i
+        WHERE i.import_session_id = ar.ref_owner_id AND i.source_snapshot_artifact_id = ar.artifact_id
+      ) THEN 'IMPORT_SESSION_ARTIFACT_MISMATCH'
+      WHEN ar.ref_kind = 'IMPORT_SESSION' AND ar.protection_class != 'RECOVERY'
+        THEN 'IMPORT_SESSION_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind NOT IN ('IMAGE_VERSION', 'SAVE_MANIFEST', 'EXPORT_ARTIFACT', 'EXPORT_ATTEMPT', 'IMPORT_SESSION')
+        THEN 'UNKNOWN_REFERENCE_KIND'
+      ELSE NULL
+    END AS finding_code
+  FROM ArtifactReference ar
+  UNION ALL
+  SELECT iv.artifact_id, 'IMAGE_VERSION', iv.image_version_id, 'CURRENT_IMAGE_VERSION_REFERENCE_MISSING'
+  FROM Page p
+  JOIN ImageVersion iv ON iv.image_version_id = p.current_image_version_id AND iv.page_id = p.page_id
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ArtifactReference ar
+    WHERE ar.artifact_id = iv.artifact_id AND ar.ref_kind = 'IMAGE_VERSION'
+      AND ar.ref_owner_id = iv.image_version_id AND ar.protection_class = 'AUTHORITATIVE'
+  )
+  UNION ALL
+  SELECT iv.artifact_id, 'IMAGE_VERSION', iv.image_version_id, 'UNDO_IMAGE_VERSION_REFERENCE_MISSING'
+  FROM Page p
+  JOIN ImageVersion iv ON iv.image_version_id = p.undo_image_version_id AND iv.page_id = p.page_id
+  WHERE p.undo_image_version_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM ArtifactReference ar
+    WHERE ar.artifact_id = iv.artifact_id AND ar.ref_kind = 'IMAGE_VERSION'
+      AND ar.ref_owner_id = iv.image_version_id AND ar.protection_class = 'UNDO'
+  )
+  UNION ALL
+  SELECT a.artifact_id, 'SAVE_MANIFEST', sm.save_manifest_id, 'SAVE_MANIFEST_REFERENCE_MISSING'
+  FROM SaveManifest sm
+  JOIN ArtifactRecord a ON (
+    (a.artifact_kind != 'EXPORT_OUTPUT'
+      AND instr(sm.frozen_payload, '"artifactId":"' || a.artifact_id || '"') > 0)
+    OR instr(sm.frozen_payload, '"sourcePdfArtifactId":"' || a.artifact_id || '"') > 0
+  )
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ExportArtifact ea WHERE ea.save_manifest_id = sm.save_manifest_id
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ArtifactReference ar
+    WHERE ar.artifact_id = a.artifact_id AND ar.ref_kind = 'SAVE_MANIFEST'
+      AND ar.ref_owner_id = sm.save_manifest_id AND ar.protection_class = 'SAVE'
+  )
+  UNION ALL
+  SELECT a.artifact_id, 'EXPORT_ARTIFACT', ea.export_artifact_id, 'EXPORT_ARTIFACT_REFERENCE_MISSING'
+  FROM ExportArtifact ea
+  JOIN ArtifactRecord a
+    ON instr(ea.artifact_set_payload, '"artifactId":"' || a.artifact_id || '"') > 0
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ArtifactReference ar
+    WHERE ar.artifact_id = a.artifact_id AND ar.ref_kind = 'EXPORT_ARTIFACT'
+      AND ar.ref_owner_id = ea.export_artifact_id AND ar.protection_class = 'EXPORT'
+  )
+  UNION ALL
+  SELECT a.artifact_id, 'EXTERNAL_EXPORT_PACKAGE_OUTPUT', ep.export_artifact_id,
+    'EXTERNAL_PACKAGE_OUTPUT_NOT_IN_EXPORT_PAYLOAD'
+  FROM ExternalExportPackageOutput o
+  JOIN ExternalExportPackage ep ON ep.export_artifact_id = o.export_artifact_id
+  JOIN ExportArtifact ea ON ea.export_artifact_id = ep.export_artifact_id
+  JOIN ArtifactRecord a ON a.artifact_id = o.output_artifact_id
+  WHERE instr(ea.artifact_set_payload, '"artifactId":"' || a.artifact_id || '"') = 0
+  UNION ALL
+  SELECT a.artifact_id, 'EXTERNAL_EXPORT_PACKAGE_OUTPUT', ep.export_artifact_id,
+    'EXTERNAL_PACKAGE_OUTPUT_MAPPING_MISSING'
+  FROM ExternalExportPackage ep
+  JOIN ExportArtifact ea ON ea.export_artifact_id = ep.export_artifact_id
+  JOIN ArtifactRecord a
+    ON instr(ea.artifact_set_payload, '"artifactId":"' || a.artifact_id || '"') > 0
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ExternalExportPackageOutput o
+    WHERE o.export_artifact_id = ep.export_artifact_id AND o.output_artifact_id = a.artifact_id
+  )
+  UNION ALL
+  SELECT i.source_snapshot_artifact_id, 'IMPORT_SESSION', i.import_session_id, 'IMPORT_SESSION_REFERENCE_MISSING'
+  FROM ImportSession i
+  WHERE i.state = 'OPEN' AND i.source_snapshot_artifact_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM ArtifactReference ar
+    WHERE ar.artifact_id = i.source_snapshot_artifact_id AND ar.ref_kind = 'IMPORT_SESSION'
+      AND ar.ref_owner_id = i.import_session_id AND ar.protection_class = 'RECOVERY'
+  )
+  UNION ALL
+  SELECT ea.output_artifact_id, 'EXPORT_ATTEMPT', ea.export_attempt_id, 'EXPORT_ATTEMPT_REFERENCE_MISSING'
+  FROM ExportAttempt ea
+  WHERE ea.state IN ('WRITING_EXTERNAL', 'UNKNOWN_OUTCOME') AND ea.output_artifact_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM ArtifactReference ar
+      WHERE ar.artifact_id = ea.output_artifact_id AND ar.ref_kind = 'EXPORT_ATTEMPT'
+        AND ar.ref_owner_id = ea.export_attempt_id AND ar.protection_class = 'RECOVERY'
+    )
+  UNION ALL
+  SELECT a.artifact_id, 'SAVED_PDF_EDIT_COMPOSITION', sm.save_manifest_id,
+    'SAVED_PDF_EDIT_COMPOSITION_MISSING'
+  FROM SaveManifest sm
+  JOIN ArtifactRecord a
+    ON instr(sm.frozen_payload, '"kind":"SAVED_PDF_EDIT"') > 0
+    AND instr(sm.frozen_payload, '"sourcePdfArtifactId":"' || a.artifact_id || '"') > 0
+  WHERE NOT EXISTS (
+    SELECT 1 FROM SavedPdfEditComposition c WHERE c.save_manifest_id = sm.save_manifest_id
+  )
+  UNION ALL
+  SELECT c.source_pdf_artifact_id, 'SAVED_PDF_EDIT_COMPOSITION', c.save_manifest_id,
+    'SAVED_PDF_EDIT_COMPOSITION_PAYLOAD_MISMATCH'
+  FROM SavedPdfEditComposition c
+  JOIN SaveManifest sm ON sm.save_manifest_id = c.save_manifest_id
+  WHERE sm.frozen_payload != '{"kind":"SAVED_PDF_EDIT","sourceExportArtifactId":"'
+    || c.source_export_artifact_id || '","sourcePdfArtifactId":"' || c.source_pdf_artifact_id
+    || '","sourcePdfSha256":"' || c.source_pdf_sha256 || '","sourcePageCount":'
+    || c.source_page_count || ',"outputPageOrder":' || c.output_page_order || '}'
+  UNION ALL
+  SELECT c.source_pdf_artifact_id, 'SAVED_PDF_EDIT_COMPOSITION', c.save_manifest_id,
+    'SAVED_PDF_EDIT_SOURCE_NOT_IN_EXPORT'
+  FROM SavedPdfEditComposition c
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ExportArtifact ea
+    WHERE ea.export_artifact_id = c.source_export_artifact_id
+      AND instr(ea.artifact_set_payload, '"artifactId":"' || c.source_pdf_artifact_id || '"') > 0
+  )
+  UNION ALL
+  SELECT ea.output_artifact_id, 'EXPORT_ATTEMPT_OBSERVATION', ea.export_attempt_id,
+    'EXPORT_ATTEMPT_OBSERVATION_MISSING'
+  FROM ExportAttempt ea
+  WHERE ea.operation_observation_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM ProviderOperationObservation o
+    WHERE o.observation_id = ea.operation_observation_id
+  )
+  UNION ALL
+  SELECT ea.output_artifact_id, 'EXPORT_ATTEMPT_OBSERVATION', ea.export_attempt_id,
+    'EXPORT_ATTEMPT_OBSERVATION_OWNER_MISMATCH'
+  FROM ExportAttempt ea
+  JOIN ProviderOperationObservation o ON o.observation_id = ea.operation_observation_id
+  WHERE ea.operation_observation_id IS NOT NULL AND o.export_attempt_id != ea.export_attempt_id
+  UNION ALL
+  SELECT ea.output_artifact_id, 'PROVIDER_OPERATION_OBSERVATION', ea.export_attempt_id,
+    'PROVIDER_OBSERVATION_BACKLINK_MISSING'
+  FROM ProviderOperationObservation o
+  JOIN ExportAttempt ea ON ea.export_attempt_id = o.export_attempt_id
+  WHERE ea.operation_observation_id IS NULL OR ea.operation_observation_id != o.observation_id
+  UNION ALL
+  SELECT o.output_artifact_id, 'EXTERNAL_PACKAGE_QUALIFICATION', ep.export_artifact_id,
+    'EXTERNAL_PACKAGE_QUALIFICATION_TUPLE_MISMATCH'
+  FROM ExternalExportPackage ep
+  JOIN ProviderQualification pq ON pq.qualification_id = ep.provider_qualification_id
+  JOIN ExternalExportPackageOutput o
+    ON o.export_artifact_id = ep.export_artifact_id AND o.ordinal = 0
+  WHERE ep.adapter_id != pq.adapter_id
+    OR ep.provider_version != pq.provider_version
+    OR ep.os_version != pq.os_version
+    OR ep.destination_access_class != pq.destination_access_class
+  UNION ALL
+  SELECT COALESCE(pdf.output_artifact_id, ea.export_artifact_id), 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_PACKAGE_NOT_CONFIRMED'
+  FROM RecentDocument rd
+  JOIN ExportArtifact ea ON ea.export_artifact_id = rd.export_artifact_id
+  LEFT JOIN ExternalExportPackage ep ON ep.export_artifact_id = rd.export_artifact_id
+  LEFT JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE ep.export_artifact_id IS NULL OR ep.state != 'SUCCEEDED'
+  UNION ALL
+  SELECT ea.export_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_PDF_OUTPUT_MISSING'
+  FROM RecentDocument rd
+  JOIN ExportArtifact ea ON ea.export_artifact_id = rd.export_artifact_id
+  LEFT JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE pdf.output_artifact_id IS NULL
+  UNION ALL
+  SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_PDF_ATTEMPT_MISSING'
+  FROM RecentDocument rd
+  JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ExportAttempt attempt
+    WHERE attempt.export_artifact_id = rd.export_artifact_id
+      AND attempt.output_artifact_id = pdf.output_artifact_id AND attempt.state = 'SUCCEEDED'
+  )
+  UNION ALL
+  SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_URI_MISMATCH'
+  FROM RecentDocument rd
+  JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE NOT EXISTS (
+    SELECT 1 FROM ExportAttempt attempt
+    WHERE attempt.export_artifact_id = rd.export_artifact_id
+      AND attempt.output_artifact_id = pdf.output_artifact_id AND attempt.state = 'SUCCEEDED'
+      AND attempt.external_identity = rd.document_uri
+  )
+  UNION ALL
+  SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_DISPLAY_NAME_MISMATCH'
+  FROM RecentDocument rd
+  JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE rd.display_name != pdf.display_name
+  UNION ALL
+  SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_OCR_STATUS_MISMATCH'
+  FROM RecentDocument rd
+  JOIN ExternalExportPackage ep ON ep.export_artifact_id = rd.export_artifact_id
+  JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  WHERE rd.ocr_status != ep.ocr_status
+  UNION ALL
+  SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
+    'RECENT_DOCUMENT_PAGE_COUNT_MISMATCH'
+  FROM RecentDocument rd
+  JOIN ExportArtifact ea ON ea.export_artifact_id = rd.export_artifact_id
+  JOIN ExternalExportPackageOutput pdf
+    ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
+  LEFT JOIN SavedPdfEditComposition edit ON edit.save_manifest_id = ea.save_manifest_id
+  WHERE rd.page_count != CASE
+    WHEN edit.save_manifest_id IS NOT NULL THEN
+      CASE WHEN edit.output_page_order = '[]' THEN 0
+        ELSE length(edit.output_page_order) - length(replace(edit.output_page_order, ',', '')) + 1 END
+    ELSE (SELECT COUNT(*) FROM ExternalExportPackageOutput page
+      WHERE page.export_artifact_id = rd.export_artifact_id AND page.ordinal > 0)
+  END
+)
+SELECT finding_code, artifact_id, ref_kind, ref_owner_id
+FROM findings
+WHERE finding_code IS NOT NULL
+ORDER BY finding_code, artifact_id, ref_kind, ref_owner_id
+LIMIT ?;
+
+workspaceActivePageIntegrityFinding:
+SELECT 'ACTIVE_PAGE_NOT_VISIBLE' AS finding_code, w.active_page_id AS page_id
+FROM Workspace w
+LEFT JOIN Page p ON p.page_id = w.active_page_id
+  AND p.workspace_id = w.workspace_id AND p.tombstone = 0
+WHERE w.workspace_id = ? AND w.active_page_id IS NOT NULL AND p.page_id IS NULL;
+
+clearActivePage:
+UPDATE Workspace SET active_page_id = NULL WHERE workspace_id = ? AND active_page_id = ?;
+
+setPageSelected:
+UPDATE Page SET selected = ?, select_when_ready = 0
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 0;
+
+setAllVisiblePagesSelected:
+UPDATE Page SET selected = ?, select_when_ready = 0
+WHERE workspace_id = ? AND tombstone = 0;
+
+setActivePageOnly:
+UPDATE Workspace SET active_page_id = ? WHERE workspace_id = ?;
+
+advancePageImage:
+UPDATE Page SET current_image_version_id = ?, undo_image_version_id = ?,
+  undo_workspace_session_id = ?, content_revision = content_revision + 1,
+  current_recognition_id = NULL, processing_desired_state = ?
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 0
+  AND current_image_version_id = ? AND content_revision = ?;
+
+undoPageImage:
+UPDATE Page SET current_image_version_id = ?, undo_image_version_id = NULL,
+  undo_workspace_session_id = NULL, content_revision = content_revision + 1,
+  current_recognition_id = ?, processing_desired_state = ?
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 0
+  AND current_image_version_id = ? AND content_revision = ?
+  AND undo_image_version_id = ? AND undo_workspace_session_id = ?;
+
+setArtifactReferenceProtection:
+UPDATE ArtifactReference SET protection_class = ?
+WHERE ref_kind = 'IMAGE_VERSION' AND ref_owner_id = ?;
+
+deleteArtifactReference:
+DELETE FROM ArtifactReference
+WHERE ref_kind = 'IMAGE_VERSION' AND ref_owner_id = ?;
+
+advanceOrderRevisionIfExpected:
+UPDATE Workspace SET order_revision = order_revision + 1
+WHERE workspace_id = ? AND order_revision = ?;
+
+setPageOrder:
+UPDATE Page SET order_index = ? WHERE page_id = ? AND workspace_id = ? AND tombstone = 0;
+
+insertImportSession:
+INSERT INTO ImportSession(import_session_id, workspace_id, durable_workflow_payload_version,
+  frozen_operation_parameters, source_snapshot_artifact_id, persistent_access_descriptor,
+  state, source_page_count, source_display_name, order_policy)
+VALUES (?, ?, 1, ?, ?, NULL, 'OPEN', ?, ?, 'APPEND_ON_COMMIT');
+
+insertPdfImportPublicationIntent:
+INSERT INTO PdfImportPublicationIntent(import_session_id, workspace_id, source_display_name)
+VALUES (?, ?, ?);
+
+pdfImportPublicationIntentById:
+SELECT * FROM PdfImportPublicationIntent WHERE import_session_id = ?;
+
+pendingPdfImportPublicationIntents:
+SELECT * FROM PdfImportPublicationIntent ORDER BY rowid ASC LIMIT ?;
+
+deletePdfImportPublicationIntent:
+DELETE FROM PdfImportPublicationIntent WHERE import_session_id = ? AND workspace_id = ?;
+
+insertImageImportPublicationIntent:
+INSERT INTO ImageImportPublicationIntent(import_session_id, workspace_id, source_display_name,
+  mime_type, artifact_id, page_id, image_version_id)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+imageImportPublicationIntentById:
+SELECT * FROM ImageImportPublicationIntent WHERE import_session_id = ?;
+
+pendingImageImportPublicationIntents:
+SELECT * FROM ImageImportPublicationIntent ORDER BY rowid ASC LIMIT ?;
+
+openSinglePageImportSessions:
+SELECT * FROM ImportSession WHERE state = 'OPEN' AND source_page_count = 1
+ORDER BY rowid ASC LIMIT ?;
+
+deleteImageImportPublicationIntent:
+DELETE FROM ImageImportPublicationIntent WHERE import_session_id = ? AND workspace_id = ?;
+
+importSessionById:
+SELECT * FROM ImportSession WHERE import_session_id = ?;
+
+artifactReferences:
+SELECT * FROM ArtifactReference WHERE artifact_id = ? ORDER BY rowid ASC;
+
+completeImportSession:
+UPDATE ImportSession SET state = 'COMPLETED'
+WHERE import_session_id = ? AND state = 'OPEN';
+
+completePdfImportSession:
+UPDATE ImportSession SET state = 'COMPLETED'
+WHERE import_session_id = ? AND state = 'OPEN'
+  AND source_page_count = (SELECT COUNT(*) FROM Page WHERE import_session_id = ? AND source_page_index IS NOT NULL);
+
+recordPdfImportFailure:
+UPDATE ImportSession SET last_error = ? WHERE import_session_id = ? AND state = 'OPEN';
+
+clearPdfImportFailure:
+UPDATE ImportSession SET last_error = NULL WHERE import_session_id = ? AND state = 'OPEN';
+
+openPdfImportSessionIds:
+SELECT ImportSession.import_session_id FROM ImportSession
+JOIN ArtifactRecord ON ArtifactRecord.artifact_id = ImportSession.source_snapshot_artifact_id
+WHERE ImportSession.state = 'OPEN' AND ImportSession.source_page_count > 0
+  AND ArtifactRecord.artifact_kind = 'IMPORT_PDF_SOURCE'
+ORDER BY ImportSession.rowid ASC;
+
+importedPdfPageIds:
+SELECT page_id FROM Page WHERE import_session_id = ? AND source_page_index IS NOT NULL
+ORDER BY source_page_index ASC;
+
+importedPdfPageIndices:
+SELECT source_page_index FROM Page WHERE import_session_id = ? AND source_page_index IS NOT NULL
+ORDER BY source_page_index ASC;
+
+markImportSourceUnavailable:
+UPDATE ImportSession SET state = 'SOURCE_UNAVAILABLE'
+WHERE import_session_id = ? AND state = 'OPEN';
+
+pageByImportTuple:
+SELECT * FROM Page WHERE import_session_id = ? AND source_page_index = ?;
+
+selectedVisiblePagesForSave:
+SELECT * FROM Page WHERE workspace_id = ? AND tombstone = 0 AND selected = 1 ORDER BY order_index ASC;
+
+insertSaveManifest:
+INSERT INTO SaveManifest(save_manifest_id, workspace_id, manifest_format_version, frozen_payload)
+VALUES (?, ?, ?, ?);
+
+insertSavedPdfEditComposition:
+INSERT INTO SavedPdfEditComposition(save_manifest_id, source_export_artifact_id, source_pdf_artifact_id,
+  source_pdf_sha256, source_page_count, output_page_order)
+VALUES (?, ?, ?, ?, ?, ?);
+
+savedPdfEditCompositionByManifest:
+SELECT * FROM SavedPdfEditComposition WHERE save_manifest_id = ?;
+
+deleteSavedPdfEditComposition:
+DELETE FROM SavedPdfEditComposition WHERE save_manifest_id = ?;
+
+incompleteSavedPdfEditManifests:
+SELECT * FROM SavedPdfEditComposition
+WHERE NOT EXISTS (SELECT 1 FROM ExportArtifact WHERE ExportArtifact.save_manifest_id = SavedPdfEditComposition.save_manifest_id)
+ORDER BY rowid LIMIT ?;
+
+saveManifestExportArtifacts:
+SELECT ArtifactRecord.* FROM ArtifactRecord
+JOIN ArtifactReference ON ArtifactReference.artifact_id = ArtifactRecord.artifact_id
+WHERE ArtifactReference.ref_kind = 'SAVE_MANIFEST' AND ArtifactReference.ref_owner_id = ?;
+
+saveManifestById:
+SELECT * FROM SaveManifest WHERE save_manifest_id = ?;
+
+hasCommittedNormalLocalSave:
+SELECT COUNT(*) FROM ExportArtifact
+WHERE save_manifest_id = ? AND output_kind = 'PDF_WITH_JPG_PAGE_SET';
+
+incompleteLocalOutputCompositionManifests:
+SELECT sm.save_manifest_id
+FROM SaveManifest sm
+JOIN SaveDependencyResult dependency ON dependency.save_manifest_id = sm.save_manifest_id
+WHERE dependency.dependency_kind = 'LOCAL_OUTPUT_COMPOSITION'
+  AND NOT EXISTS (SELECT 1 FROM SavedPdfEditComposition edit WHERE edit.save_manifest_id = sm.save_manifest_id)
+  AND NOT EXISTS (SELECT 1 FROM ExportArtifact export WHERE export.save_manifest_id = sm.save_manifest_id)
+GROUP BY sm.save_manifest_id
+ORDER BY sm.rowid ASC
+LIMIT ?;
+
+saveManifestArtifactReferences:
+SELECT * FROM ArtifactReference
+WHERE ref_kind = 'SAVE_MANIFEST' AND ref_owner_id = ? ORDER BY artifact_id ASC;
+
+exportArtifactsBySaveManifest:
+SELECT * FROM ExportArtifact WHERE save_manifest_id = ?;
+
+stagedExportOutputReferencesForSave:
+SELECT COUNT(*) FROM ArtifactReference r
+JOIN ArtifactRecord a ON a.artifact_id = r.artifact_id
+WHERE r.ref_kind = 'SAVE_MANIFEST' AND r.ref_owner_id = ? AND a.artifact_kind = 'EXPORT_OUTPUT'
+  AND NOT EXISTS (
+    SELECT 1 FROM SavedPdfEditComposition edit
+    WHERE edit.save_manifest_id = r.ref_owner_id AND edit.source_pdf_artifact_id = r.artifact_id
+  );
+
+stagedExportOutputsForSave:
+SELECT ArtifactRecord.rowid AS recovery_sequence, ArtifactRecord.artifact_id,
+  ArtifactRecord.relative_storage_path, ArtifactRecord.artifact_kind, ArtifactRecord.size_bytes,
+  ArtifactRecord.checksum, ArtifactRecord.artifact_format_version, ArtifactRecord.creation_revision,
+  ArtifactRecord.state, ArtifactRecord.producer_epoch, ArtifactRecord.gc_claim_token,
+  ArtifactRecord.storage_state
+FROM ArtifactRecord
+JOIN ArtifactReference ON ArtifactReference.artifact_id = ArtifactRecord.artifact_id
+WHERE ArtifactReference.ref_kind = 'SAVE_MANIFEST'
+  AND ArtifactReference.ref_owner_id = ?
+  AND ArtifactRecord.artifact_kind = 'EXPORT_OUTPUT'
+ORDER BY ArtifactRecord.rowid ASC;
+
+saveOutputPublicationIntents:
+SELECT * FROM SaveOutputPublicationIntent
+WHERE save_manifest_id = ? ORDER BY output_ordinal ASC;
+
+saveOutputPublicationIntentCount:
+SELECT COUNT(*) FROM SaveOutputPublicationIntent WHERE save_manifest_id = ?;
+
+saveOutputPublicationIntentByArtifactId:
+SELECT * FROM SaveOutputPublicationIntent WHERE artifact_id = ?;
+
+insertSaveOutputPublicationIntent:
+INSERT INTO SaveOutputPublicationIntent(artifact_id, save_manifest_id, output_ordinal, extension,
+  relative_storage_path, size_bytes, checksum, artifact_format_version, producer_epoch)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+saveOutputPublicationIntentsForRecovery:
+SELECT SaveOutputPublicationIntent.* FROM SaveOutputPublicationIntent
+JOIN SaveManifest ON SaveManifest.save_manifest_id = SaveOutputPublicationIntent.save_manifest_id
+WHERE SaveOutputPublicationIntent.save_manifest_id = ?
+ORDER BY SaveOutputPublicationIntent.output_ordinal ASC;
+
+deleteSaveOutputPublicationIntent:
+DELETE FROM SaveOutputPublicationIntent WHERE artifact_id = ? AND save_manifest_id = ?;
+
+deleteSaveOutputPublicationIntents:
+DELETE FROM SaveOutputPublicationIntent WHERE save_manifest_id = ?;
+
+artifactReferenceCount:
+SELECT COUNT(*) FROM ArtifactReference WHERE artifact_id = ?;
+
+exportOutputReferenceForSave:
+SELECT COUNT(*) FROM ArtifactReference
+WHERE artifact_id = ? AND ref_kind = 'SAVE_MANIFEST' AND ref_owner_id = ? AND protection_class = 'SAVE';
+
+exportArtifactOutputReferences:
+SELECT artifact_id FROM ArtifactReference
+WHERE ref_kind = 'EXPORT_ARTIFACT' AND ref_owner_id = ? ORDER BY rowid ASC;
+
+artifactReferenceForExportOutput:
+SELECT COUNT(*) FROM ArtifactReference
+WHERE artifact_id = ? AND ref_kind = 'EXPORT_ARTIFACT' AND ref_owner_id = ?;
+
+exportArtifactById:
+SELECT * FROM ExportArtifact WHERE export_artifact_id = ?;
+
+insertProviderQualification:
+INSERT INTO ProviderQualification(qualification_id, adapter_id, provider_version, os_version,
+  destination_access_class, validation_suite_version, qualified_capabilities_payload)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+providerQualificationById:
+SELECT * FROM ProviderQualification WHERE qualification_id = ?;
+
+providerOperationObservationById:
+SELECT * FROM ProviderOperationObservation WHERE observation_id = ?;
+
+providerQualificationByTuple:
+SELECT * FROM ProviderQualification WHERE adapter_id = ? AND provider_version = ?
+  AND os_version = ? AND destination_access_class = ? ORDER BY qualification_id ASC LIMIT 1;
+
+providerQualificationsByTuple:
+SELECT * FROM ProviderQualification WHERE adapter_id = ? AND provider_version = ?
+  AND os_version = ? AND destination_access_class = ? ORDER BY qualification_id ASC;
+
+insertExportAttempt:
+INSERT INTO ExportAttempt(export_attempt_id, export_artifact_id, output_artifact_id, durable_workflow_payload_version,
+  destination_descriptor, frozen_provider_parameters, state, external_identity,
+  operation_observation_id, known_error)
+VALUES (?, ?, ?, ?, ?, ?, 'WRITING_EXTERNAL', NULL, NULL, NULL);
+
+exportAttemptById:
+SELECT * FROM ExportAttempt WHERE export_attempt_id = ?;
+
+exportAttemptsInWriting:
+SELECT * FROM ExportAttempt WHERE state = 'WRITING_EXTERNAL' ORDER BY rowid ASC;
+
+unknownExportAttempts:
+SELECT * FROM ExportAttempt WHERE state = 'UNKNOWN_OUTCOME' ORDER BY rowid ASC;
+
+exportAttemptsForArtifact:
+SELECT * FROM ExportAttempt WHERE export_artifact_id = ? ORDER BY rowid ASC;
+
+exportAttemptsForOutput:
+SELECT * FROM ExportAttempt WHERE export_artifact_id = ? AND output_artifact_id = ? ORDER BY rowid ASC;
+
+insertExternalExportPackage:
+INSERT INTO ExternalExportPackage(export_artifact_id, destination_tree_uri, common_basename,
+  provider_qualification_id, adapter_id, provider_version, os_version, destination_access_class, state, last_error,
+  ocr_status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'READY', NULL, ?);
+
+insertExternalExportPackageOutput:
+INSERT INTO ExternalExportPackageOutput(export_artifact_id, output_artifact_id, display_name, ordinal)
+VALUES (?, ?, ?, ?);
+
+externalExportPackageById:
+SELECT * FROM ExternalExportPackage WHERE export_artifact_id = ?;
+
+externalExportPackageOutputByArtifact:
+SELECT * FROM ExternalExportPackageOutput WHERE export_artifact_id = ? AND output_artifact_id = ?;
+
+externalExportPackageOutputs:
+SELECT * FROM ExternalExportPackageOutput WHERE export_artifact_id = ? ORDER BY ordinal ASC;
+
+incompleteExternalExportPackages:
+SELECT * FROM ExternalExportPackage WHERE state IN ('READY', 'PARTIAL', 'UNKNOWN_OUTCOME', 'WRITING_EXTERNAL') ORDER BY rowid ASC;
+
+insertRecentDocument:
+INSERT INTO RecentDocument(recent_id, export_artifact_id, document_uri, display_name, page_count, saved_wall, ocr_status)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+recentDocumentByExport:
+SELECT * FROM RecentDocument WHERE export_artifact_id = ?;
+
+recentDocumentsInWindow:
+SELECT * FROM RecentDocument WHERE saved_wall >= ? AND saved_wall <= ? ORDER BY saved_wall DESC, recent_id DESC;
+
+expireRecentDocuments:
+DELETE FROM RecentDocument WHERE saved_wall < ?;
+
+successfulPackagesMissingRecentDocument:
+SELECT ExternalExportPackage.export_artifact_id FROM ExternalExportPackage
+WHERE ExternalExportPackage.state = 'SUCCEEDED'
+  AND NOT EXISTS (SELECT 1 FROM RecentDocument WHERE RecentDocument.export_artifact_id = ExternalExportPackage.export_artifact_id)
+ORDER BY ExternalExportPackage.rowid ASC;
+
+updateExternalExportPackageState:
+UPDATE ExternalExportPackage SET state = ?, last_error = ? WHERE export_artifact_id = ?;
+
+nonterminalAttemptForDestination:
+SELECT COUNT(*) FROM ExportAttempt
+WHERE export_artifact_id = ? AND destination_descriptor = ?
+  AND state IN ('WRITING_EXTERNAL', 'UNKNOWN_OUTCOME');
+
+finishWritingExportAttempt:
+UPDATE ExportAttempt SET state = ?, external_identity = ?, operation_observation_id = ?, known_error = ?
+WHERE export_attempt_id = ? AND state = 'WRITING_EXTERNAL';
+
+finishUnknownExportAttempt:
+UPDATE ExportAttempt SET state = ?, external_identity = ?, operation_observation_id = ?, known_error = ?
+WHERE export_attempt_id = ? AND state = 'UNKNOWN_OUTCOME';
+
+insertProviderOperationObservation:
+INSERT INTO ProviderOperationObservation(observation_id, export_attempt_id, identity_evidence,
+  existence_evidence, integrity_evidence, readability_evidence, name_evidence, access_evidence)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteExportAttemptArtifactReferences:
+DELETE FROM ArtifactReference WHERE ref_kind = 'EXPORT_ATTEMPT' AND ref_owner_id = ?;
+
+activeDestinationGrant:
+SELECT * FROM DestinationGrant WHERE grant_id = 'ACTIVE';
+
+insertDestinationGrant:
+INSERT INTO DestinationGrant(grant_id, tree_uri, granted_wall, last_verified_wall)
+VALUES ('ACTIVE', ?, ?, ?);
+
+updateDestinationGrantVerified:
+UPDATE DestinationGrant SET last_verified_wall = ?
+WHERE grant_id = 'ACTIVE' AND tree_uri = ? AND ? >= granted_wall;
+
+deleteDestinationGrant:
+DELETE FROM DestinationGrant WHERE grant_id = 'ACTIVE';
+
+insertExportArtifact:
+INSERT INTO ExportArtifact(export_artifact_id, save_manifest_id, output_kind,
+  artifact_set_payload, artifact_format_version, structural_validation_version)
+VALUES (?, ?, ?, ?, ?, ?);
+
+insertSaveDependencyResult:
+INSERT INTO SaveDependencyResult(save_dependency_result_id, save_manifest_id, image_version_id,
+  dependency_kind, dependency_spec, payload, artifact_id)
+VALUES (?, ?, ?, ?, ?, NULL, NULL);
+
+saveOutputCompositionStarted:
+SELECT COUNT(*) FROM SaveDependencyResult
+WHERE save_manifest_id = ? AND dependency_kind = 'LOCAL_OUTPUT_COMPOSITION';
+
+saveOutputCompositionDependencies:
+SELECT * FROM SaveDependencyResult
+WHERE save_manifest_id = ? AND dependency_kind = 'LOCAL_OUTPUT_COMPOSITION'
+ORDER BY rowid ASC;
+
+deleteLocalOutputCompositionBarrier:
+DELETE FROM SaveDependencyResult
+WHERE save_manifest_id = ? AND dependency_kind = 'LOCAL_OUTPUT_COMPOSITION';
+
+deleteSaveManifestArtifactReferences:
+DELETE FROM ArtifactReference WHERE ref_kind = 'SAVE_MANIFEST' AND ref_owner_id = ?;
+
+deleteSaveManifest:
+DELETE FROM SaveManifest WHERE save_manifest_id = ? AND workspace_id = ?;
+
+insertImportedPage:
+INSERT INTO Page(page_id, workspace_id, workspace_session_id, order_index, selected, select_when_ready,
+  content_revision, current_image_version_id, undo_image_version_id, undo_workspace_session_id,
+  processing_desired_state, current_recognition_id, tombstone, import_session_id,
+  source_page_index, source_provenance)
+VALUES (?, ?, ?, ?, 1, 0, 1, ?, NULL, NULL, ?, NULL, 0, ?, ?, ?);
+
+removeImportSnapshotReference:
+DELETE FROM ArtifactReference
+WHERE artifact_id = ? AND ref_kind = 'IMPORT_SESSION' AND ref_owner_id = ?;
+
+recoveryArtifactBatch:
+SELECT rowid AS recovery_sequence, * FROM ArtifactRecord
+WHERE rowid > CAST(? AS INTEGER) AND state IN ('STAGED_DURABLE', 'COMMITTED') AND storage_state = 'PRESENT'
+ORDER BY rowid LIMIT ?;
+
+unreferencedArtifacts:
+SELECT * FROM ArtifactRecord
+WHERE state = 'COMMITTED' AND storage_state = 'PRESENT'
+  AND NOT EXISTS (SELECT 1 FROM ArtifactReference WHERE ArtifactReference.artifact_id = ArtifactRecord.artifact_id)
+ORDER BY rowid LIMIT ?;
+
+claimArtifactForDeletion:
+UPDATE ArtifactRecord SET state = 'GC_CLAIMED', gc_claim_token = ?
+WHERE artifact_id = ? AND state = 'COMMITTED' AND storage_state = 'PRESENT'
+  AND NOT EXISTS (SELECT 1 FROM ArtifactReference WHERE ArtifactReference.artifact_id = ArtifactRecord.artifact_id);
+
+gcClaimedArtifacts:
+SELECT * FROM ArtifactRecord WHERE state = 'GC_CLAIMED' AND gc_claim_token IS NOT NULL ORDER BY rowid LIMIT ?;
+
+finalizeArtifactDeletion:
+UPDATE ArtifactRecord SET state = 'COMMITTED', storage_state = 'DELETED', gc_claim_token = NULL
+WHERE artifact_id = ? AND state = 'GC_CLAIMED' AND gc_claim_token = ?
+  AND NOT EXISTS (SELECT 1 FROM ArtifactReference WHERE ArtifactReference.artifact_id = ArtifactRecord.artifact_id);
+
+releaseArtifactDeletionClaim:
+UPDATE ArtifactRecord SET state = 'COMMITTED', gc_claim_token = NULL
+WHERE artifact_id = ? AND state = 'GC_CLAIMED' AND gc_claim_token = ?;
+
+quarantineClaimedArtifact:
+UPDATE ArtifactRecord SET state = 'QUARANTINED', gc_claim_token = NULL
+WHERE artifact_id = ? AND state = 'GC_CLAIMED' AND gc_claim_token = ?;
+
+recoveryCursorByDomain:
+SELECT * FROM MaintenanceCursor WHERE domain = ?;
+
+writeRecoveryCursor:
+INSERT OR REPLACE INTO MaintenanceCursor(domain, cursor_payload, cursor_format_version)
+VALUES (?, ?, 1);
+
+quarantineArtifact:
+UPDATE ArtifactRecord SET state = 'QUARANTINED'
+WHERE artifact_id = ? AND state IN ('STAGED_DURABLE', 'COMMITTED');
+
+markDeletedStagedExportArtifact:
+UPDATE ArtifactRecord SET state = 'QUARANTINED', storage_state = 'DELETED'
+WHERE artifact_id = ? AND artifact_kind = 'EXPORT_OUTPUT' AND state = 'STAGED_DURABLE'
+  AND storage_state = 'PRESENT'
+  AND NOT EXISTS (SELECT 1 FROM ArtifactReference WHERE artifact_id = ArtifactRecord.artifact_id);
+
+insertRecognition:
+INSERT INTO Recognition(recognition_id, page_id, image_version_id, payload)
+VALUES (?, ?, ?, ?);
+
+commitCurrentRecognition:
+UPDATE Page SET current_recognition_id = ?,
+  selected = CASE WHEN select_when_ready = 1 THEN 1 ELSE selected END,
+  select_when_ready = 0
+WHERE page_id = ? AND workspace_id = ? AND tombstone = 0
+  AND current_image_version_id = ? AND content_revision = ?
+  AND processing_desired_state = ?;
+
+recognitionById:
+SELECT * FROM Recognition WHERE recognition_id = ?;
+
+recognitionCount:
+SELECT COUNT(*) FROM Recognition;
+
+recognitionForImageVersion:
+SELECT * FROM Recognition
+WHERE page_id = ? AND image_version_id = ?
+ORDER BY rowid DESC LIMIT 1;

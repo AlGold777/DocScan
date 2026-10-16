@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <permission
+        android:name="app.docscan.scanner.test.permission.READ_PDF_SOURCE"
+        android:protectionLevel="normal" />
+    <application>
+        <provider
+            android:name="app.docscan.android.PdfSourceFaultTestProvider"
+            android:authorities="app.docscan.scanner.test.pdfsource"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:readPermission="app.docscan.scanner.test.permission.READ_PDF_SOURCE" />
+    </application>
+</manifest>

@@ -1,0 +1,9 @@
+DocScan includes the OpenCV Android library 4.14.0.
+
+- OpenCV: Apache License 2.0. The license text is included in LICENSE.
+  https://github.com/opencv/opencv/tree/4.14.0
+- Android AAR: org.opencv:opencv:4.14.0, published on Maven Central.
+
+DocScan uses OpenCV for opt-in document boundary detection and perspective
+preview. The detected candidate is shown for user review before any page image
+version is written.

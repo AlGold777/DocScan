@@ -1,0 +1,1 @@
+ALTER TABLE ArtifactRecord ADD COLUMN storage_state TEXT NOT NULL DEFAULT 'PRESENT';

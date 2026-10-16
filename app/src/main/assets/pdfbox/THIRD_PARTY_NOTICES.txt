@@ -1,0 +1,13 @@
+DocScan includes PdfBox-Android 2.0.27.0, an Android port based on Apache PDFBox 2.0.27.
+
+- PdfBox-Android: Apache License 2.0. See licenses/Apache-2.0.txt.
+  https://github.com/TomRoush/PdfBox-Android/tree/2.0.27.0
+- Apache PDFBox 2.0.27: Apache License 2.0. The license text is included above.
+  https://pdfbox.apache.org/
+
+This product build excludes PdfBox-Android's optional Bouncy Castle transitive
+dependencies. DocScan's writer creates and reads unencrypted PDF documents and
+does not expose PDF decryption, signatures, or cryptographic operations.
+- Android system Roboto may be embedded as a subset for selectable/searchable text.
+  Roboto is distributed under Apache License 2.0; see licenses/Apache-2.0.txt.
+  https://github.com/google/fonts/tree/main/apache/roboto

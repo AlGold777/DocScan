@@ -1,0 +1,15 @@
+DocScan uses these OCR components and data files:
+
+- Tesseract4Android 4.9.0: Apache License 2.0. See licenses/Tesseract4Android-Apache-2.0.txt.
+  https://github.com/adaptech-cz/Tesseract4Android/tree/15c5347
+- Tesseract 5.5.1: Apache License 2.0. See licenses/Tesseract-Apache-2.0.txt.
+  https://github.com/tesseract-ocr/tesseract/tree/5.5.1
+- Leptonica 1.85.0: BSD-style license. See licenses/Leptonica-BSD.txt.
+  https://github.com/DanBloomberg/leptonica/tree/1.85.0
+- IJG JPEG 9f: Independent JPEG Group terms and required product documentation acknowledgment.
+  See licenses/IJG-libjpeg-README.txt. This software is based in part on the work of the Independent JPEG Group.
+  https://github.com/libjpeg-turbo/ijg
+- libpng 1.6.48: PNG Reference Library License. See licenses/libpng-license.txt.
+  https://github.com/pnggroup/libpng/tree/v1.6.48
+- Tesseract tessdata_fast English and Russian trained data: Apache License 2.0. See LICENSE.
+  Model source: https://github.com/tesseract-ocr/tessdata_fast/tree/87416418657359cb625c412a48b6e1d6d41c29bd

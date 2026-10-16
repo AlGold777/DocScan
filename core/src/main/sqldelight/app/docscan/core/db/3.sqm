@@ -1,0 +1,1 @@
+ALTER TABLE DeleteUndo ADD COLUMN undo_batch_id TEXT;
