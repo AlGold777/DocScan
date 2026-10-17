@@ -22,13 +22,21 @@ internal class WorkspaceHomeAdapter(
     private val enabled: () -> Boolean,
     private val onPageClick: (StoredPage) -> Unit,
     private val onSelectionChanged: (StoredPage, Boolean) -> Unit,
-    private val onLongClick: () -> Unit,
+    private val onStartDrag: ((Holder) -> Unit)? = null,
 ) : ListAdapter<WorkspaceHomeAdapter.Item, WorkspaceHomeAdapter.Holder>(DIFF) {
     internal data class Item(val page: StoredPage, val index: Int, val active: Boolean)
+
+    private val localItems = mutableListOf<Item>()
 
     init { setHasStableIds(true) }
 
     override fun getItemId(position: Int): Long = stableIdFor(getItem(position).page.pageId)
+
+    override fun getItem(position: Int): Item =
+        if (position in localItems.indices) localItems[position] else super.getItem(position)
+
+    override fun getItemCount(): Int =
+        if (localItems.isNotEmpty()) localItems.size else super.getItemCount()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder = Holder(activity).also { holder ->
         holder.thumbnail.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(56), activity.dpForThumbnail(64))
@@ -66,8 +74,10 @@ internal class WorkspaceHomeAdapter(
         }
         holder.thumbnail.setOnClickListener { if (enabled()) onPageClick(item.page) }
         holder.thumbnail.setOnLongClickListener {
-            if (enabled()) onLongClick()
-            true
+            if (enabled()) {
+                onStartDrag?.invoke(holder)
+                true
+            } else false
         }
 
         holder.selection.tag = HOME_SELECTION_TAG_PREFIX + item.page.pageId.value
@@ -111,17 +121,29 @@ internal class WorkspaceHomeAdapter(
     }
 
     internal fun submitPages(pages: List<StoredPage>, activePageId: PageId?) {
-        submitList(pages.mapIndexed { index, page -> Item(page, index, page.pageId == activePageId) })
+        val newItems = pages.mapIndexed { index, page -> Item(page, index, page.pageId == activePageId) }
+        localItems.clear()
+        localItems.addAll(newItems)
+        submitList(newItems)
     }
 
-    internal fun currentPages(): List<StoredPage> = currentList.map { it.page }
+    internal fun currentPages(): List<StoredPage> =
+        if (localItems.isNotEmpty()) localItems.map { it.page } else currentList.map { it.page }
+
+    internal fun moveItem(fromPosition: Int, toPosition: Int): Boolean {
+        if (fromPosition !in localItems.indices || toPosition !in localItems.indices || fromPosition == toPosition) return false
+        val item = localItems.removeAt(fromPosition)
+        localItems.add(toPosition, item)
+        notifyItemMoved(fromPosition, toPosition)
+        return true
+    }
 
     /** Rebind attached checkboxes after the workspace busy state changes without a page diff. */
     internal fun refreshBoundItems() {
         notifyDataSetChanged()
     }
 
-    internal class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
+    internal inner class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
         LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -140,6 +162,12 @@ internal class WorkspaceHomeAdapter(
                 addView(thumbnail)
                 addView(selection)
                 layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(68), ViewGroup.LayoutParams.MATCH_PARENT)
+                setOnLongClickListener {
+                    if (enabled()) {
+                        onStartDrag?.invoke(this@Holder)
+                        true
+                    } else false
+                }
             }
         }
     }

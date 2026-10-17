@@ -392,6 +392,7 @@ class ProductActivity : AppCompatActivity() {
             addView(shutterRow, android.widget.FrameLayout.LayoutParams(-1, dp(88), Gravity.BOTTOM).apply { leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(8) })
         }
         root.addView(camera, LinearLayout.LayoutParams(-1, 0, 1f))
+        var homeItemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
         homeThumbnailAdapter = WorkspaceHomeAdapter(
             activity = this,
             loader = workspaceThumbnailLoader,
@@ -411,7 +412,11 @@ class ProductActivity : AppCompatActivity() {
                     runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
                 }
             } },
-            onLongClick = { if (canInteractWorkspace()) showWorkspaceMenu() },
+            onStartDrag = { holder ->
+                if (canInteractWorkspace()) {
+                    homeItemTouchHelper?.startDrag(holder)
+                }
+            },
         )
         homeRail = RecyclerView(this).apply {
             tag = "docscan-home-thumbnail-scroll"
@@ -422,6 +427,77 @@ class ProductActivity : AppCompatActivity() {
             setPadding(dp(8), dp(4), dp(8), dp(4))
             clipToPadding = false
         }
+        val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+            androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT,
+            0,
+        ) {
+            private var dragStarted = false
+            private var dragMoved = false
+
+            override fun isLongPressDragEnabled(): Boolean = true
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder,
+            ): Boolean {
+                val from = viewHolder.bindingAdapterPosition
+                val to = target.bindingAdapterPosition
+                if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION || from == to) return false
+                dragMoved = true
+                homeThumbnailAdapter.moveItem(from, to)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_DRAG) {
+                    dragStarted = true
+                    dragMoved = false
+                    viewHolder?.itemView?.apply {
+                        uiHapticFeedback(this)
+                        animate().scaleX(1.1f).scaleY(1.1f).alpha(0.85f).setDuration(120).start()
+                        elevation = dp(6).toFloat()
+                    }
+                }
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                viewHolder.itemView.apply {
+                    animate().scaleX(1.0f).scaleY(1.0f).alpha(1.0f).setDuration(120).start()
+                    elevation = 0f
+                }
+                if (dragStarted && dragMoved) {
+                    val projection = lastWorkspaceProjection
+                    if (projection != null && canInteractWorkspace()) {
+                        val newPages = homeThumbnailAdapter.currentPages()
+                        val activeStorage = storage
+                        if (activeStorage != null && newPages.isNotEmpty()) {
+                            io.execute {
+                                try {
+                                    activeStorage.reorderPages(projection, newPages)
+                                    val refreshed = activeStorage.workspaceProjection()
+                                    runOnUiThread {
+                                        status.text = getString(R.string.page_order_updated)
+                                        uiHapticFeedback(root)
+                                        renderPages(refreshed)
+                                    }
+                                } catch (failure: Exception) {
+                                    runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
+                                }
+                            }
+                        }
+                    }
+                }
+                dragStarted = false
+                dragMoved = false
+            }
+        })
+        homeItemTouchHelper = touchHelper
+        touchHelper.attachToRecyclerView(homeRail)
         val homeRailFrame = android.widget.FrameLayout(this).apply {
             tag = "docscan-home-thumbnail-strip"
             addView(homeRail, android.widget.FrameLayout.LayoutParams(-1, -1))
