@@ -2,7 +2,9 @@ package app.docscan.android
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -14,13 +16,14 @@ import app.docscan.core.model.PageId
 import app.docscan.core.store.StoredPage
 import java.util.UUID
 
-/** Stable-identity camera rail with drag & drop reordering and responsive thumbnail buttons. */
+/** Stable-identity camera rail with drag & drop reordering, double-tap viewer open, and responsive buttons. */
 internal class WorkspaceHomeAdapter(
     private val activity: ProductActivity,
     private val loader: WorkspaceThumbnailLoader,
     private val enabled: () -> Boolean,
     private val onPageClick: (StoredPage) -> Unit,
     private val onSelectionChanged: (StoredPage, Boolean) -> Unit,
+    private val onPageActive: ((StoredPage) -> Unit)? = null,
 ) : RecyclerView.Adapter<WorkspaceHomeAdapter.Holder>() {
     internal data class Item(val page: StoredPage, val index: Int, val active: Boolean)
 
@@ -146,7 +149,7 @@ internal class WorkspaceHomeAdapter(
         notifyDataSetChanged()
     }
 
-    internal class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
+    internal inner class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
         LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -160,11 +163,38 @@ internal class WorkspaceHomeAdapter(
         val selection = CheckBox(activity)
         var boundItem: Item? = null
 
+        private val gestureDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (!enabled()) return false
+                val pos = bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
+                    activity.uiHapticFeedback(thumbnail)
+                    onPageActive?.invoke(items[pos].page)
+                }
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (!enabled()) return false
+                val pos = bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
+                    activity.uiHapticFeedback(thumbnail)
+                    onPageClick(items[pos].page)
+                }
+                return true
+            }
+        })
+
         init {
             (itemView as LinearLayout).apply {
                 addView(thumbnail)
                 addView(selection)
                 layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(68), ViewGroup.LayoutParams.MATCH_PARENT)
+            }
+            thumbnail.setOnTouchListener { _, event ->
+                gestureDetector.onTouchEvent(event)
             }
         }
     }

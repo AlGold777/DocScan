@@ -412,6 +412,14 @@ class ProductActivity : AppCompatActivity() {
                     runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
                 }
             } },
+            onPageActive = { page -> if (canInteractWorkspace()) io.execute {
+                runCatching {
+                    storage?.setActivePage(page.pageId)
+                    storage?.workspaceProjection()
+                }.onSuccess { projection ->
+                    if (projection != null) runOnUiThread { renderPages(projection) }
+                }
+            } },
         )
         homeRail = RecyclerView(this).apply {
             tag = "docscan-home-thumbnail-scroll"
