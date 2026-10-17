@@ -45,6 +45,14 @@ android {
         }
     }
 
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.outputFileName =
+                "DocScan-${variant.buildType.name}-${variant.versionName}.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
