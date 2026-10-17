@@ -743,8 +743,13 @@ class StateStore(
                 canUndoImage = page.undo_image_version_id != null
                     && page.undo_workspace_session_id == openSessionId,
                 recognizedText = page.current_recognition_id?.let { recognitionId ->
-                    queries.recognitionById(recognitionId).executeAsOneOrNull()?.payload
-                        ?.let(RecognitionPayloadCodec::decode)?.text
+                    queries.recognitionById(recognitionId).executeAsOneOrNull()?.payload?.let { raw ->
+                        try {
+                            RecognitionPayloadCodec.decode(raw).text
+                        } catch (_: Exception) {
+                            raw
+                        }
+                    }
                 },
                 artifactState = artifact.state,
             )
@@ -847,6 +852,7 @@ class StateStore(
                 orderIndex = page.order_index,
                 recognizedText = recognition?.text,
                 recognizedGeometry = recognition?.geometry,
+                recognizedLayout = recognition?.layout,
             )
         }
         val payload = frozenPages.toCanonicalSavePayload(workspaceId)
@@ -1797,7 +1803,70 @@ class StateStore(
             append(page.recognizedText?.let { "\"${it.jsonEscape()}\"" } ?: "null")
             append(",\"recognizedGeometry\":")
             append(page.recognizedGeometry?.toCanonicalJson() ?: "null")
+            append(",\"recognizedLayout\":")
+            append(page.recognizedLayout?.toCanonicalJson() ?: "null")
             append('}')
+        }
+        append("]}")
+    }
+
+    private fun RecognitionLayout.toCanonicalJson(): String = buildString {
+        append("{\"formatVersion\":").append(formatVersion)
+        append(",\"sourceWidthPx\":").append(sourceWidthPx)
+        append(",\"sourceHeightPx\":").append(sourceHeightPx)
+        quality?.let { q ->
+            append(",\"quality\":{\"meanConfidence\":").append(q.meanConfidence)
+            append(",\"lowConfidenceWordCount\":").append(q.lowConfidenceWordCount)
+            append(",\"structureAvailable\":").append(q.structureAvailable)
+            q.language?.let { append(",\"language\":\"").append(it.jsonEscape()).append('"') }
+            append(",\"preprocessingProfile\":\"").append(q.preprocessingProfile.jsonEscape()).append('"')
+            append(",\"engineVersion\":\"").append(q.engineVersion.jsonEscape()).append('"')
+            append('}')
+        }
+        append(",\"blocks\":[")
+        blocks.forEachIndexed { bIndex, block ->
+            if (bIndex > 0) append(',')
+            append("{\"id\":\"").append(block.id.jsonEscape()).append('"')
+            append(",\"type\":\"").append(block.type.name.jsonEscape()).append('"')
+            append(",\"readingOrder\":").append(block.readingOrder)
+            append(",\"box\":{\"left\":").append(block.box.left)
+            append(",\"top\":").append(block.box.top)
+            append(",\"right\":").append(block.box.right)
+            append(",\"bottom\":").append(block.box.bottom).append('}')
+            append(",\"paragraphs\":[")
+            block.paragraphs.forEachIndexed { pIndex, par ->
+                if (pIndex > 0) append(',')
+                append("{\"box\":{\"left\":").append(par.box.left)
+                append(",\"top\":").append(par.box.top)
+                append(",\"right\":").append(par.box.right)
+                append(",\"bottom\":").append(par.box.bottom).append('}')
+                append(",\"lines\":[")
+                par.lines.forEachIndexed { lIndex, line ->
+                    if (lIndex > 0) append(',')
+                    append("{\"box\":{\"left\":").append(line.box.left)
+                    append(",\"top\":").append(line.box.top)
+                    append(",\"right\":").append(line.box.right)
+                    append(",\"bottom\":").append(line.box.bottom).append('}')
+                    line.baseline?.let { b ->
+                        append(",\"baseline\":{\"slope\":").append(b.slope).append(",\"intercept\":").append(b.intercept).append('}')
+                    }
+                    line.xHeight?.let { append(",\"xHeight\":").append(it) }
+                    append(",\"words\":[")
+                    line.words.forEachIndexed { wIndex, word ->
+                        if (wIndex > 0) append(',')
+                        append("{\"text\":\"").append(word.text.jsonEscape()).append('"')
+                        append(",\"box\":{\"left\":").append(word.box.left)
+                        append(",\"top\":").append(word.box.top)
+                        append(",\"right\":").append(word.box.right)
+                        append(",\"bottom\":").append(word.box.bottom).append('}')
+                        append(",\"confidence\":").append(word.confidence)
+                        append('}')
+                    }
+                    append("]}")
+                }
+                append("]}")
+            }
+            append("]}")
         }
         append("]}")
     }
@@ -2013,6 +2082,25 @@ class StateStore(
             if (queries.recognitionById(candidate.recognitionId.value).executeAsOneOrNull() != null) {
                 throw StoreConflict("Recognition ID already exists")
             }
+            candidate.layout?.let { layout ->
+                if (layout.sourceWidthPx <= 0 || layout.sourceHeightPx <= 0 || layout.formatVersion != 2) {
+                    throw StoreInvariantViolation("OCR layout header is invalid")
+                }
+                layout.blocks.forEach { block ->
+                    if (block.readingOrder < 0) {
+                        throw StoreInvariantViolation("OCR block reading order is negative")
+                    }
+                    block.paragraphs.forEach { par ->
+                        par.lines.forEach { line ->
+                            line.words.forEach { word ->
+                                if (word.text.isBlank() || !word.confidence.isFinite() || word.confidence !in 0f..100f) {
+                                    throw StoreInvariantViolation("OCR word geometry is outside the source image or malformed")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             candidate.geometry?.let { geometry ->
                 if (geometry.sourceWidthPx <= 0L || geometry.sourceHeightPx <= 0L
                     || geometry.formatVersion != 1L || geometry.coordinateSpace != OCR_WORD_COORDINATE_SPACE
@@ -2025,12 +2113,14 @@ class StateStore(
                     ) throw StoreInvariantViolation("OCR word geometry is outside the source image or malformed")
                 }
             }
+            val payload = candidate.layout?.let { RecognitionPayloadCodec.encode(candidate.recognizedText, it) }
+                ?: candidate.geometry?.let { RecognitionPayloadCodec.encode(candidate.recognizedText, it) }
+                ?: candidate.recognizedText
             queries.insertRecognition(
                 recognition_id = candidate.recognitionId.value,
                 page_id = candidate.pageId.value,
                 image_version_id = candidate.imageVersionId.value,
-                payload = candidate.geometry?.let { RecognitionPayloadCodec.encode(candidate.recognizedText, it) }
-                    ?: candidate.recognizedText,
+                payload = payload,
             )
             if (queries.commitCurrentRecognition(
                     current_recognition_id = candidate.recognitionId.value,

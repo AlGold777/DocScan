@@ -993,7 +993,8 @@ class ProductActivity : AppCompatActivity() {
         if (selectedCount == 0 || selectedCount > MAX_SAVE_PAGES || workspaceActionBlocked || externalWorkflowRunning.get()) return
 
         val now = java.time.LocalDateTime.now()
-        val defaultName = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm")) + ".pdf"
+        val defaultBaseName = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm"))
+        val defaultName = "$defaultBaseName.pdf"
 
         val density = resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
@@ -1014,20 +1015,21 @@ class ProductActivity : AppCompatActivity() {
         }
         container.addView(headerView)
 
-        // Filename input: 2026-10-17 06-04.pdf
+        // Filename input: 2026-10-17 06-04.pdf (name without extension selected in blue)
         val input = EditText(this).apply {
             setSingleLine(true)
             setText(defaultName)
             textSize = 16f
             gravity = Gravity.CENTER_HORIZONTAL
             setTextColor(0xFF0F172A.toInt())
+            highlightColor = 0x662563EB
             background = GradientDrawable().apply {
                 setColor(0xFFF1F5F9.toInt())
                 cornerRadius = dp(10).toFloat()
                 setStroke(dp(1), 0xFFCBD5E1.toInt())
             }
             setPadding(dp(16), dp(12), dp(16), dp(12))
-            selectAll()
+            setSelection(0, defaultBaseName.length)
         }
         container.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(16)
@@ -1066,7 +1068,7 @@ class ProductActivity : AppCompatActivity() {
             })
         }
 
-        dialogHost.builder(this)
+        val dialog = dialogHost.builder(this)
             .setView(container)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
@@ -1077,7 +1079,20 @@ class ProductActivity : AppCompatActivity() {
                 val includeJpg = if (autoOcrSkipped) true else (jpgCheck?.isChecked ?: true)
                 executeDocScanSave(cleanName, includeOcr, includeJpg)
             }
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            input.requestFocus()
+            val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+            imm?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            input.post {
+                val currentText = input.text?.toString() ?: ""
+                val dotIndex = currentText.lastIndexOf('.').takeIf { it > 0 } ?: defaultBaseName.length
+                val end = minOf(dotIndex, input.text?.length ?: 0)
+                input.setSelection(0, end)
+            }
+        }
+        dialog.show()
     }
 
     private fun promptExportBasename() {
@@ -3690,6 +3705,13 @@ class ProductActivity : AppCompatActivity() {
                             if (!isFinishing) {
                                 status.text = getString(R.string.ocr_complete)
                                 renderPages(projection)
+                                if (pageViewer?.isShowing == true) {
+                                    pageViewerPages = projection.pages.toList()
+                                    pageViewerPages.getOrNull(pageViewerIndex)?.let { currentPage ->
+                                        pageViewerText?.text = currentPage.recognizedText?.takeIf { it.isNotBlank() }
+                                            ?: getString(R.string.ocr_pending_or_empty)
+                                    }
+                                }
                             }
                         }
                     } catch (_: app.docscan.core.store.StoreConflict) {

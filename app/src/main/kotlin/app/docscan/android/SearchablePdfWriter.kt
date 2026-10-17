@@ -33,7 +33,8 @@ data class PdfOutputSettings(
 
 data class PdfInputPage(
     val openBitmap: () -> Bitmap,
-    val recognition: RecognitionGeometry?,
+    val recognition: RecognitionGeometry? = null,
+    val layout: app.docscan.core.store.RecognitionLayout? = null,
 )
 
 data class PdfWriteResult(val pageCount: Int, val fileSizeBytes: Long)
@@ -60,7 +61,7 @@ class SearchablePdfWriter(context: Context) {
                 pages.forEach { source ->
                     val bitmap = source.openBitmap()
                     try {
-                        addPage(document, bitmap, source.recognition, settings, font)
+                        addPage(document, bitmap, source.recognition, source.layout, settings, font)
                     } finally {
                         bitmap.recycle()
                     }
@@ -79,22 +80,16 @@ class SearchablePdfWriter(context: Context) {
         document: PDDocument,
         bitmap: Bitmap,
         recognition: RecognitionGeometry?,
+        layout: app.docscan.core.store.RecognitionLayout?,
         settings: PdfOutputSettings,
         font: PDType0Font?,
     ) {
-        if (recognition != null) {
-            require(recognition.sourceWidthPx == bitmap.width.toLong()
-                && recognition.sourceHeightPx == bitmap.height.toLong()
+        if (layout != null) {
+            require(layout.formatVersion == 2) { "OCR layout does not match formatVersion 2" }
+        } else if (recognition != null) {
+            require(recognition.formatVersion == 1L
                 && recognition.coordinateSpace == app.docscan.core.store.OCR_WORD_COORDINATE_SPACE
-                && recognition.formatVersion == 1L
-            ) { "OCR geometry does not match the oriented PDF source bitmap" }
-            recognition.words.forEach { word ->
-                require(word.text.isNotBlank() && word.leftPx >= 0L && word.topPx >= 0L
-                    && word.rightPx > word.leftPx && word.bottomPx > word.topPx
-                    && word.rightPx <= bitmap.width.toLong() && word.bottomPx <= bitmap.height.toLong()
-                    && word.confidence.isFinite() && word.confidence in 0.0..100.0
-                ) { "OCR word bounds are invalid for the oriented PDF source bitmap" }
-            }
+            ) { "OCR geometry does not match formatVersion 1" }
         }
         val pageWidth = if (bitmap.width >= bitmap.height) settings.a4LongSidePoints else settings.a4ShortSidePoints
         val pageHeight = if (bitmap.width >= bitmap.height) settings.a4ShortSidePoints else settings.a4LongSidePoints
@@ -110,37 +105,88 @@ class SearchablePdfWriter(context: Context) {
         PDPageContentStream(document, page).use { content ->
             content.drawImage(image, offsetX, offsetY, imageWidth, imageHeight)
             if (font != null) {
-                recognition?.words?.forEach { word ->
-                    val boxWidth = (word.rightPx - word.leftPx) * scale
-                    val boxHeight = (word.bottomPx - word.topPx) * scale
-                    val x = offsetX + word.leftPx * scale
-                    val bottom = offsetY + (bitmap.height - word.bottomPx) * scale
-                    val fontDescriptor = font.fontDescriptor
-                    val glyphHeight = fontDescriptor.ascent - fontDescriptor.descent
-                    if (boxWidth <= 0f || boxHeight <= 0f || glyphHeight <= 0f) return@forEach
-                    val safeWord = sanitizeForFont(font, word.text)
-                    if (safeWord.isBlank()) return@forEach
-                    val fontSize = boxHeight * 1000f / glyphHeight
-                    val baseline = bottom - fontDescriptor.descent * fontSize / 1000f
-                    val naturalWidth = try {
-                        font.getStringWidth(safeWord) * fontSize / 1000f
-                    } catch (_: Exception) {
-                        0f
+                if (layout != null) {
+                    val blocks = layout.blocks.sortedBy { it.readingOrder }
+                    blocks.forEach { block ->
+                        block.paragraphs.forEach { paragraph ->
+                            paragraph.lines.forEach { line ->
+                                content.beginText()
+                                content.setRenderingMode(RenderingMode.NEITHER)
+                                line.words.forEach { word ->
+                                    val boxWidth = word.box.width * imageWidth
+                                    val boxHeight = word.box.height * imageHeight
+                                    val x = offsetX + word.box.left * imageWidth
+                                    val bottom = offsetY + (1f - word.box.bottom) * imageHeight
+                                    val fontDescriptor = font.fontDescriptor
+                                    val glyphHeight = fontDescriptor.ascent - fontDescriptor.descent
+                                    if (boxWidth <= 0f || boxHeight <= 0f || glyphHeight <= 0f) return@forEach
+                                    val cleanText = app.docscan.core.store.sanitizeOcrText(word.text)
+                                    val safeWord = sanitizeForFont(font, cleanText)
+                                    if (safeWord.isBlank()) return@forEach
+                                    val fontSize = boxHeight * 1000f / glyphHeight
+                                    val lineBaseline = line.baseline
+                                    val baseline = if (lineBaseline != null && layout.sourceHeightPx > 0) {
+                                        val lineBottomPdf = offsetY + (1f - line.box.bottom) * imageHeight
+                                        val baselinePdf = lineBottomPdf - (lineBaseline.intercept / layout.sourceHeightPx) * imageHeight
+                                        baselinePdf.coerceIn(bottom, bottom + boxHeight)
+                                    } else {
+                                        bottom - fontDescriptor.descent * fontSize / 1000f
+                                    }
+                                    val naturalWidth = try {
+                                        font.getStringWidth(safeWord) * fontSize / 1000f
+                                    } catch (_: Exception) {
+                                        0f
+                                    }
+                                    if (naturalWidth <= 0f) return@forEach
+                                    val horizontalScale = boxWidth * 100f / naturalWidth
+                                    if (!horizontalScale.isFinite() || horizontalScale <= 0f) return@forEach
+                                    content.setFont(font, fontSize)
+                                    content.setHorizontalScaling(horizontalScale)
+                                    content.setTextMatrix(Matrix.getTranslateInstance(x, baseline))
+                                    try {
+                                        content.showText(safeWord)
+                                    } catch (_: Exception) {
+                                        // Fail-safe: do not let a rogue glyph fail the entire PDF export
+                                    }
+                                }
+                                content.endText()
+                            }
+                        }
                     }
-                    if (naturalWidth <= 0f) return@forEach
-                    val horizontalScale = boxWidth * 100f / naturalWidth
-                    if (!horizontalScale.isFinite() || horizontalScale <= 0f) return@forEach
-                    content.beginText()
-                    content.setFont(font, fontSize)
-                    content.setRenderingMode(RenderingMode.NEITHER)
-                    content.setHorizontalScaling(horizontalScale)
-                    content.setTextMatrix(Matrix.getTranslateInstance(x, baseline))
-                    try {
-                        content.showText(safeWord)
-                    } catch (_: Exception) {
-                        // Fail-safe: do not let a rogue glyph fail the entire PDF export
+                } else if (recognition != null) {
+                    recognition.words.forEach { word ->
+                        val boxWidth = (word.rightPx - word.leftPx) * scale
+                        val boxHeight = (word.bottomPx - word.topPx) * scale
+                        val x = offsetX + word.leftPx * scale
+                        val bottom = offsetY + (bitmap.height - word.bottomPx) * scale
+                        val fontDescriptor = font.fontDescriptor
+                        val glyphHeight = fontDescriptor.ascent - fontDescriptor.descent
+                        if (boxWidth <= 0f || boxHeight <= 0f || glyphHeight <= 0f) return@forEach
+                        val cleanText = app.docscan.core.store.sanitizeOcrText(word.text)
+                        val safeWord = sanitizeForFont(font, cleanText)
+                        if (safeWord.isBlank()) return@forEach
+                        val fontSize = boxHeight * 1000f / glyphHeight
+                        val baseline = bottom - fontDescriptor.descent * fontSize / 1000f
+                        val naturalWidth = try {
+                            font.getStringWidth(safeWord) * fontSize / 1000f
+                        } catch (_: Exception) {
+                            0f
+                        }
+                        if (naturalWidth <= 0f) return@forEach
+                        val horizontalScale = boxWidth * 100f / naturalWidth
+                        if (!horizontalScale.isFinite() || horizontalScale <= 0f) return@forEach
+                        content.beginText()
+                        content.setFont(font, fontSize)
+                        content.setRenderingMode(RenderingMode.NEITHER)
+                        content.setHorizontalScaling(horizontalScale)
+                        content.setTextMatrix(Matrix.getTranslateInstance(x, baseline))
+                        try {
+                            content.showText(safeWord)
+                        } catch (_: Exception) {
+                            // Fail-safe: do not let a rogue glyph fail the entire PDF export
+                        }
+                        content.endText()
                     }
-                    content.endText()
                 }
             }
         }

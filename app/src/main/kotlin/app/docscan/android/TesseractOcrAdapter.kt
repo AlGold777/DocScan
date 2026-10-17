@@ -2,7 +2,6 @@ package app.docscan.android
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.text.Html
 import app.docscan.core.store.OCR_WORD_COORDINATE_SPACE
 import app.docscan.core.store.RecognitionGeometry
 import app.docscan.core.store.RecognizedWord
@@ -17,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class TesseractOcrAdapter(
     context: Context,
     private val progressObserverForTest: (() -> Unit)? = null,
-) : AutoCloseable {
+) : DocumentRecognizer {
     private val appContext = context.applicationContext
     private val dataRoot = File(appContext.filesDir, "docscan-tesseract/fast-8741641")
     private val tess = TessBaseAPI(
@@ -25,16 +24,25 @@ class TesseractOcrAdapter(
     )
     private val cancellationRequested = AtomicBoolean(false)
     private val nativeRecognitionActive = AtomicBoolean(false)
+    private val resultIteratorExtractor = ResultIteratorLayoutExtractor()
     @Volatile private var initialized = false
     private var unusable = false
 
-    data class OcrResult(val text: String, val geometry: RecognitionGeometry)
+    data class OcrResult(
+        val text: String,
+        val geometry: RecognitionGeometry,
+        val layout: app.docscan.core.store.RecognitionLayout,
+    )
 
     fun estimateDecodedWorkingSetBytes(file: File): Long =
         ProductImageDecoder.estimateWorkingSetBytes(file, MAX_BITMAP_PIXELS)
 
     fun recognize(file: File): String {
         return recognizeDetailed(file).text
+    }
+
+    override fun recognize(file: File, options: RecognitionOptions): app.docscan.core.store.RecognitionLayout {
+        return recognizeDetailed(file, options.isCancelled).layout
     }
 
     fun recognizeDetailed(file: File, isCancelled: () -> Boolean = { false }): OcrResult {
@@ -57,37 +65,102 @@ class TesseractOcrAdapter(
                 throwIfCancelled(isCancelled)
                 nativeRecognitionActive.set(true)
                 throwIfCancelled(isCancelled)
-                val words = try {
-                    val hocr = tess.getHOCRText(0).orEmpty()
-                    val iterWords = extractWordsFromIterator(tess)
-                    if (iterWords.isNotEmpty()) {
-                        iterWords
-                    } else {
-                        parseHocrWords(hocr)
-                    }
+
+                // 1. Try ResultIteratorLayoutExtractor directly from Tesseract native layout structures
+                var layout: app.docscan.core.store.RecognitionLayout? = try {
+                    resultIteratorExtractor.extract(tess, decoded.width, decoded.height)
                 } catch (_: Throwable) {
-                    val hocr = tess.getHOCRText(0).orEmpty()
-                    parseHocrWords(hocr)
-                } finally {
-                    nativeRecognitionActive.set(false)
+                    null
                 }
-                throwIfCancelled(isCancelled)
+
+                // 2. If ResultIterator yielded no blocks, fall back to HocrLayoutExtractor
+                if (layout == null || layout.blocks.isEmpty()) {
+                    val hocr = try {
+                        tess.getHOCRText(0).orEmpty()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                    if (hocr.isNotBlank()) {
+                        layout = app.docscan.core.ocr.HocrParser.parse(
+                            hocr = hocr,
+                            fallbackWidthPx = decoded.width,
+                            fallbackHeightPx = decoded.height,
+                        )
+                    }
+                }
+
+                // 3. Fail-safe text preservation: if layout still has no text, check getUTF8Text()
+                val plainText = layout?.toPlainText().orEmpty()
+                val finalLayout = if (plainText.isBlank()) {
+                    val utf8 = try {
+                        tess.getUTF8Text()?.trim().orEmpty()
+                    } catch (_: Throwable) {
+                        ""
+                    }
+                    if (utf8.isNotBlank()) {
+                        createFallbackLayout(utf8, decoded.width, decoded.height)
+                    } else {
+                        layout ?: app.docscan.core.ocr.HocrParser.parse("", decoded.width, decoded.height)
+                    }
+                } else {
+                    layout!!
+                }
+
                 OcrResult(
-                    text = wordsToText(words),
-                    geometry = RecognitionGeometry(
-                        sourceWidthPx = decoded.width.toLong(),
-                        sourceHeightPx = decoded.height.toLong(),
-                        coordinateSpace = OCR_WORD_COORDINATE_SPACE,
-                        words = words,
-                    ),
+                    text = finalLayout.toPlainText(),
+                    geometry = finalLayout.toLegacyGeometry(),
+                    layout = finalLayout,
                 )
             } finally {
+                nativeRecognitionActive.set(false)
                 tess.clear()
             }
         }
     }
 
-    fun cancelCurrentRecognition() {
+    private fun createFallbackLayout(
+        text: String,
+        widthPx: Int,
+        heightPx: Int,
+    ): app.docscan.core.store.RecognitionLayout {
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val ocrLines = lines.map { lineStr ->
+            val words = lineStr.split(Regex("\\s+")).filter { it.isNotEmpty() }.map { w ->
+                val sanitized = app.docscan.core.store.sanitizeOcrText(w)
+                app.docscan.core.store.OcrWord(
+                    text = sanitized.ifEmpty { w },
+                    box = app.docscan.core.store.NormalizedBox(0.01f, 0.01f, 0.99f, 0.99f),
+                    confidence = 80f,
+                )
+            }
+            app.docscan.core.store.OcrLine(
+                box = app.docscan.core.store.NormalizedBox(0.01f, 0.01f, 0.99f, 0.99f),
+                baseline = null,
+                xHeight = null,
+                words = words,
+            )
+        }
+        val paragraph = app.docscan.core.store.OcrParagraph(
+            box = app.docscan.core.store.NormalizedBox(0.01f, 0.01f, 0.99f, 0.99f),
+            lines = ocrLines,
+        )
+        val block = app.docscan.core.store.OcrBlock(
+            id = "fallback_block",
+            type = app.docscan.core.store.BlockType.TEXT,
+            box = app.docscan.core.store.NormalizedBox(0.01f, 0.01f, 0.99f, 0.99f),
+            readingOrder = 0,
+            paragraphs = listOf(paragraph),
+        )
+        return app.docscan.core.store.RecognitionLayout(
+            sourceWidthPx = maxOf(1, widthPx),
+            sourceHeightPx = maxOf(1, heightPx),
+            blocks = listOf(block),
+            quality = app.docscan.core.store.LayoutQuality(80f, 0, structureAvailable = false),
+            formatVersion = 2,
+        )
+    }
+
+    override fun cancelCurrentRecognition() {
         cancellationRequested.set(true)
         if (nativeRecognitionActive.get() && initialized) {
             tess.stop()
@@ -149,68 +222,6 @@ class TesseractOcrAdapter(
         if (cancellationRequested.get() || isCancelled()) throw CancellationException("OCR was canceled")
     }
 
-    private fun extractWordsFromIterator(tess: TessBaseAPI): List<RecognizedWord> {
-        val words = mutableListOf<RecognizedWord>()
-        val iterator = tess.resultIterator ?: return emptyList()
-        try {
-            iterator.begin()
-            do {
-                val text = iterator.getUTF8Text(TessBaseAPI.PageIteratorLevel.RIL_WORD)?.trim().orEmpty()
-                if (text.isNotEmpty()) {
-                    val box = iterator.getBoundingBox(TessBaseAPI.PageIteratorLevel.RIL_WORD)
-                    val conf = iterator.confidence(TessBaseAPI.PageIteratorLevel.RIL_WORD).toDouble().coerceIn(0.0, 100.0)
-                    if (box != null && box.size >= 4) {
-                        val left = box[0].toLong()
-                        val top = box[1].toLong()
-                        val right = box[2].toLong()
-                        val bottom = box[3].toLong()
-                        if (left >= 0 && top >= 0 && right > left && bottom > top) {
-                            words += RecognizedWord(text, left, top, right, bottom, conf)
-                        }
-                    }
-                }
-            } while (iterator.next(TessBaseAPI.PageIteratorLevel.RIL_WORD))
-            return words
-        } finally {
-            iterator.delete()
-        }
-    }
-
-    private fun parseHocrWords(hocr: String): List<RecognizedWord> {
-        val words = mutableListOf<RecognizedWord>()
-        WORD_SPAN.findAll(hocr).forEach { match ->
-            val openTag = match.groupValues[1]
-            val title = TITLE_ATTRIBUTE.find(openTag)?.groupValues?.get(1).orEmpty()
-            val bounds = BBOX.find(title)?.groupValues?.drop(1)?.mapNotNull(String::toLongOrNull)
-                ?: return@forEach
-            if (bounds.size != 4) return@forEach
-            val left = bounds[0]
-            val top = bounds[1]
-            val right = bounds[2]
-            val bottom = bounds[3]
-            if (left < 0 || top < 0 || right <= left || bottom <= top) return@forEach
-            val word = Html.fromHtml(match.groupValues[2], Html.FROM_HTML_MODE_LEGACY).toString().trim()
-            if (word.isEmpty()) return@forEach
-            val confidence = CONFIDENCE.find(title)?.groupValues?.get(1)?.toDoubleOrNull()?.coerceIn(0.0, 100.0) ?: 0.0
-            words += RecognizedWord(word, left, top, right, bottom, confidence)
-        }
-        return words
-    }
-
-    private fun wordsToText(words: List<RecognizedWord>): String {
-        val lines = mutableListOf<MutableList<RecognizedWord>>()
-        words.forEach { word ->
-            val current = lines.lastOrNull()
-            val previous = current?.lastOrNull()
-            val overlap = if (previous == null) 0L else
-                (minOf(previous.bottomPx, word.bottomPx) - maxOf(previous.topPx, word.topPx)).coerceAtLeast(0L)
-            val sameLineThreshold = if (previous == null) 0L else
-                minOf(previous.bottomPx - previous.topPx, word.bottomPx - word.topPx) / 2
-            if (current == null || overlap < sameLineThreshold) lines += mutableListOf(word) else current += word
-        }
-        return lines.joinToString("\n") { line -> line.joinToString(" ") { it.text } }
-    }
-
     private inline fun <T> android.graphics.Bitmap.useBitmap(block: (android.graphics.Bitmap) -> T): T = try {
         block(this)
     } finally {
@@ -219,10 +230,6 @@ class TesseractOcrAdapter(
 
     private companion object {
         const val MAX_BITMAP_PIXELS = 12L * 1024L * 1024L
-        val WORD_SPAN = Regex("""(?is)(<span\b(?=[^>]*\bclass=['"][^'"]*\bocrx_word\b)[^>]*>)(.*?)</span>""")
-        val TITLE_ATTRIBUTE = Regex("""(?is)\btitle=['"]([^'"]*)['"]""")
-        val BBOX = Regex("""\bbbox\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)""")
-        val CONFIDENCE = Regex("""\bx_wconf\s+([\d.]+)""")
         const val ENG_SHA256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
         const val RUS_SHA256 = "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225"
     }

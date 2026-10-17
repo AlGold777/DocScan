@@ -357,6 +357,7 @@ data class FrozenSavePage(
     val orderIndex: Long,
     val recognizedText: String?,
     val recognizedGeometry: RecognitionGeometry?,
+    val recognizedLayout: RecognitionLayout? = null,
 )
 
 @ConsistentCopyVisibility
@@ -399,6 +400,7 @@ data class RecognitionCandidate(
     val desiredOperationKey: String,
     val recognizedText: String,
     val geometry: RecognitionGeometry? = null,
+    val layout: RecognitionLayout? = null,
 )
 
 data class RecognitionGeometry(

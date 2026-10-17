@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -1193,6 +1194,88 @@ class StateStoreTest {
         assertThrows(IllegalArgumentException::class.java) {
             RecognitionPayloadCodec.decode("DOCSCAN-OCR-GEOMETRY/1\nnot-base64\nheader")
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            RecognitionPayloadCodec.decode("DOCSCAN-OCR-LAYOUT/2\nnot-base64\nheader")
+        }
+    }
+
+    @Test
+    fun recognitionLayoutRoundTripsAndFreezesInSaveManifest() {
+        val artifact = durableArtifact()
+        store.recordStagedDurableArtifact(artifact)
+        val page = captureCommand(artifact).copy(selected = true)
+        store.commitCapture(page)
+        val recognitionId = RecognitionId.new()
+
+        val box = NormalizedBox(50f / 1400f, 50f / 900f, 800f / 1400f, 150f / 900f)
+        val word1Box = NormalizedBox(50f / 1400f, 50f / 900f, 500f / 1400f, 150f / 900f)
+        val word2Box = NormalizedBox(520f / 1400f, 50f / 900f, 800f / 1400f, 150f / 900f)
+        val layout = RecognitionLayout(
+            sourceWidthPx = 1400,
+            sourceHeightPx = 900,
+            blocks = listOf(
+                OcrBlock(
+                    id = "block_1",
+                    type = BlockType.TITLE,
+                    box = box,
+                    readingOrder = 0,
+                    paragraphs = listOf(
+                        OcrParagraph(
+                            box = box,
+                            lines = listOf(
+                                OcrLine(
+                                    box = box,
+                                    baseline = Baseline(0.0f, -5.0f),
+                                    xHeight = null,
+                                    words = listOf(
+                                        OcrWord("Счёт-фактура", word1Box, 98.0f),
+                                        OcrWord("№123", word2Box, 95.0f),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        store.commitRecognition(
+            RecognitionCandidate(
+                recognitionId = recognitionId,
+                workspaceId = workspaceId,
+                pageId = page.pageId,
+                imageVersionId = page.imageVersionId,
+                contentRevision = 1L,
+                desiredOperationKey = "OCR_LATIN_V1",
+                recognizedText = layout.toPlainText(),
+                layout = layout,
+            ),
+        )
+
+        val storedPayload = database.schemaQueries.recognitionById(recognitionId.value).executeAsOne().payload
+        assertTrue(storedPayload.startsWith("DOCSCAN-OCR-LAYOUT/2\n"))
+        val decoded = RecognitionPayloadCodec.decode(storedPayload)
+        assertEquals("Счёт-фактура №123", decoded.text)
+        assertNotNull(decoded.layout)
+        assertEquals(1400, decoded.layout?.sourceWidthPx)
+        assertEquals(900, decoded.layout?.sourceHeightPx)
+        assertEquals(1, decoded.layout?.blocks?.size)
+        assertEquals(BlockType.TITLE, decoded.layout?.blocks?.first()?.type)
+        assertEquals("Счёт-фактура", decoded.layout?.blocks?.first()?.lines?.first()?.words?.first()?.text)
+
+        // Legacy geometry compatibility projection
+        assertNotNull(decoded.geometry)
+        assertEquals(1400L, decoded.geometry?.sourceWidthPx)
+        assertEquals(2, decoded.geometry?.words?.size)
+
+        // Manifest freezing
+        val manifestId = SaveManifestId.new()
+        val frozen = store.freezeSelectedPagesForSave(workspaceId, manifestId)
+        val frozenPage = frozen.pages.single()
+        assertEquals("Счёт-фактура №123", frozenPage.recognizedText)
+        assertNotNull(frozenPage.recognizedLayout)
+        assertEquals(1400, frozenPage.recognizedLayout?.sourceWidthPx)
+        assertTrue(frozen.frozenPayload.contains("\"recognizedLayout\":{\"formatVersion\":2"))
     }
 
     @Test

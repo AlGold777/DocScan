@@ -217,6 +217,7 @@ internal class ProductSelfTestRunner(
                         desiredOperationKey = OCR_OPERATION_KEY,
                         recognizedText = recognized.text,
                         geometry = recognized.geometry,
+                        layout = recognized.layout,
                     ),
                 )
                 check(sandbox.visiblePages().single().recognizedText == recognized.text) {

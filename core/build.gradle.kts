@@ -19,7 +19,9 @@ sqldelight {
 
 dependencies {
     implementation("app.cash.sqldelight:runtime:2.3.2")
+    implementation("org.jsoup:jsoup:1.18.3")
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("app.cash.sqldelight:sqlite-driver:2.3.2")
 }
+

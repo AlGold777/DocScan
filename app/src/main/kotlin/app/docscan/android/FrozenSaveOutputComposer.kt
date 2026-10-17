@@ -77,6 +77,12 @@ class FrozenSaveOutputComposer(
                     ?: throw IllegalArgumentException("Frozen source image cannot be decoded")
                 val sourceWidth = decoded.width
                 val sourceHeight = decoded.height
+                page.recognizedLayout?.let { layout ->
+                    require(layout.sourceWidthPx == sourceWidth
+                        && layout.sourceHeightPx == sourceHeight) {
+                        "Frozen OCR layout does not match its source ImageVersion"
+                    }
+                }
                 page.recognizedGeometry?.let { geometry ->
                     require(geometry.sourceWidthPx == sourceWidth.toLong()
                         && geometry.sourceHeightPx == sourceHeight.toLong()) {
@@ -108,9 +114,12 @@ class FrozenSaveOutputComposer(
                         checkBitmap.recycle()
                     }
                     val effectiveGeometry = if (includeOcr) page.recognizedGeometry else null
-                    pageCandidates += PageCandidate(jpeg, scaleGeometry(
-                        effectiveGeometry, sourceWidth, sourceHeight, bitmap.width, bitmap.height,
-                    ))
+                    val effectiveLayout = if (includeOcr) page.recognizedLayout else null
+                    pageCandidates += PageCandidate(
+                        jpeg = jpeg,
+                        recognition = scaleGeometry(effectiveGeometry, sourceWidth, sourceHeight, bitmap.width, bitmap.height),
+                        layout = scaleLayout(effectiveLayout, sourceWidth, sourceHeight, bitmap.width, bitmap.height),
+                    )
                     FrozenPageOutput(
                         imageVersionId = page.imageVersionId.value,
                         orderIndex = page.orderIndex,
@@ -130,6 +139,7 @@ class FrozenSaveOutputComposer(
                             ?: throw IllegalArgumentException("Bounded companion JPG cannot be decoded")
                     },
                     recognition = candidate.recognition,
+                    layout = candidate.layout,
                 )
             }
             val pdfTemp = File(staging, "document.pdf")
@@ -176,8 +186,15 @@ class FrozenSaveOutputComposer(
         PDDocument.load(pdfFile, MemoryUsageSetting.setupTempFileOnly()).use { document ->
             check(document.numberOfPages == pages.size) { "PDF page count differs from frozen SaveManifest" }
             if (includeOcr) {
-                val expectedWords = pages.flatMap { it.recognizedGeometry?.words.orEmpty() }.map { it.text }
-                    .filter { it.isNotBlank() }
+                val expectedWords = pages.flatMap { page ->
+                    val layout = page.recognizedLayout
+                    val geometry = page.recognizedGeometry
+                    when {
+                        layout != null -> layout.blocks.flatMap { it.lines.flatMap { line -> line.words.map { w -> w.text } } }
+                        geometry != null -> geometry.words.map { it.text }
+                        else -> emptyList()
+                    }
+                }.filter { it.isNotBlank() }
                 if (expectedWords.isNotEmpty()) {
                     val extracted = PDFTextStripper().getText(document).normalizeWhitespace()
                     expectedWords.forEach { word ->
@@ -233,7 +250,25 @@ class FrozenSaveOutputComposer(
         return geometry.copy(sourceWidthPx = outputWidth.toLong(), sourceHeightPx = outputHeight.toLong(), words = words)
     }
 
-    private data class PageCandidate(val jpeg: File, val recognition: RecognitionGeometry?)
+    private fun scaleLayout(
+        layout: app.docscan.core.store.RecognitionLayout?,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int,
+    ): app.docscan.core.store.RecognitionLayout? {
+        if (layout == null) return null
+        return layout.copy(
+            sourceWidthPx = outputWidth,
+            sourceHeightPx = outputHeight,
+        )
+    }
+
+    private data class PageCandidate(
+        val jpeg: File,
+        val recognition: RecognitionGeometry?,
+        val layout: app.docscan.core.store.RecognitionLayout? = null,
+    )
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
