@@ -393,7 +393,6 @@ class ProductActivity : AppCompatActivity() {
             addView(shutterRow, android.widget.FrameLayout.LayoutParams(-1, dp(88), Gravity.BOTTOM).apply { leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(8) })
         }
         root.addView(camera, LinearLayout.LayoutParams(-1, 0, 1f))
-        var homeItemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper? = null
         homeThumbnailAdapter = WorkspaceHomeAdapter(
             activity = this,
             loader = workspaceThumbnailLoader,
@@ -413,11 +412,6 @@ class ProductActivity : AppCompatActivity() {
                     runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
                 }
             } },
-            onStartDrag = { holder ->
-                if (canInteractWorkspace()) {
-                    homeItemTouchHelper?.startDrag(holder)
-                }
-            },
         )
         homeRail = RecyclerView(this).apply {
             tag = "docscan-home-thumbnail-scroll"
@@ -497,7 +491,6 @@ class ProductActivity : AppCompatActivity() {
                 dragMoved = false
             }
         })
-        homeItemTouchHelper = touchHelper
         touchHelper.attachToRecyclerView(homeRail)
         val homeRailFrame = android.widget.FrameLayout(this).apply {
             tag = "docscan-home-thumbnail-strip"

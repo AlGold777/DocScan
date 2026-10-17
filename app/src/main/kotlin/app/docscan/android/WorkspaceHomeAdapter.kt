@@ -9,41 +9,37 @@ import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import app.docscan.core.model.PageId
 import app.docscan.core.store.StoredPage
 import java.util.UUID
 
-/** Stable-identity camera rail. Only attached RecyclerView holders request a bitmap. */
+/** Stable-identity camera rail with drag & drop reordering and responsive thumbnail buttons. */
 internal class WorkspaceHomeAdapter(
     private val activity: ProductActivity,
     private val loader: WorkspaceThumbnailLoader,
     private val enabled: () -> Boolean,
     private val onPageClick: (StoredPage) -> Unit,
     private val onSelectionChanged: (StoredPage, Boolean) -> Unit,
-    private val onStartDrag: ((Holder) -> Unit)? = null,
-) : ListAdapter<WorkspaceHomeAdapter.Item, WorkspaceHomeAdapter.Holder>(DIFF) {
+) : RecyclerView.Adapter<WorkspaceHomeAdapter.Holder>() {
     internal data class Item(val page: StoredPage, val index: Int, val active: Boolean)
 
-    private val localItems = mutableListOf<Item>()
+    private val items = mutableListOf<Item>()
 
     init { setHasStableIds(true) }
 
-    override fun getItemId(position: Int): Long = stableIdFor(getItem(position).page.pageId)
+    override fun getItemId(position: Int): Long = stableIdFor(items[position].page.pageId)
 
-    override fun getItem(position: Int): Item =
-        if (position in localItems.indices) localItems[position] else super.getItem(position)
+    override fun getItemCount(): Int = items.size
 
-    override fun getItemCount(): Int =
-        if (localItems.isNotEmpty()) localItems.size else super.getItemCount()
+    internal fun getItem(position: Int): Item = items[position]
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder = Holder(activity).also { holder ->
         holder.thumbnail.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(56), activity.dpForThumbnail(64))
         holder.selection.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(56), activity.dpForThumbnail(48))
     }
 
-    override fun onBindViewHolder(holder: Holder, position: Int) = bind(holder, getItem(position))
+    override fun onBindViewHolder(holder: Holder, position: Int) = bind(holder, items[position])
 
     override fun onViewAttachedToWindow(holder: Holder) {
         super.onViewAttachedToWindow(holder)
@@ -72,12 +68,12 @@ internal class WorkspaceHomeAdapter(
             setColor(0xff303030.toInt())
             setStroke(activity.dpForThumbnail(if (item.active) 3 else 1), if (item.active) Color.WHITE else 0xff777777.toInt())
         }
-        holder.thumbnail.setOnClickListener { if (enabled()) onPageClick(item.page) }
-        holder.thumbnail.setOnLongClickListener {
-            if (enabled()) {
-                onStartDrag?.invoke(holder)
-                true
-            } else false
+        holder.thumbnail.setOnClickListener {
+            if (!enabled()) return@setOnClickListener
+            val pos = holder.bindingAdapterPosition
+            if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
+                onPageClick(items[pos].page)
+            }
         }
 
         holder.selection.tag = HOME_SELECTION_TAG_PREFIX + item.page.pageId.value
@@ -87,16 +83,18 @@ internal class WorkspaceHomeAdapter(
         holder.selection.isEnabled = enabled()
         holder.selection.setOnCheckedChangeListener(null)
         holder.selection.isChecked = item.page.selected
-        var restoringSelection = false
         holder.selection.setOnCheckedChangeListener { checkbox, checked ->
-            if (restoringSelection) return@setOnCheckedChangeListener
             if (!enabled()) {
-                restoringSelection = true
                 checkbox.isChecked = item.page.selected
-                restoringSelection = false
                 return@setOnCheckedChangeListener
             }
-            onSelectionChanged(item.page, checked)
+            val pos = holder.bindingAdapterPosition
+            if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
+                val page = items[pos].page
+                if (page.selected != checked) {
+                    onSelectionChanged(page, checked)
+                }
+            }
         }
         if (holder.itemView.isAttachedToWindow) bindThumbnail(holder, item)
     }
@@ -122,18 +120,23 @@ internal class WorkspaceHomeAdapter(
 
     internal fun submitPages(pages: List<StoredPage>, activePageId: PageId?) {
         val newItems = pages.mapIndexed { index, page -> Item(page, index, page.pageId == activePageId) }
-        localItems.clear()
-        localItems.addAll(newItems)
-        submitList(newItems)
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = items.size
+            override fun getNewListSize(): Int = newItems.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean = items[oldPos].page.pageId == newItems[newPos].page.pageId
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean = items[oldPos] == newItems[newPos]
+        })
+        items.clear()
+        items.addAll(newItems)
+        diffResult.dispatchUpdatesTo(this)
     }
 
-    internal fun currentPages(): List<StoredPage> =
-        if (localItems.isNotEmpty()) localItems.map { it.page } else currentList.map { it.page }
+    internal fun currentPages(): List<StoredPage> = items.map { it.page }
 
     internal fun moveItem(fromPosition: Int, toPosition: Int): Boolean {
-        if (fromPosition !in localItems.indices || toPosition !in localItems.indices || fromPosition == toPosition) return false
-        val item = localItems.removeAt(fromPosition)
-        localItems.add(toPosition, item)
+        if (fromPosition !in items.indices || toPosition !in items.indices || fromPosition == toPosition) return false
+        val item = items.removeAt(fromPosition)
+        items.add(toPosition, item)
         notifyItemMoved(fromPosition, toPosition)
         return true
     }
@@ -143,7 +146,7 @@ internal class WorkspaceHomeAdapter(
         notifyDataSetChanged()
     }
 
-    internal inner class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
+    internal class Holder(activity: ProductActivity) : RecyclerView.ViewHolder(
         LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -162,12 +165,6 @@ internal class WorkspaceHomeAdapter(
                 addView(thumbnail)
                 addView(selection)
                 layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(68), ViewGroup.LayoutParams.MATCH_PARENT)
-                setOnLongClickListener {
-                    if (enabled()) {
-                        onStartDrag?.invoke(this@Holder)
-                        true
-                    } else false
-                }
             }
         }
     }
@@ -175,11 +172,6 @@ internal class WorkspaceHomeAdapter(
     companion object {
         const val HOME_THUMBNAIL_TAG_PREFIX = "docscan-home-page:"
         const val HOME_SELECTION_TAG_PREFIX = "docscan-home-selection:"
-
-        private val DIFF = object : DiffUtil.ItemCallback<Item>() {
-            override fun areItemsTheSame(oldItem: Item, newItem: Item): Boolean = oldItem.page.pageId == newItem.page.pageId
-            override fun areContentsTheSame(oldItem: Item, newItem: Item): Boolean = oldItem == newItem
-        }
 
         internal fun stableIdFor(pageId: PageId): Long = runCatching {
             UUID.fromString(pageId.value).mostSignificantBits
