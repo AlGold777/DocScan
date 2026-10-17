@@ -51,6 +51,7 @@ class FrozenSaveOutputComposer(
         outputRoot: File,
         pdfSettings: PdfOutputSettings,
         companionJpegQuality: Int,
+        includeOcr: Boolean = true,
     ): FrozenSaveOutputSet {
         require(snapshot.pages.isNotEmpty()) { "SaveManifest has no frozen pages" }
         require(companionJpegQuality in 0..100)
@@ -106,8 +107,9 @@ class FrozenSaveOutputComposer(
                     } finally {
                         checkBitmap.recycle()
                     }
+                    val effectiveGeometry = if (includeOcr) page.recognizedGeometry else null
                     pageCandidates += PageCandidate(jpeg, scaleGeometry(
-                        page.recognizedGeometry, sourceWidth, sourceHeight, bitmap.width, bitmap.height,
+                        effectiveGeometry, sourceWidth, sourceHeight, bitmap.width, bitmap.height,
                     ))
                     FrozenPageOutput(
                         imageVersionId = page.imageVersionId.value,
@@ -132,7 +134,7 @@ class FrozenSaveOutputComposer(
             }
             val pdfTemp = File(staging, "document.pdf")
             pdfWriter.write(pdfTemp, inputs, pdfSettings)
-            validatePdf(pdfTemp, snapshot.pages, pageOutputs)
+            validatePdf(pdfTemp, snapshot.pages, pageOutputs, includeOcr)
             snapshot.pages.forEach { page ->
                 check(sourceRepository.verifyPublished(page.artifactRelativePath, page.artifactSizeBytes, page.artifactSha256)) {
                     "Frozen source artifact changed while composing the output set: ${page.artifactId.value}"
@@ -168,17 +170,20 @@ class FrozenSaveOutputComposer(
         pdfFile: File,
         pages: List<FrozenSavePage>,
         pageOutputs: List<FrozenPageOutput>,
+        includeOcr: Boolean,
     ) {
         PDFBoxResourceLoader.init(resourceLoaderContext.applicationContext)
         PDDocument.load(pdfFile, MemoryUsageSetting.setupTempFileOnly()).use { document ->
             check(document.numberOfPages == pages.size) { "PDF page count differs from frozen SaveManifest" }
-            val expectedWords = pages.flatMap { it.recognizedGeometry?.words.orEmpty() }.map { it.text }
-                .filter { it.isNotBlank() }
-            if (expectedWords.isNotEmpty()) {
-                val extracted = PDFTextStripper().getText(document).normalizeWhitespace()
-                expectedWords.forEach { word ->
-                    check(extracted.contains(word.normalizeWhitespace())) {
-                        "PDF read-back is missing frozen searchable OCR text"
+            if (includeOcr) {
+                val expectedWords = pages.flatMap { it.recognizedGeometry?.words.orEmpty() }.map { it.text }
+                    .filter { it.isNotBlank() }
+                if (expectedWords.isNotEmpty()) {
+                    val extracted = PDFTextStripper().getText(document).normalizeWhitespace()
+                    expectedWords.forEach { word ->
+                        check(extracted.contains(word.normalizeWhitespace())) {
+                            "PDF read-back is missing frozen searchable OCR text"
+                        }
                     }
                 }
             }

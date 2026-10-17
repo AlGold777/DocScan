@@ -22,6 +22,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.ActivityResult
@@ -368,8 +369,8 @@ class ProductActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             addView(menuButton, LinearLayout.LayoutParams(dp(56), dp(48)))
             addView(TextView(this@ProductActivity).apply { text = "DocScan"; setTextColor(Color.WHITE); textSize = 18f }, LinearLayout.LayoutParams(0, dp(48), 1f))
-            saveButton.contentDescription = getString(R.string.export_selected_pages)
-            saveButton.text = getString(R.string.save_pdf_short)
+            saveButton.contentDescription = "Save"
+            saveButton.text = "Save"
             addView(saveButton, LinearLayout.LayoutParams(dp(150), dp(48)))
         }
         val camera = android.widget.FrameLayout(this).apply {
@@ -639,8 +640,7 @@ class ProductActivity : AppCompatActivity() {
         val activeStorage = storage ?: return
         val count = activeStorage.workspaceProjection().pages.count { it.selected }
         if (workspaceActionBlocked || count !in 1..MAX_SAVE_PAGES || externalWorkflowRunning.get()) return
-        pendingMainSave = true
-        prepareSaveDestination(onReady = { promptExportBasename() })
+        showModernSaveDialog()
     }
 
     /** Entry availability is separate from authorization to compose or write user outputs. */
@@ -684,7 +684,7 @@ class ProductActivity : AppCompatActivity() {
     }
 
     private fun finishDestinationSetup(failure: Exception? = null, cancelled: Boolean = false) {
-        val ready = destinationReadyAction ?: if (pendingMainSave) ({ promptExportBasename() }) else null
+        val ready = destinationReadyAction ?: if (pendingMainSave) ({ showModernSaveDialog() }) else null
         val cancelAction = destinationCancelledAction
         destinationReadyAction = null
         destinationCancelledAction = null
@@ -789,6 +789,7 @@ class ProductActivity : AppCompatActivity() {
         runOnUiThread {
             saveButton.isEnabled = !workspaceActionBlocked && !destinationSetupRunning.get() && !externalWorkflowRunning.get()
                 && selectedCount in 1..MAX_SAVE_PAGES
+            saveButton.text = if (selectedCount > 0) "Save ($selectedCount)" else "Save"
         }
     }
 
@@ -816,122 +817,186 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
-    private fun promptExportBasename() {
+    private fun showModernSaveDialog() {
+        val activeStorage = storage ?: return
+        val selectedCount = runCatching { activeStorage.workspaceProjection().pages.count { it.selected } }.getOrDefault(0)
+        if (selectedCount == 0 || selectedCount > MAX_SAVE_PAGES || workspaceActionBlocked || externalWorkflowRunning.get()) return
+
         val now = java.time.LocalDateTime.now()
-        val suggestedName = runCatching {
-            storage?.workspaceProjection()?.pages.orEmpty()
-                .filter { it.selected }
-                .sortedBy { it.orderIndex }
-                .map { it.recognizedText }
-                .let { OutputBasenameSuggester.suggest(it, now) }
-        }.getOrElse { OutputBasenameSuggester.suggest(emptyList(), now) }
+        val defaultName = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm")) + ".pdf"
+
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(16), dp(24), dp(8))
+        }
+
+        // Header: /DocScan (no comments or explanations)
+        val headerView = TextView(this).apply {
+            text = "/DocScan"
+            textSize = 20f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(0xFF1E293B.toInt())
+            setPadding(0, dp(4), 0, dp(16))
+        }
+        container.addView(headerView)
+
+        // Filename input: 2026-10-17 06-04.pdf
         val input = EditText(this).apply {
             setSingleLine(true)
-            setText(suggestedName)
+            setText(defaultName)
+            textSize = 16f
+            gravity = Gravity.CENTER_HORIZONTAL
+            setTextColor(0xFF0F172A.toInt())
+            background = GradientDrawable().apply {
+                setColor(0xFFF1F5F9.toInt())
+                cornerRadius = dp(10).toFloat()
+                setStroke(dp(1), 0xFFCBD5E1.toInt())
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(12))
             selectAll()
         }
+        container.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(16)
+        })
+
+        // Checkboxes: [✓] OCR      [✓] JPG
+        val checkContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        val ocrCheck = CheckBox(this).apply {
+            text = "OCR"
+            isChecked = true
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFF334155.toInt())
+        }
+        val jpgCheck = CheckBox(this).apply {
+            text = "JPG"
+            isChecked = true
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFF334155.toInt())
+        }
+
+        checkContainer.addView(ocrCheck, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            rightMargin = dp(24)
+        })
+        checkContainer.addView(jpgCheck)
+        container.addView(checkContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(8)
+        })
+
         dialogHost.builder(this)
-            .setTitle(R.string.export_basename_title)
-            .setMessage(R.string.export_basename_message)
-            .setView(input)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.export_selected_pages) { _, _ -> exportSelectedPages(input.text.toString()) }
+            .setView(container)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val enteredName = input.text.toString().trim()
+                val fileName = if (enteredName.isNotBlank()) enteredName else defaultName
+                val cleanName = if (fileName.endsWith(".pdf", ignoreCase = true)) fileName else "$fileName.pdf"
+                executeDocScanSave(cleanName, ocrCheck.isChecked, jpgCheck.isChecked)
+            }
             .show()
     }
 
+    private fun promptExportBasename() {
+        showModernSaveDialog()
+    }
+
     private fun exportSelectedPages(basename: String) {
+        val cleanName = if (basename.endsWith(".pdf", ignoreCase = true)) basename else "$basename.pdf"
+        executeDocScanSave(cleanName, includeOcr = true, includeJpg = true)
+    }
+
+    private fun executeDocScanSave(cleanPdfName: String, includeOcr: Boolean, includeJpg: Boolean) {
         val activeStorage = storage ?: return
         if (!beginExternalWorkflow()) return
         saveButton.isEnabled = false
-        status.text = getString(R.string.export_preparing)
+        status.text = "Сохранение в /DocScan..."
         io.execute {
-            var exportId: ExportArtifactId? = null
-            var confirmed = 0
-            var expected = 0
-            var candidateCleanupPending = false
             try {
-                val grant = activeStorage.destinationGrant()
-                    ?: error(getString(R.string.export_choose_folder_first))
-                val manager = SafDestinationGrantManager(this)
-                check(manager.revalidate(grant, activeStorage)) { getString(R.string.destination_revoked) }
-                val tuple = resolveProviderTuple(grant.treeUri)
-                val qualification = SafRuntimeDestinationCheck(this, activeStorage).findReady(grant.treeUri)
-                    ?: error(getString(R.string.save_destination_setup_hint))
-                val payload = org.json.JSONObject(qualification.qualifiedCapabilitiesPayload)
-                val capabilities = payload.optJSONObject("capabilities") ?: payload
-                check(capabilities.optBoolean("createDoesNotOverwriteExistingDocument", false)
-                    && capabilities.optBoolean("enumerateChildren", false)
-                    && capabilities.optBoolean("readBackSha256", false)
-                ) { getString(R.string.export_provider_lacks_required_capabilities) }
-
                 val selectedCount = activeStorage.workspaceProjection().pages.count { it.selected }
                 if (selectedCount == 0) error(getString(R.string.export_no_selected_pages))
                 if (selectedCount > MAX_SAVE_PAGES) {
                     error(getString(R.string.export_page_limit, selectedCount, MAX_SAVE_PAGES))
-                }
-                expected = selectedCount + 1
-                val gateway = SafExportGateway(this, activeStorage)
-                val nameResolution = gateway.resolveOutputNames(grant.treeUri, basename, selectedCount)
-                val names = when (nameResolution) {
-                    is OutputNameResolution.Resolved -> nameResolution.names
-                    is OutputNameResolution.Invalid -> error(nameResolution.reason)
-                    is OutputNameResolution.Collision -> error(
-                        getString(R.string.export_name_collision, nameResolution.conflictingNames.joinToString()),
-                    )
                 }
                 val frozen = activeStorage.freezeSelectedPagesForSave()
                 if (frozen.pages.size != selectedCount) {
                     activeStorage.cancelUnstartedSaveManifest(frozen.saveManifestId)
                     error(getString(R.string.export_selection_changed))
                 }
+                val baseName = cleanPdfName.removeSuffix(".pdf")
                 val outputSet = activeStorage.composeFrozenSaveOutputSet(
                     frozen,
                     PdfOutputSettings(595.28f, 841.89f, 0.85f, 300),
                     companionJpegQuality = 85,
+                    includeOcr = includeOcr,
                 )
-                val namesInOrder = listOf(names.pdfName) + names.pageJpegNames
-                val externalPackage = ExternalExportPackagePlan(
-                    destinationTreeUri = grant.treeUri,
-                    commonBasename = names.basename,
-                    providerQualificationId = qualification.qualificationId,
-                    adapterId = tuple.adapterId,
-                    providerVersion = tuple.providerVersion,
-                    osVersion = tuple.osVersion,
-                    destinationAccessClass = tuple.accessClass,
-                    outputDisplayNames = namesInOrder,
-                    ocrStatus = when (frozen.pages.count { it.recognizedGeometry?.words?.isNotEmpty() == true }) {
-                        frozen.pages.size -> "FULL"
-                        0 -> "NONE"
-                        else -> "PARTIAL"
-                    },
-                )
-                val committedExportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet, externalPackage)
-                exportId = committedExportId
-                candidateCleanupPending = activeStorage.cleanupCommittedLocalOutputCandidate(frozen.saveManifestId).isFailure
-                check(activeStorage.committedExportOutputs(committedExportId).size == expected) {
-                    "Committed output count differs from frozen Save"
+                val jpegFiles = outputSet.pages.map { it.jpegFile }
+                val jpegNames = outputSet.pages.mapIndexed { idx, _ ->
+                    if (outputSet.pages.size == 1) "$baseName.jpg" else "${baseName}_page_${idx + 1}.jpg"
                 }
-                updateRecoveryActions(activeStorage)
-                confirmed = runExternalExportPackage(activeStorage, gateway, committedExportId)
-                updateRecentDocuments(activeStorage)
+
+                val publishedUri = DocScanPublisher.publish(
+                    context = this@ProductActivity,
+                    pdfSource = outputSet.pdfFile,
+                    pdfFileName = cleanPdfName,
+                    jpegSources = jpegFiles,
+                    jpegFileNames = jpegNames,
+                    saveJpg = includeJpg,
+                )
+
+                // Optional: mirror to SAF if configured, but never fail if SAF is absent or unqualified
+                runCatching {
+                    val grant = activeStorage.destinationGrant()
+                    if (grant != null) {
+                        val manager = SafDestinationGrantManager(this@ProductActivity)
+                        if (manager.revalidate(grant, activeStorage)) {
+                            val tuple = resolveProviderTuple(grant.treeUri)
+                            val qualification = SafRuntimeDestinationCheck(this@ProductActivity, activeStorage).findReady(grant.treeUri)
+                            if (qualification != null) {
+                                val namesInOrder = listOf(cleanPdfName) + jpegNames
+                                val externalPackage = ExternalExportPackagePlan(
+                                    destinationTreeUri = grant.treeUri,
+                                    commonBasename = baseName,
+                                    providerQualificationId = qualification.qualificationId,
+                                    adapterId = tuple.adapterId,
+                                    providerVersion = tuple.providerVersion,
+                                    osVersion = tuple.osVersion,
+                                    destinationAccessClass = tuple.accessClass,
+                                    outputDisplayNames = namesInOrder,
+                                    ocrStatus = if (includeOcr) "FULL" else "NONE",
+                                )
+                                val committedExportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet, externalPackage)
+                                val gateway = SafExportGateway(this@ProductActivity, activeStorage)
+                                runExternalExportPackage(activeStorage, gateway, committedExportId)
+                            }
+                        }
+                    }
+                }
+
+                runCatching {
+                    activeStorage.cleanupCommittedLocalOutputCandidate(frozen.saveManifestId)
+                }
+                runCatching {
+                    updateRecentDocuments(activeStorage)
+                }
+
                 runOnUiThread {
-                    status.text = if (candidateCleanupPending) {
-                        getString(R.string.export_success_cleanup_pending, expected)
-                    } else getString(R.string.export_success, expected)
+                    status.text = "Сохранено: /DocScan/$cleanPdfName"
+                    showSavedSuccessDialog(cleanPdfName, publishedUri)
                 }
             } catch (failure: Exception) {
-                val detail = (failure.message ?: failure.javaClass.simpleName) + if (candidateCleanupPending) {
-                    " — ${getString(R.string.local_candidate_cleanup_pending_suffix)}"
-                } else ""
-                val savedAttempts = exportId?.let(activeStorage::exportAttempts).orEmpty()
-                val confirmedSoFar = maxOf(confirmed, savedAttempts.count { it.state == "SUCCEEDED" })
-                val unresolved = savedAttempts.count { it.state == "UNKNOWN_OUTCOME" || it.state == "WRITING_EXTERNAL" }
-                val message = if (confirmedSoFar > 0 || unresolved > 0) {
-                    getString(R.string.export_partial, confirmedSoFar, expected, unresolved, detail)
-                } else {
-                    getString(R.string.export_failed, detail)
+                val message = "Ошибка сохранения: ${failure.message ?: failure.javaClass.simpleName}"
+                runOnUiThread {
+                    status.text = message
+                    Toast.makeText(this@ProductActivity, message, Toast.LENGTH_LONG).show()
                 }
-                runOnUiThread { status.text = message }
             } finally {
                 externalWorkflowRunning.set(false)
                 val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
@@ -948,6 +1013,29 @@ class ProductActivity : AppCompatActivity() {
                 updateRecoveryActions(activeStorage)
             }
         }
+    }
+
+    private fun showSavedSuccessDialog(pdfName: String, uri: Uri?) {
+        val builder = dialogHost.builder(this)
+            .setTitle("Файл сохранён")
+            .setMessage("Файл успешно сохранён в папку /DocScan:\n$pdfName")
+            .setPositiveButton("OK", null)
+
+        if (uri != null) {
+            builder.setNeutralButton("Открыть PDF") { _, _ ->
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/pdf")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Нет приложения для просмотра PDF", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        builder.show()
     }
 
     private fun recheckInterruptedExports() {
@@ -1793,9 +1881,9 @@ class ProductActivity : AppCompatActivity() {
         saveButton.isEnabled = !workspaceActionBlocked && !destinationSetupRunning.get() && !externalWorkflowRunning.get()
             && selectedCount in 1..MAX_SAVE_PAGES
         saveButton.text = if (selectedCount > 0) {
-            "${getString(R.string.save_pdf_short)} ($selectedCount)"
+            "Save ($selectedCount)"
         } else {
-            getString(R.string.save_pdf_short)
+            "Save"
         }
         deleteSelectedButton.isEnabled = !externalWorkflowRunning.get() && selectedCount > 0
         clearWorkspaceButton.isEnabled = !externalWorkflowRunning.get() && pages.isNotEmpty()

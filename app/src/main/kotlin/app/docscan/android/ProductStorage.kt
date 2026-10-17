@@ -950,6 +950,7 @@ class ProductStorage(
         snapshot: app.docscan.core.store.SaveManifestSnapshot,
         pdfSettings: PdfOutputSettings,
         companionJpegQuality: Int,
+        includeOcr: Boolean = true,
     ): FrozenSaveOutputSet {
         require(snapshot.workspaceId == workspaceId) { "SaveManifest belongs to another Workspace" }
         store.beginLocalOutputComposition(snapshot)
@@ -961,7 +962,7 @@ class ProductStorage(
                 pdfWriter = SearchablePdfWriter(appContext),
                 resourceLoaderContext = appContext,
                 directorySync = directorySyncFactory(),
-            ).compose(snapshot, candidateRoot, pdfSettings, companionJpegQuality)
+            ).compose(snapshot, candidateRoot, pdfSettings, companionJpegQuality, includeOcr)
         } catch (failure: Throwable) {
             try {
                 store.abortLocalOutputComposition(snapshot)
