@@ -5,7 +5,7 @@ class HeavyWorkScheduler(
     private val maxConcurrentJobs: Int = DEFAULT_MAX_CONCURRENT_JOBS,
     private val decodedByteBudget: Long = DEFAULT_DECODED_BYTE_BUDGET,
 ) {
-    private val monitor = Object()
+    private val lock = Any()
     private var runningJobs = 0
     private var reservedBytes = 0L
 
@@ -18,9 +18,10 @@ class HeavyWorkScheduler(
         require(decodedBytes in 1..decodedByteBudget) {
             "Heavy job estimate $decodedBytes exceeds the decoded-image budget $decodedByteBudget"
         }
-        synchronized(monitor) {
+        synchronized(lock) {
             while (runningJobs >= maxConcurrentJobs || reservedBytes > decodedByteBudget - decodedBytes) {
-                monitor.wait()
+                @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+                (lock as java.lang.Object).wait()
             }
             runningJobs += 1
             reservedBytes += decodedBytes
@@ -28,10 +29,11 @@ class HeavyWorkScheduler(
         try {
             return work()
         } finally {
-            synchronized(monitor) {
+            synchronized(lock) {
                 runningJobs -= 1
                 reservedBytes -= decodedBytes
-                monitor.notifyAll()
+                @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+                (lock as java.lang.Object).notifyAll()
             }
         }
     }

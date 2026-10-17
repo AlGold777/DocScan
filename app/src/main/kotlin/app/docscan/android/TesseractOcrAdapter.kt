@@ -58,11 +58,11 @@ class TesseractOcrAdapter(
                 nativeRecognitionActive.set(true)
                 throwIfCancelled(isCancelled)
                 val words = try {
+                    val hocr = tess.getHOCRText(0).orEmpty()
                     val iterWords = extractWordsFromIterator(tess)
                     if (iterWords.isNotEmpty()) {
                         iterWords
                     } else {
-                        val hocr = tess.getHOCRText(0).orEmpty()
                         parseHocrWords(hocr)
                     }
                 } catch (_: Throwable) {

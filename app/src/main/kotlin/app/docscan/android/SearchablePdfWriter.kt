@@ -56,10 +56,7 @@ class SearchablePdfWriter(context: Context) {
         PDFBoxResourceLoader.init(appContext)
         try {
             PDDocument(MemoryUsageSetting.setupTempFileOnly()).use { document ->
-                val fontFile = FONT_CANDIDATES.asSequence().map(::File)
-                    .firstOrNull { it.isFile && it.canRead() }
-                    ?: throw IllegalStateException("No system font with Cyrillic support is available")
-                val font = PDType0Font.load(document, fontFile)
+                val font = resolveFont(document)
                 pages.forEach { source ->
                     val bitmap = source.openBitmap()
                     try {
@@ -83,7 +80,7 @@ class SearchablePdfWriter(context: Context) {
         bitmap: Bitmap,
         recognition: RecognitionGeometry?,
         settings: PdfOutputSettings,
-        font: PDType0Font,
+        font: PDType0Font?,
     ) {
         if (recognition != null) {
             require(recognition.sourceWidthPx == bitmap.width.toLong()
@@ -112,39 +109,65 @@ class SearchablePdfWriter(context: Context) {
         val image = JPEGFactory.createFromImage(document, bitmap, settings.jpegQuality, settings.jpegResolutionDpi)
         PDPageContentStream(document, page).use { content ->
             content.drawImage(image, offsetX, offsetY, imageWidth, imageHeight)
-            recognition?.words?.forEach { word ->
-                val boxWidth = (word.rightPx - word.leftPx) * scale
-                val boxHeight = (word.bottomPx - word.topPx) * scale
-                val x = offsetX + word.leftPx * scale
-                val bottom = offsetY + (bitmap.height - word.bottomPx) * scale
-                val fontDescriptor = font.fontDescriptor
-                val glyphHeight = fontDescriptor.ascent - fontDescriptor.descent
-                if (boxWidth <= 0f || boxHeight <= 0f || glyphHeight <= 0f) return@forEach
-                val safeWord = sanitizeForFont(font, word.text)
-                if (safeWord.isBlank()) return@forEach
-                val fontSize = boxHeight * 1000f / glyphHeight
-                val baseline = bottom - fontDescriptor.descent * fontSize / 1000f
-                val naturalWidth = try {
-                    font.getStringWidth(safeWord) * fontSize / 1000f
-                } catch (_: Exception) {
-                    0f
+            if (font != null) {
+                recognition?.words?.forEach { word ->
+                    val boxWidth = (word.rightPx - word.leftPx) * scale
+                    val boxHeight = (word.bottomPx - word.topPx) * scale
+                    val x = offsetX + word.leftPx * scale
+                    val bottom = offsetY + (bitmap.height - word.bottomPx) * scale
+                    val fontDescriptor = font.fontDescriptor
+                    val glyphHeight = fontDescriptor.ascent - fontDescriptor.descent
+                    if (boxWidth <= 0f || boxHeight <= 0f || glyphHeight <= 0f) return@forEach
+                    val safeWord = sanitizeForFont(font, word.text)
+                    if (safeWord.isBlank()) return@forEach
+                    val fontSize = boxHeight * 1000f / glyphHeight
+                    val baseline = bottom - fontDescriptor.descent * fontSize / 1000f
+                    val naturalWidth = try {
+                        font.getStringWidth(safeWord) * fontSize / 1000f
+                    } catch (_: Exception) {
+                        0f
+                    }
+                    if (naturalWidth <= 0f) return@forEach
+                    val horizontalScale = boxWidth * 100f / naturalWidth
+                    if (!horizontalScale.isFinite() || horizontalScale <= 0f) return@forEach
+                    content.beginText()
+                    content.setFont(font, fontSize)
+                    content.setRenderingMode(RenderingMode.NEITHER)
+                    content.setHorizontalScaling(horizontalScale)
+                    content.setTextMatrix(Matrix.getTranslateInstance(x, baseline))
+                    try {
+                        content.showText(safeWord)
+                    } catch (_: Exception) {
+                        // Fail-safe: do not let a rogue glyph fail the entire PDF export
+                    }
+                    content.endText()
                 }
-                if (naturalWidth <= 0f) return@forEach
-                val horizontalScale = boxWidth * 100f / naturalWidth
-                if (!horizontalScale.isFinite() || horizontalScale <= 0f) return@forEach
-                content.beginText()
-                content.setFont(font, fontSize)
-                content.setRenderingMode(RenderingMode.NEITHER)
-                content.setHorizontalScaling(horizontalScale)
-                content.setTextMatrix(Matrix.getTranslateInstance(x, baseline))
-                try {
-                    content.showText(safeWord)
-                } catch (_: Exception) {
-                    // Fail-safe: do not let a rogue glyph fail the entire PDF export
-                }
-                content.endText()
             }
         }
+    }
+
+    private fun resolveFont(document: PDDocument): PDType0Font? {
+        val candidates = mutableListOf<File>()
+        FONT_CANDIDATES.forEach { path ->
+            val f = File(path)
+            if (f.isFile && f.canRead()) candidates.add(f)
+        }
+        val systemFontsDir = File("/system/fonts")
+        if (systemFontsDir.isDirectory) {
+            systemFontsDir.listFiles()?.filter {
+                it.isFile && it.canRead() && it.name.endsWith(".ttf", ignoreCase = true)
+            }?.forEach { f ->
+                if (!candidates.contains(f)) candidates.add(f)
+            }
+        }
+        for (file in candidates) {
+            try {
+                return PDType0Font.load(document, file)
+            } catch (_: Exception) {
+                // try next candidate
+            }
+        }
+        return null
     }
 
     private fun sanitizeForFont(font: PDType0Font, text: String): String {

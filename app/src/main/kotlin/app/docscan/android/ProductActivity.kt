@@ -2319,16 +2319,61 @@ class ProductActivity : AppCompatActivity() {
         pageViewerText = TextView(this).apply {
             textSize = 14f
             setPadding(0, dp(8), 0, 0)
+            setTextIsSelectable(true)
         }
+        val viewerActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        fun addViewerAction(btn: Button) {
+            btn.minimumHeight = dp(40)
+            viewerActions.addView(btn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        addViewerAction(Button(this).apply {
+            text = getString(R.string.edit_image)
+            setOnClickListener {
+                val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
+                pageViewer?.dismiss()
+                showPageImageEditor(page)
+            }
+        })
+        addViewerAction(Button(this).apply {
+            text = getString(R.string.retake_page)
+            setOnClickListener {
+                val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
+                retakeTarget = page
+                status.text = getString(R.string.retake_instruction, pageViewerIndex + 1)
+                pageViewer?.dismiss()
+            }
+        })
+        addViewerAction(Button(this).apply {
+            text = getString(R.string.recognize_text)
+            setOnClickListener {
+                val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
+                val activeStorage = storage ?: return@setOnClickListener
+                scheduleOcr(activeStorage, page, force = true)
+            }
+        })
+        addViewerAction(Button(this).apply {
+            text = getString(R.string.delete_page)
+            setOnClickListener {
+                val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
+                pageViewer?.dismiss()
+                deleteWorkspacePage(page)
+            }
+        })
+
         content.addView(pageViewerTitle, matchWrap())
         content.addView(pageViewerImage, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             0,
             1f,
         ))
+        content.addView(viewerActions, matchWrap())
         content.addView(ScrollView(this).apply {
             addView(pageViewerText)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(112)))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(96)))
 
         content.addView(viewerFooter(requireNotNull(pageViewerStripScroll), navigation), LinearLayout.LayoutParams(-1, dp(172)))
 
