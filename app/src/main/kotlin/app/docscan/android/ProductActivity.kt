@@ -2595,6 +2595,147 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
+    private fun rotateViewerCurrentPage() {
+        if (!canInteractWorkspace()) return
+        val activeStorage = storage ?: return
+        val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return
+        val imageFile = activeStorage.artifactPath(page.artifactRelativePath).toFile()
+        if (!imageFile.exists()) return
+
+        status.text = getString(R.string.edit_applying)
+        uiHapticFeedback(pageViewerImage ?: root)
+
+        io.execute {
+            try {
+                val source = decodeViewerImage(imageFile) ?: throw IllegalArgumentException("Image cannot be decoded")
+                val matrix = android.graphics.Matrix().apply { postRotate(90f) }
+                val rotated = android.graphics.Bitmap.createBitmap(
+                    source, 0, 0, source.width, source.height, matrix, true
+                )
+                if (rotated !== source) source.recycle()
+                val newProjection = activeStorage.applyPageImageEdit(page, rotated)
+                runOnUiThread {
+                    if (pageViewer?.isShowing == true) {
+                        (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
+                        pageViewerImage?.setImageBitmap(rotated)
+                        pageViewerPages = newProjection.pages.toList()
+                        renderPages(newProjection)
+                        refreshViewerStrip(newProjection.pages)
+                        syncViewerStripActive()
+                        status.text = getString(R.string.edit_applied)
+                    } else {
+                        rotated.recycle()
+                    }
+                }
+            } catch (failure: Exception) {
+                runOnUiThread {
+                    status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    private fun cropViewerCurrentPage() {
+        if (!canInteractWorkspace()) return
+        val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return
+        showCropDialogForViewer(page)
+    }
+
+    private fun showCropDialogForViewer(page: app.docscan.core.store.StoredPage) {
+        val activeStorage = storage ?: return
+        val imageFile = activeStorage.artifactPath(page.artifactRelativePath).toFile()
+        if (!imageFile.exists()) return
+
+        val selection = CropSelectionView(this).apply {
+            contentDescription = getString(R.string.manual_crop_view_description)
+        }
+        val message = TextView(this).apply {
+            text = getString(R.string.manual_crop_preparing)
+            setTextColor(0xFFE2E8F0.toInt())
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(8))
+        }
+        val cropContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF16191E.toInt())
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            addView(message, matchWrap())
+            addView(selection, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(dp(120), minOf(dp(440), root.height - dp(240)))))
+        }
+        var sourceBitmap: android.graphics.Bitmap? = null
+        val cropDialog = dialogHost.builder(this)
+            .setTitle(R.string.manual_crop_title)
+            .setView(cropContent)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.manual_crop_apply, null)
+            .create()
+        cropDialog.setCanceledOnTouchOutside(false)
+        cropDialog.setOnDismissListener {
+            selection.bitmap = null
+            sourceBitmap?.recycle()
+            sourceBitmap = null
+        }
+        cropDialog.show()
+        val applyButton = cropDialog.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false }
+        applyButton.setOnClickListener {
+            if (!applyButton.isEnabled) return@setOnClickListener
+            val source = sourceBitmap ?: return@setOnClickListener
+            val quad = selection.quadrilateral
+            applyButton.isEnabled = false
+            status.text = getString(R.string.edit_applying)
+            io.execute {
+                var cropped: android.graphics.Bitmap? = null
+                try {
+                    cropped = (application as DocScanApplication).heavyWorkScheduler.withAdmission(
+                        EDIT_WORKING_SET_BYTES,
+                    ) { PageImageAdjustmentProcessor.render(source, PageImageEditState(crop = quad)) }
+                    val newProjection = activeStorage.applyPageImageEdit(page, cropped)
+                    runOnUiThread {
+                        cropDialog.dismiss()
+                        if (pageViewer?.isShowing == true) {
+                            (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
+                            pageViewerImage?.setImageBitmap(cropped)
+                            pageViewerPages = newProjection.pages.toList()
+                            renderPages(newProjection)
+                            refreshViewerStrip(newProjection.pages)
+                            syncViewerStripActive()
+                        } else {
+                            cropped.recycle()
+                        }
+                        status.text = getString(R.string.edit_applied)
+                    }
+                } catch (failure: Exception) {
+                    runOnUiThread {
+                        applyButton.isEnabled = true
+                        status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                    }
+                }
+            }
+        }
+        io.execute {
+            try {
+                val decoded = decodeViewerImage(imageFile) ?: throw IllegalArgumentException("Cannot decode image")
+                sourceBitmap = decoded
+                runOnUiThread {
+                    if (cropDialog.isShowing) {
+                        selection.bitmap = decoded
+                        message.text = getString(R.string.manual_crop_instruction)
+                        applyButton.isEnabled = true
+                    } else {
+                        decoded.recycle()
+                    }
+                }
+            } catch (failure: Exception) {
+                runOnUiThread {
+                    if (cropDialog.isShowing) {
+                        message.text = getString(R.string.edit_preview_failed, failure.message ?: "")
+                    }
+                }
+            }
+        }
+    }
+
     private fun showPageViewer(pages: List<app.docscan.core.store.StoredPage>, index: Int) {
         if (!canInteractWorkspace() || pages.isEmpty() || index !in pages.indices) return
         pageViewer?.dismiss()
@@ -2603,31 +2744,38 @@ class ProductActivity : AppCompatActivity() {
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setBackgroundColor(0xFF111316.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+
+        // Header: Back/Close button + Title "Page X of Y"
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(8))
+        }
+        val closeBtn = Button(this).apply {
+            text = "✕"
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(radiusDp = 18)
+            setOnClickListener { pageViewer?.dismiss() }
         }
         pageViewerTitle = TextView(this).apply {
-            textSize = 18f
+            textSize = 17f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFF8FAFC.toInt())
             gravity = Gravity.CENTER
             tag = VIEWER_TITLE_TAG
         }
-        val navigation = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val previous = Button(this).apply {
-            text = getString(R.string.viewer_previous)
-            tag = VIEWER_PREVIOUS_TAG
-            setOnClickListener { showViewerPage(pageViewerIndex - 1) }
-        }
-        val next = Button(this).apply {
-            text = getString(R.string.viewer_next)
-            tag = VIEWER_NEXT_TAG
-            setOnClickListener { showViewerPage(pageViewerIndex + 1) }
-        }
-        pageViewerPrevious = previous
-        pageViewerNext = next
-        navigation.addView(previous)
-        navigation.addView(next)
+        header.addView(closeBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+        header.addView(pageViewerTitle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val headerSpacer = View(this)
+        header.addView(headerSpacer, LinearLayout.LayoutParams(dp(36), dp(36)))
+
+        content.addView(header, matchWrap())
+
         pageViewerStrip = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2638,10 +2786,16 @@ class ProductActivity : AppCompatActivity() {
             setOnScrollChangeListener { _, _, _, _, _ -> loadVisibleViewerThumbnails() }
             addView(pageViewerStrip, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
+
         pageViewerImage = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             tag = VIEWER_MAIN_IMAGE_TAG
+            background = GradientDrawable().apply {
+                setColor(0xFF0B0D10.toInt())
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), 0xFF22262E.toInt())
+            }
             var touchDownX = 0f
             var touchDownY = 0f
             setOnTouchListener { _, event ->
@@ -2657,7 +2811,6 @@ class ProductActivity : AppCompatActivity() {
                         if (kotlin.math.abs(dx) >= dp(48) && kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
                             val destination = pageViewerIndex + if (dx < 0) 1 else -1
                             android.util.Log.d("DocScanViewerGesture", "dx=$dx dy=$dy from=$pageViewerIndex to=$destination")
-                            // At either edge, consume the gesture without wrapping.
                             if (destination in pageViewerPages.indices) showViewerPage(destination)
                         }
                         true
@@ -2667,66 +2820,148 @@ class ProductActivity : AppCompatActivity() {
                 }
             }
         }
-        pageViewerText = TextView(this).apply {
-            textSize = 14f
-            setPadding(0, dp(8), 0, 0)
-            setTextIsSelectable(true)
-        }
-        val viewerActions = LinearLayout(this).apply {
+        content.addView(pageViewerImage, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f,
+        ).apply {
+            bottomMargin = dp(8)
+        })
+
+        // Editing Toolbar: Rotate, Crop/Resize, Adjust/Filters
+        val editToolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(0, dp(2), 0, dp(6))
         }
-        fun addViewerAction(btn: Button) {
-            btn.minimumHeight = dp(40)
-            viewerActions.addView(btn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val rotateBtn = Button(this).apply {
+            text = "⟳ Rotate"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFF1F5F9.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
+            setOnClickListener { rotateViewerCurrentPage() }
         }
-        addViewerAction(Button(this).apply {
-            text = getString(R.string.edit_image)
+        val cropBtn = Button(this).apply {
+            text = "✂ Crop"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFF1F5F9.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
+            setOnClickListener { cropViewerCurrentPage() }
+        }
+        val adjustBtn = Button(this).apply {
+            text = "🎨 Adjust"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFF1F5F9.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 pageViewer?.dismiss()
                 showPageImageEditor(page)
             }
-        })
-        addViewerAction(Button(this).apply {
+        }
+        editToolbar.addView(rotateBtn, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
+        editToolbar.addView(cropBtn, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(2); marginEnd = dp(2) })
+        editToolbar.addView(adjustBtn, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(4) })
+        content.addView(editToolbar, matchWrap())
+
+        // Secondary Actions: Retake, OCR, Delete
+        val viewerActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, dp(6))
+        }
+        val retakeBtn = Button(this).apply {
             text = getString(R.string.retake_page)
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFCBD5E1.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 retakeTarget = page
                 status.text = getString(R.string.retake_instruction, pageViewerIndex + 1)
                 pageViewer?.dismiss()
             }
-        })
-        addViewerAction(Button(this).apply {
+        }
+        val ocrBtn = Button(this).apply {
             text = getString(R.string.recognize_text)
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFCBD5E1.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 val activeStorage = storage ?: return@setOnClickListener
                 scheduleOcr(activeStorage, page, force = true)
             }
-        })
-        addViewerAction(Button(this).apply {
+        }
+        val deleteBtn = Button(this).apply {
             text = getString(R.string.delete_page)
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFFCA5A5.toInt())
+            background = modernButtonDrawable(normalBg = 0xFF2A1517.toInt(), strokeColor = 0xFF7F1D1D.toInt(), radiusDp = 10)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 pageViewer?.dismiss()
                 deleteWorkspacePage(page)
             }
+        }
+        viewerActions.addView(retakeBtn, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+        viewerActions.addView(ocrBtn, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(2); marginEnd = dp(2) })
+        viewerActions.addView(deleteBtn, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
+        content.addView(viewerActions, matchWrap())
+
+        pageViewerText = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFF94A3B8.toInt())
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setTextIsSelectable(true)
+        }
+        val ocrScroll = ScrollView(this).apply {
+            background = GradientDrawable().apply {
+                setColor(0xFF0F1216.toInt())
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), 0xFF1E222A.toInt())
+            }
+            addView(pageViewerText)
+        }
+        content.addView(ocrScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)).apply {
+            bottomMargin = dp(8)
         })
 
-        content.addView(pageViewerTitle, matchWrap())
-        content.addView(pageViewerImage, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0,
-            1f,
-        ))
-        content.addView(viewerActions, matchWrap())
-        content.addView(ScrollView(this).apply {
-            addView(pageViewerText)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(96)))
+        val navigation = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+        }
+        val previous = Button(this).apply {
+            text = getString(R.string.viewer_previous)
+            tag = VIEWER_PREVIOUS_TAG
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFE2E8F0.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
+            setOnClickListener { showViewerPage(pageViewerIndex - 1) }
+        }
+        val next = Button(this).apply {
+            text = getString(R.string.viewer_next)
+            tag = VIEWER_NEXT_TAG
+            textSize = 12f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFFE2E8F0.toInt())
+            background = modernButtonDrawable(radiusDp = 10)
+            setOnClickListener { showViewerPage(pageViewerIndex + 1) }
+        }
+        pageViewerPrevious = previous
+        pageViewerNext = next
+        navigation.addView(previous, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(8) })
+        navigation.addView(next, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginStart = dp(8) })
 
-        content.addView(viewerFooter(requireNotNull(pageViewerStripScroll), navigation), LinearLayout.LayoutParams(-1, dp(172)))
+        content.addView(viewerFooter(requireNotNull(pageViewerStripScroll), navigation), LinearLayout.LayoutParams(-1, dp(154)))
 
         pageViewer = dialogHost.builder(this)
             .setView(content)

@@ -73,13 +73,6 @@ internal class WorkspaceHomeAdapter(
             setColor(0xff303030.toInt())
             setStroke(activity.dpForThumbnail(if (item.active) 3 else 1), if (item.active) Color.WHITE else 0xff777777.toInt())
         }
-        holder.thumbnail.setOnClickListener {
-            if (!enabled()) return@setOnClickListener
-            val pos = holder.bindingAdapterPosition
-            if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
-                onPageClick(items[pos].page)
-            }
-        }
 
         holder.selection.tag = HOME_SELECTION_TAG_PREFIX + item.page.pageId.value
         holder.selection.contentDescription = activity.getString(R.string.include_page_in_save, item.index + 1)
@@ -165,39 +158,40 @@ internal class WorkspaceHomeAdapter(
         val selection = CheckBox(activity)
         var boundItem: Item? = null
 
-        private val gestureDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
-
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (!enabled()) return false
-                val pos = bindingAdapterPosition
-                if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
-                    activity.uiHapticFeedback(thumbnail)
-                    onPageActive?.invoke(items[pos].page)
-                }
-                return true
-            }
-
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                if (!enabled()) return false
-                val pos = bindingAdapterPosition
-                if (pos != RecyclerView.NO_POSITION && pos in items.indices) {
-                    activity.uiHapticFeedback(thumbnail)
-                    onPageClick(items[pos].page)
-                }
-                return true
-            }
-        })
-
         init {
             (itemView as LinearLayout).apply {
                 addView(thumbnail)
                 addView(selection)
                 layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(84), ViewGroup.LayoutParams.MATCH_PARENT)
             }
-            thumbnail.setOnTouchListener { _, event ->
-                gestureDetector.onTouchEvent(event)
-            }
+            thumbnail.setOnClickListener { handlePageTap(this, thumbnail) }
+            itemView.setOnClickListener { handlePageTap(this, itemView) }
+        }
+    }
+
+    private var lastClickTime = 0L
+    private var lastClickPageId: PageId? = null
+    private val DOUBLE_TAP_TIMEOUT_MS = 500L
+
+    private fun handlePageTap(holder: Holder, view: View) {
+        if (!enabled()) return
+        val pos = holder.bindingAdapterPosition
+        if (pos == RecyclerView.NO_POSITION || pos !in items.indices) return
+        val item = items[pos]
+        val page = item.page
+        val now = android.os.SystemClock.uptimeMillis()
+        val isDoubleTap = page.pageId == lastClickPageId && (now - lastClickTime) < DOUBLE_TAP_TIMEOUT_MS
+        val isAlreadyActive = item.active
+
+        lastClickTime = now
+        lastClickPageId = page.pageId
+
+        if (isDoubleTap || isAlreadyActive) {
+            activity.uiHapticFeedback(view)
+            onPageClick(page)
+        } else {
+            activity.uiHapticFeedback(view)
+            onPageActive?.invoke(page)
         }
     }
 
