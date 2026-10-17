@@ -38,8 +38,10 @@ internal class WorkspaceHomeAdapter(
     internal fun getItem(position: Int): Item = items[position]
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder = Holder(activity).also { holder ->
-        holder.thumbnail.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(56), activity.dpForThumbnail(64))
-        holder.selection.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(56), activity.dpForThumbnail(48))
+        holder.thumbnail.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(72), activity.dpForThumbnail(92))
+        holder.selection.layoutParams = LinearLayout.LayoutParams(activity.dpForThumbnail(72), activity.dpForThumbnail(32)).apply {
+            topMargin = activity.dpForThumbnail(2)
+        }
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) = bind(holder, items[position])
@@ -81,8 +83,8 @@ internal class WorkspaceHomeAdapter(
 
         holder.selection.tag = HOME_SELECTION_TAG_PREFIX + item.page.pageId.value
         holder.selection.contentDescription = activity.getString(R.string.include_page_in_save, item.index + 1)
-        holder.selection.minimumWidth = activity.dpForThumbnail(48)
-        holder.selection.minimumHeight = activity.dpForThumbnail(48)
+        holder.selection.minimumWidth = activity.dpForThumbnail(32)
+        holder.selection.minimumHeight = activity.dpForThumbnail(32)
         holder.selection.isEnabled = enabled()
         holder.selection.setOnCheckedChangeListener(null)
         holder.selection.isChecked = item.page.selected
@@ -114,8 +116,8 @@ internal class WorkspaceHomeAdapter(
                 pageId = item.page.pageId,
                 imageVersionId = item.page.imageVersionId,
                 sourceSizeBytes = file.length(),
-                targetWidthPx = activity.dpForThumbnail(56) * 2,
-                targetHeightPx = activity.dpForThumbnail(64) * 2,
+                targetWidthPx = activity.dpForThumbnail(72) * 2,
+                targetHeightPx = activity.dpForThumbnail(92) * 2,
             ),
             file,
         )
@@ -191,7 +193,7 @@ internal class WorkspaceHomeAdapter(
             (itemView as LinearLayout).apply {
                 addView(thumbnail)
                 addView(selection)
-                layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(68), ViewGroup.LayoutParams.MATCH_PARENT)
+                layoutParams = RecyclerView.LayoutParams(activity.dpForThumbnail(84), ViewGroup.LayoutParams.MATCH_PARENT)
             }
             thumbnail.setOnTouchListener { _, event ->
                 gestureDetector.onTouchEvent(event)

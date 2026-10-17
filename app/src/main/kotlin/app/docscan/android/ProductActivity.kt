@@ -38,8 +38,11 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.StateListDrawable
 import app.docscan.core.model.ImageVersionId
 import app.docscan.core.model.PageId
 import app.docscan.core.model.RecognitionId
@@ -80,6 +83,8 @@ class ProductActivity : AppCompatActivity() {
     private lateinit var previewView: PreviewView
     private lateinit var captureButton: Button
     private lateinit var permissionActionButton: Button
+    private lateinit var ocrButton: Button
+    private var autoOcrSkipped: Boolean = true
     private lateinit var importButton: Button
     private lateinit var destinationButton: Button
     private lateinit var recentDocumentsButton: Button
@@ -216,8 +221,10 @@ class ProductActivity : AppCompatActivity() {
                         }
                     }
                     val refreshed = runCatching { initialized.workspaceProjection() }.getOrNull() ?: return@execute
-                    refreshed.pages.filter { it.recognizedText == null && it.artifactState == "COMMITTED" }
-                        .forEach { scheduleOcr(initialized, it) }
+                    if (!autoOcrSkipped) {
+                        refreshed.pages.filter { it.recognizedText == null && it.artifactState == "COMMITTED" }
+                            .forEach { scheduleOcr(initialized, it) }
+                    }
                     runOnUiThread { if (!isFinishing) renderPages(refreshed) }
                 }
             } catch (failure: Exception) {
@@ -258,6 +265,77 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
+    private fun modernPillDrawable(enabledColor: Int, disabledColor: Int, radiusDp: Int, strokeColor: Int? = null): StateListDrawable {
+        val radiusPx = dp(radiusDp).toFloat()
+        val enabledDrawable = GradientDrawable().apply {
+            cornerRadius = radiusPx
+            setColor(enabledColor)
+        }
+        val disabledDrawable = GradientDrawable().apply {
+            cornerRadius = radiusPx
+            setColor(disabledColor)
+            if (strokeColor != null) setStroke(dp(1), strokeColor)
+        }
+        return StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_enabled), enabledDrawable)
+            addState(intArrayOf(-android.R.attr.state_enabled), disabledDrawable)
+        }
+    }
+
+    private fun modernButtonDrawable(
+        normalBg: Int = 0xFF1E222A.toInt(),
+        pressedBg: Int = 0xFF334155.toInt(),
+        disabledBg: Int = 0xFF14171C.toInt(),
+        strokeColor: Int = 0xFF374151.toInt(),
+        radiusDp: Int = 12,
+    ): StateListDrawable {
+        val radiusPx = dp(radiusDp).toFloat()
+        val pressed = GradientDrawable().apply {
+            cornerRadius = radiusPx
+            setColor(pressedBg)
+            setStroke(dp(1), strokeColor)
+        }
+        val normal = GradientDrawable().apply {
+            cornerRadius = radiusPx
+            setColor(normalBg)
+            setStroke(dp(1), strokeColor)
+        }
+        val disabled = GradientDrawable().apply {
+            cornerRadius = radiusPx
+            setColor(disabledBg)
+            setStroke(dp(1), 0xFF262B33.toInt())
+        }
+        return StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), pressed)
+            addState(intArrayOf(-android.R.attr.state_enabled), disabled)
+            addState(intArrayOf(android.R.attr.state_enabled), normal)
+            addState(intArrayOf(), normal)
+        }
+    }
+
+    private fun updateOcrButtonAppearance() {
+        if (!::ocrButton.isInitialized) return
+        if (autoOcrSkipped) {
+            ocrButton.text = "✅ OCR"
+            ocrButton.setTextColor(0xFF93C5FD.toInt())
+            ocrButton.background = modernButtonDrawable(
+                normalBg = 0xFF1E3A5F.toInt(),
+                pressedBg = 0xFF2563EB.toInt(),
+                strokeColor = 0xFF3B82F6.toInt(),
+                radiusDp = 12,
+            )
+        } else {
+            ocrButton.text = "OCR"
+            ocrButton.setTextColor(0xFF94A3B8.toInt())
+            ocrButton.background = modernButtonDrawable(
+                normalBg = 0xFF1E222A.toInt(),
+                pressedBg = 0xFF334155.toInt(),
+                strokeColor = 0xFF374151.toInt(),
+                radiusDp = 12,
+            )
+        }
+    }
+
     private fun buildContent() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -281,16 +359,55 @@ class ProductActivity : AppCompatActivity() {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
+        val actionTextColor = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf(-android.R.attr.state_enabled)),
+            intArrayOf(0xFFF8FAFC.toInt(), 0xFF64748B.toInt())
+        )
         captureButton = Button(this).apply {
-            text = getString(R.string.capture_page)
             tag = "docscan-capture-button"
+            contentDescription = getString(R.string.capture_page)
+            text = ""
             isEnabled = false
+            val outer = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x22FFFFFF)
+                setStroke(dp(4), Color.WHITE)
+            }
+            val inner = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+            }
+            background = LayerDrawable(arrayOf(outer, inner)).apply {
+                setLayerInset(1, dp(7), dp(7), dp(7), dp(7))
+            }
             setOnClickListener { takePicture() }
         }
+        ocrButton = Button(this).apply {
+            tag = "docscan-ocr-toggle-button"
+            contentDescription = "OCR toggle"
+            textSize = 12f
+            maxLines = 1
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            minimumWidth = dp(48)
+            minimumHeight = dp(48)
+            setOnClickListener {
+                autoOcrSkipped = !autoOcrSkipped
+                uiHapticFeedback(this)
+                updateOcrButtonAppearance()
+                status.text = if (autoOcrSkipped) "Авто-OCR выключен" else "Авто-OCR включен"
+            }
+        }
+        updateOcrButtonAppearance()
         importButton = Button(this).apply {
-            text = getString(R.string.home_import)
+            text = "+"
+            textSize = 22f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             contentDescription = getString(R.string.import_images_or_pdf)
             tag = "docscan-import-button"
+            background = modernButtonDrawable()
+            setTextColor(actionTextColor)
+            minimumWidth = dp(48)
+            minimumHeight = dp(48)
             setOnClickListener {
                 currentImportRequestId = UUID.randomUUID().toString()
                 importRequest.launch(arrayOf("image/*", "application/pdf"))
@@ -307,19 +424,49 @@ class ProductActivity : AppCompatActivity() {
         recentDocumentsButton = Button(this).apply {
             tag = "docscan-recent-button"
             visibility = View.GONE
+            textSize = 11f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = modernButtonDrawable(
+                normalBg = 0xDD1E222A.toInt(),
+                pressedBg = 0xFF334155.toInt(),
+                strokeColor = 0xFF475569.toInt(),
+                radiusDp = 12,
+            )
+            setTextColor(0xFFE2E8F0.toInt())
             setOnClickListener { showRecentDocuments() }
         }
         saveButton = Button(this).apply {
-            text = getString(R.string.export_selected_pages)
+            contentDescription = "Save"
+            text = "Save"
             tag = "docscan-save-button"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             isEnabled = false
+            background = modernPillDrawable(
+                enabledColor = 0xFF2563EB.toInt(),
+                disabledColor = 0xFF1E293B.toInt(),
+                radiusDp = 22,
+                strokeColor = 0xFF334155.toInt(),
+            )
+            setTextColor(
+                ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf(-android.R.attr.state_enabled)),
+                    intArrayOf(Color.WHITE, 0xFF64748B.toInt())
+                )
+            )
             setOnClickListener { requestMainSave() }
         }
         selectionButton = Button(this).apply {
-            text = getString(R.string.home_select_all)
+            text = "Select"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             contentDescription = getString(R.string.select_all_pages)
             tag = "docscan-selection-button"
             isEnabled = false
+            background = modernButtonDrawable()
+            setTextColor(actionTextColor)
+            minimumWidth = dp(48)
+            minimumHeight = dp(48)
             setOnClickListener { toggleAllPageSelection() }
         }
         recoverExportsButton = Button(this).apply {
@@ -335,10 +482,15 @@ class ProductActivity : AppCompatActivity() {
             setOnClickListener { resumeIncompleteExports() }
         }
         deleteSelectedButton = Button(this).apply {
-            text = getString(R.string.home_delete)
+            text = "🗑"
+            textSize = 18f
             contentDescription = getString(R.string.delete_selected_pages)
             tag = "docscan-delete-selected-button"
             isEnabled = false
+            background = modernButtonDrawable()
+            setTextColor(actionTextColor)
+            minimumWidth = dp(48)
+            minimumHeight = dp(48)
             setOnClickListener { deletePageBatch(clearAll = false) }
         }
         clearWorkspaceButton = Button(this).apply {
@@ -361,17 +513,32 @@ class ProductActivity : AppCompatActivity() {
             visibility = View.GONE
         }
         val menuButton = Button(this).apply {
-            text = "⋯"; contentDescription = getString(R.string.workspace_menu)
-            tag = "docscan-menu-button"; minimumWidth = dp(48); minimumHeight = dp(48)
+            text = "⋯"
+            contentDescription = getString(R.string.workspace_menu)
+            tag = "docscan-menu-button"
+            textSize = 20f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(
+                normalBg = 0xDD1E222A.toInt(),
+                pressedBg = 0xFF334155.toInt(),
+                strokeColor = 0xFF475569.toInt(),
+                radiusDp = 14,
+            )
             setOnClickListener { showWorkspaceMenu() }
         }
         val top = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(menuButton, LinearLayout.LayoutParams(dp(56), dp(48)))
-            addView(TextView(this@ProductActivity).apply { text = "DocScan"; setTextColor(Color.WHITE); textSize = 18f }, LinearLayout.LayoutParams(0, dp(48), 1f))
-            saveButton.contentDescription = "Save"
-            saveButton.text = "Save"
-            addView(saveButton, LinearLayout.LayoutParams(dp(150), dp(48)))
+            setPadding(dp(12), dp(8), dp(12), dp(4))
+            addView(menuButton, LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(12) })
+            addView(TextView(this@ProductActivity).apply {
+                text = "DocScan"
+                setTextColor(Color.WHITE)
+                textSize = 19f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                letterSpacing = 0.02f
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(saveButton, LinearLayout.LayoutParams(dp(130), dp(44)))
         }
         val camera = android.widget.FrameLayout(this).apply {
             tag = "docscan-camera-area"
@@ -382,11 +549,6 @@ class ProductActivity : AppCompatActivity() {
             val shutterRow = android.widget.FrameLayout(this@ProductActivity).apply {
                 recentDocumentsButton.apply { textSize = 10f; minWidth = dp(48) }
                 addView(recentDocumentsButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
-                captureButton.apply {
-                    contentDescription = getString(R.string.capture_page); text = "●"; textSize = 36f
-                    background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setStroke(dp(3), 0xffaab4c4.toInt()) }
-                    setTextColor(0xffe4e8ee.toInt())
-                }
                 addView(captureButton, android.widget.FrameLayout.LayoutParams(dp(72), dp(72), Gravity.CENTER))
                 addView(permissionActionButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(56), Gravity.END or Gravity.CENTER_VERTICAL))
             }
@@ -427,7 +589,7 @@ class ProductActivity : AppCompatActivity() {
             adapter = homeThumbnailAdapter
             itemAnimator = null
             isNestedScrollingEnabled = false
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setPadding(dp(8), dp(2), dp(8), dp(2))
             clipToPadding = false
         }
         val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
@@ -510,12 +672,18 @@ class ProductActivity : AppCompatActivity() {
             }
             addView(homeEmptyLabel, android.widget.FrameLayout.LayoutParams(-1, -1))
         }
-        root.addView(homeRailFrame, LinearLayout.LayoutParams(-1, dp(124)))
+        root.addView(homeRailFrame, LinearLayout.LayoutParams(-1, dp(134)))
         val actions = LinearLayout(this).apply {
-            tag = "docscan-home-actions"; gravity = Gravity.CENTER_VERTICAL
-            listOf(importButton, selectionButton, deleteSelectedButton).forEach { button ->
-                button.textSize = 12f; button.maxLines = 2; button.minimumWidth = dp(48); button.minimumHeight = dp(48)
-                addView(button, LinearLayout.LayoutParams(0, dp(48), 1f))
+            tag = "docscan-home-actions"
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(6), dp(0), dp(6), dp(0))
+            listOf(ocrButton, importButton, selectionButton, deleteSelectedButton).forEach { button ->
+                button.minimumWidth = dp(48)
+                button.minimumHeight = dp(48)
+                addView(button, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                    marginStart = dp(3)
+                    marginEnd = dp(3)
+                })
             }
         }
         root.addView(actions, LinearLayout.LayoutParams(-1, dp(48)))
@@ -603,6 +771,7 @@ class ProductActivity : AppCompatActivity() {
         listOf(
             captureButton,
             permissionActionButton,
+            ocrButton,
             importButton,
             destinationButton,
             recentDocumentsButton,
@@ -864,34 +1033,38 @@ class ProductActivity : AppCompatActivity() {
             bottomMargin = dp(16)
         })
 
-        // Checkboxes: [✓] OCR      [✓] JPG
-        val checkContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
+        var ocrCheck: CheckBox? = null
+        var jpgCheck: CheckBox? = null
+        if (!autoOcrSkipped) {
+            // Checkboxes: [✓] OCR      [✓] JPG
+            val checkContainer = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
 
-        val ocrCheck = CheckBox(this).apply {
-            text = "OCR"
-            isChecked = true
-            textSize = 15f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFF334155.toInt())
-        }
-        val jpgCheck = CheckBox(this).apply {
-            text = "JPG"
-            isChecked = true
-            textSize = 15f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFF334155.toInt())
-        }
+            ocrCheck = CheckBox(this).apply {
+                text = "OCR"
+                isChecked = true
+                textSize = 15f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(0xFF334155.toInt())
+            }
+            jpgCheck = CheckBox(this).apply {
+                text = "JPG"
+                isChecked = true
+                textSize = 15f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(0xFF334155.toInt())
+            }
 
-        checkContainer.addView(ocrCheck, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            rightMargin = dp(24)
-        })
-        checkContainer.addView(jpgCheck)
-        container.addView(checkContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(8)
-        })
+            checkContainer.addView(ocrCheck, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                rightMargin = dp(24)
+            })
+            checkContainer.addView(jpgCheck)
+            container.addView(checkContainer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(8)
+            })
+        }
 
         dialogHost.builder(this)
             .setView(container)
@@ -900,7 +1073,9 @@ class ProductActivity : AppCompatActivity() {
                 val enteredName = input.text.toString().trim()
                 val fileName = if (enteredName.isNotBlank()) enteredName else defaultName
                 val cleanName = if (fileName.endsWith(".pdf", ignoreCase = true)) fileName else "$fileName.pdf"
-                executeDocScanSave(cleanName, ocrCheck.isChecked, jpgCheck.isChecked)
+                val includeOcr = if (autoOcrSkipped) false else (ocrCheck?.isChecked ?: true)
+                val includeJpg = if (autoOcrSkipped) true else (jpgCheck?.isChecked ?: true)
+                executeDocScanSave(cleanName, includeOcr, includeJpg)
             }
             .show()
     }
@@ -1741,8 +1916,10 @@ class ProductActivity : AppCompatActivity() {
                 }
                 return@execute
             }
-            projection.pages.filter { it.pageId in importedPageIds && it.recognizedText == null }
-                .forEach { scheduleOcr(activeStorage, it) }
+            if (!autoOcrSkipped) {
+                projection.pages.filter { it.pageId in importedPageIds && it.recognizedText == null }
+                    .forEach { scheduleOcr(activeStorage, it) }
+            }
             runOnUiThread {
                 try {
                     val failed = failureMessage
@@ -1844,8 +2021,10 @@ class ProductActivity : AppCompatActivity() {
                             )
                         }
                         val projection = activeStorage.workspaceProjection()
-                        projection.pages.firstOrNull { it.pageId == affectedPageId }?.let {
-                            scheduleOcr(activeStorage, it)
+                        if (!autoOcrSkipped) {
+                            projection.pages.firstOrNull { it.pageId == affectedPageId }?.let {
+                                scheduleOcr(activeStorage, it)
+                            }
                         }
                         runOnUiThread {
                             captureButton.isEnabled = imageCapture != null
@@ -1890,8 +2069,11 @@ class ProductActivity : AppCompatActivity() {
         clearWorkspaceButton.isEnabled = !externalWorkflowRunning.get() && pages.isNotEmpty()
         selectionButton.isEnabled = !externalWorkflowRunning.get() && pages.isNotEmpty()
         val allSelected = pages.isNotEmpty() && pages.all { it.selected }
-        selectionButton.text = getString(if (allSelected) R.string.home_deselect_all else R.string.home_select_all)
+        selectionButton.text = "Select"
         selectionButton.contentDescription = getString(if (allSelected) R.string.deselect_all_pages else R.string.select_all_pages)
+        if (::ocrButton.isInitialized) {
+            ocrButton.isEnabled = !externalWorkflowRunning.get() && !workspaceActionBlocked
+        }
         if (workspaceMenuDialog?.isShowing == true) {
             workspaceEmptyLabel?.visibility = if (pages.isEmpty()) View.VISIBLE else View.GONE
             workspacePageAdapter?.submitProjection(projection)
@@ -2376,7 +2558,9 @@ class ProductActivity : AppCompatActivity() {
             try {
                 activeStorage.undoDeleteBatch(batchId)
                 val projection = activeStorage.workspaceProjection()
-                projection.pages.filter { it.recognizedText == null }.forEach { scheduleOcr(activeStorage, it) }
+                if (!autoOcrSkipped) {
+                    projection.pages.filter { it.recognizedText == null }.forEach { scheduleOcr(activeStorage, it) }
+                }
                 runOnUiThread {
                     status.text = getString(R.string.delete_batch_undo_complete)
                     renderPages(projection)
@@ -2396,7 +2580,9 @@ class ProductActivity : AppCompatActivity() {
             try {
                 activeStorage.undoDelete(pageId)
                 val projection = activeStorage.workspaceProjection()
-                projection.pages.filter { it.recognizedText == null }.forEach { scheduleOcr(activeStorage, it) }
+                if (!autoOcrSkipped) {
+                    projection.pages.filter { it.recognizedText == null }.forEach { scheduleOcr(activeStorage, it) }
+                }
                 runOnUiThread {
                     status.text = getString(R.string.delete_undo_complete)
                     renderPages(projection)
@@ -3346,8 +3532,10 @@ class ProductActivity : AppCompatActivity() {
             }
             val projection = activeStorage.workspaceProjection()
             importedPageIds += projection.pages.filter { it.pageId !in initialPageIds }.map { it.pageId }
-            projection.pages.filter { it.pageId in importedPageIds && it.recognizedText == null }
-                .forEach { scheduleOcr(activeStorage, it) }
+            if (!autoOcrSkipped) {
+                projection.pages.filter { it.pageId in importedPageIds && it.recognizedText == null }
+                    .forEach { scheduleOcr(activeStorage, it) }
+            }
             runOnUiThread {
                 status.text = when {
                     failures.isEmpty() -> getString(R.string.import_documents_complete, importedPageIds.size, uris.size)
