@@ -152,24 +152,28 @@ class TesseractOcrAdapter(
     private fun extractWordsFromIterator(tess: TessBaseAPI): List<RecognizedWord> {
         val words = mutableListOf<RecognizedWord>()
         val iterator = tess.resultIterator ?: return emptyList()
-        iterator.begin()
-        do {
-            val text = iterator.getUTF8Text(TessBaseAPI.PageIteratorLevel.RIL_WORD)?.trim().orEmpty()
-            if (text.isNotEmpty()) {
-                val box = iterator.getBoundingBox(TessBaseAPI.PageIteratorLevel.RIL_WORD)
-                val conf = iterator.confidence(TessBaseAPI.PageIteratorLevel.RIL_WORD).toDouble().coerceIn(0.0, 100.0)
-                if (box != null && box.size >= 4) {
-                    val left = box[0].toLong()
-                    val top = box[1].toLong()
-                    val right = box[2].toLong()
-                    val bottom = box[3].toLong()
-                    if (left >= 0 && top >= 0 && right > left && bottom > top) {
-                        words += RecognizedWord(text, left, top, right, bottom, conf)
+        try {
+            iterator.begin()
+            do {
+                val text = iterator.getUTF8Text(TessBaseAPI.PageIteratorLevel.RIL_WORD)?.trim().orEmpty()
+                if (text.isNotEmpty()) {
+                    val box = iterator.getBoundingBox(TessBaseAPI.PageIteratorLevel.RIL_WORD)
+                    val conf = iterator.confidence(TessBaseAPI.PageIteratorLevel.RIL_WORD).toDouble().coerceIn(0.0, 100.0)
+                    if (box != null && box.size >= 4) {
+                        val left = box[0].toLong()
+                        val top = box[1].toLong()
+                        val right = box[2].toLong()
+                        val bottom = box[3].toLong()
+                        if (left >= 0 && top >= 0 && right > left && bottom > top) {
+                            words += RecognizedWord(text, left, top, right, bottom, conf)
+                        }
                     }
                 }
-            }
-        } while (iterator.next(TessBaseAPI.PageIteratorLevel.RIL_WORD))
-        return words
+            } while (iterator.next(TessBaseAPI.PageIteratorLevel.RIL_WORD))
+            return words
+        } finally {
+            iterator.delete()
+        }
     }
 
     private fun parseHocrWords(hocr: String): List<RecognizedWord> {
