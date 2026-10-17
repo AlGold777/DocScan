@@ -63,7 +63,10 @@ internal class WorkspaceHomeAdapter(
     }
 
     private fun bind(holder: Holder, item: Item) {
+        val isItemEnabled = enabled()
         holder.boundItem = item
+        holder.itemView.isEnabled = isItemEnabled
+        holder.thumbnail.isEnabled = isItemEnabled
         holder.thumbnail.tag = HOME_THUMBNAIL_TAG_PREFIX + item.page.pageId.value
         holder.thumbnail.contentDescription = activity.getString(
             if (item.active) R.string.active_page else R.string.page_image_description,
@@ -78,7 +81,7 @@ internal class WorkspaceHomeAdapter(
         holder.selection.contentDescription = activity.getString(R.string.include_page_in_save, item.index + 1)
         holder.selection.minimumWidth = activity.dpForThumbnail(32)
         holder.selection.minimumHeight = activity.dpForThumbnail(32)
-        holder.selection.isEnabled = enabled()
+        holder.selection.isEnabled = isItemEnabled
         holder.selection.setOnCheckedChangeListener(null)
         holder.selection.isChecked = item.page.selected
         holder.selection.setOnCheckedChangeListener { checkbox, checked ->
@@ -159,6 +162,10 @@ internal class WorkspaceHomeAdapter(
         var boundItem: Item? = null
 
         init {
+            val isItemEnabled = enabled()
+            itemView.isEnabled = isItemEnabled
+            thumbnail.isEnabled = isItemEnabled
+            selection.isEnabled = isItemEnabled
             (itemView as LinearLayout).apply {
                 addView(thumbnail)
                 addView(selection)

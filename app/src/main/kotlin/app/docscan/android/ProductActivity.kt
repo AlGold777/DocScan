@@ -1183,10 +1183,10 @@ class ProductActivity : AppCompatActivity() {
                         saveButton.isEnabled = false
                         updateBulkActionButtons(emptyList())
                     }
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(projection?.pages.orEmpty())
+                    updateRecoveryActions(activeStorage)
                 }
-                updateSaveButtonState(activeStorage)
-                updateBulkActionButtons(projection?.pages.orEmpty())
-                updateRecoveryActions(activeStorage)
             }
         }
     }
@@ -1235,10 +1235,14 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread { status.text = getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName) }
             } finally {
                 externalWorkflowRunning.set(false)
-                runOnUiThread { setWorkspaceInteractionEnabled(true) }
-                updateRecoveryActions(activeStorage)
-                updateSaveButtonState(activeStorage)
-                updateBulkActionButtons(activeStorage.workspaceProjection().pages)
+                val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
+                runOnUiThread {
+                    setWorkspaceInteractionEnabled(true)
+                    if (projection != null) renderPages(projection)
+                    updateRecoveryActions(activeStorage)
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(projection?.pages.orEmpty())
+                }
             }
         }
     }
@@ -1279,10 +1283,14 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread { status.text = getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName) }
             } finally {
                 externalWorkflowRunning.set(false)
-                runOnUiThread { setWorkspaceInteractionEnabled(true) }
-                updateRecoveryActions(activeStorage)
-                updateSaveButtonState(activeStorage)
-                updateBulkActionButtons(activeStorage.workspaceProjection().pages)
+                val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
+                runOnUiThread {
+                    setWorkspaceInteractionEnabled(true)
+                    if (projection != null) renderPages(projection)
+                    updateRecoveryActions(activeStorage)
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(projection?.pages.orEmpty())
+                }
             }
         }
     }
@@ -1304,21 +1312,17 @@ class ProductActivity : AppCompatActivity() {
 
     private fun setWorkspaceInteractionEnabled(enabled: Boolean) {
         val canInteract = enabled && !workspaceActionBlocked && !externalWorkflowRunning.get()
-        if (!enabled) {
-            fun disable(view: View) {
-                view.isEnabled = false
-                if (view is ViewGroup) {
-                    for (index in 0 until view.childCount) disable(view.getChildAt(index))
+        fun setTreeEnabled(view: View, targetEnabled: Boolean) {
+            view.isEnabled = targetEnabled
+            if (view is ViewGroup) {
+                for (index in 0 until view.childCount) {
+                    setTreeEnabled(view.getChildAt(index), targetEnabled)
                 }
             }
-            pagesContainer?.let(::disable)
-            disable(homeRail)
-            return
         }
 
-        // RecyclerView/ListAdapter can legitimately skip an identical-list diff. Restore the
-        // container itself and explicitly rebind attached rows so their child enabled state is
-        // recomputed from current workflow guards.
+        pagesContainer?.let { setTreeEnabled(it, canInteract) }
+        setTreeEnabled(homeRail, canInteract)
         homeRail.isEnabled = canInteract
         pagesContainer?.isEnabled = canInteract
         homeThumbnailAdapter.refreshBoundItems()
@@ -2425,18 +2429,17 @@ class ProductActivity : AppCompatActivity() {
             } finally {
                 externalWorkflowRunning.set(false)
                 val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
-                if (refreshed != null) {
-                    runOnUiThread {
-                        setWorkspaceInteractionEnabled(true)
+                runOnUiThread {
+                    setWorkspaceInteractionEnabled(true)
+                    if (refreshed != null) {
                         renderPages(refreshed)
                         updateRecoveryActions(activeStorage)
-                    }
-                } else {
-                    runOnUiThread {
-                        setWorkspaceInteractionEnabled(true)
+                    } else {
                         saveButton.isEnabled = false
                         updateBulkActionButtons(emptyList())
                     }
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(refreshed?.pages.orEmpty())
                 }
             }
         }
@@ -2534,18 +2537,17 @@ class ProductActivity : AppCompatActivity() {
             } finally {
                 externalWorkflowRunning.set(false)
                 val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
-                if (refreshed != null) {
-                    runOnUiThread {
-                        setWorkspaceInteractionEnabled(true)
+                runOnUiThread {
+                    setWorkspaceInteractionEnabled(true)
+                    if (refreshed != null) {
                         renderPages(refreshed)
                         updateRecoveryActions(activeStorage)
-                    }
-                } else {
-                    runOnUiThread {
-                        setWorkspaceInteractionEnabled(true)
+                    } else {
                         saveButton.isEnabled = false
                         updateBulkActionButtons(emptyList())
                     }
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(refreshed?.pages.orEmpty())
                 }
             }
         }
@@ -3680,6 +3682,7 @@ class ProductActivity : AppCompatActivity() {
                                 desiredOperationKey = OCR_OPERATION_KEY,
                                 recognizedText = result.text,
                                 geometry = result.geometry,
+                                layout = result.layout,
                             ),
                         )
                         val projection = activeStorage.workspaceProjection()
