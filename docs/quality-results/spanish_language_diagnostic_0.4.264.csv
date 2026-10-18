@@ -1,0 +1,5 @@
+version,fixture_format,model,mode,selected_language,cer,correct_accent_tokens,accent_token_count,pingüino_with_diaeresis,recognized_text
+0.4.264,png,fast,AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+0.4.264,jpg,fast,AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+0.4.264,png,fast,ES_EN PSM_AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+0.4.264,jpg,fast,ES_EN PSM_AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821

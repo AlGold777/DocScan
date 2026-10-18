@@ -1,0 +1,11 @@
+fixture_format,model,mode,selected_language,cer,correct_accent_tokens,accent_token_count,pingüino_with_diaeresis,recognized_text
+png,fast,AUTO,rus+eng,0.15789,1,6,false,Manana accion Nina café pinguino Numero 4821
+jpg,fast,AUTO,rus+eng,0.15789,1,6,false,Manana accion Nina café pinguino Numero 4821
+png,fast,ES_EN PSM_AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+png,fast,ES_EN PSM_SINGLE_BLOCK,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+jpg,fast,ES_EN PSM_AUTO,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+jpg,fast,ES_EN PSM_SINGLE_BLOCK,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+png,best,ES_EN,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+jpg,best,ES_EN,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+png,fast-eng+best-spa,ES_EN,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
+jpg,fast-eng+best-spa,ES_EN,spa+eng,0.02632,5,6,false,Mañana acción Niña café pinguino Número 4821
