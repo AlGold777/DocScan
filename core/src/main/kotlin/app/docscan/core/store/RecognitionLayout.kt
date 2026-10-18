@@ -7,6 +7,7 @@ data class RecognitionLayout(
     val languageHints: Set<String> = emptySet(),
     val quality: LayoutQuality? = null,
     val formatVersion: Int = 2,
+    val plainText: String? = null,
 ) {
     fun toLegacyGeometry(): RecognitionGeometry {
         val allWords = blocks
@@ -36,7 +37,8 @@ data class RecognitionLayout(
     }
 
     fun toPlainText(): String {
-        return blocks
+        if (!plainText.isNullOrBlank()) return plainText
+        val structuralText = blocks
             .sortedBy { it.readingOrder }
             .mapNotNull { block ->
                 val blockText = block.paragraphs
@@ -52,6 +54,10 @@ data class RecognitionLayout(
                 if (blockText.isBlank()) null else blockText
             }
             .joinToString("\n\n")
+        val hasWords = blocks.any { block ->
+            block.paragraphs.any { paragraph -> paragraph.lines.any { it.words.isNotEmpty() } }
+        }
+        return if (hasWords) structuralText else plainText.orEmpty()
     }
 }
 
@@ -113,7 +119,7 @@ data class LayoutQuality(
     val structureAvailable: Boolean,
     val language: String? = null,
     val preprocessingProfile: String = "DEFAULT",
-    val engineVersion: String = "TESSERACT_4",
+    val engineVersion: String = "UNKNOWN",
 )
 
 enum class BlockType {

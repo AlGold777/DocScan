@@ -42,7 +42,9 @@ object RecognitionPayloadCodec {
                     val ws = JSONArray()
                     for (w in ln.words) ws.put(JSONArray()
                         .put(w.text).put(w.box.l).put(w.box.t).put(w.box.r).put(w.box.b).put(w.conf.toDouble()))
-                    lines.put(JSONObject().put("b", bx(ln.box)).put("w", ws))
+                    val lineObj = JSONObject().put("b", bx(ln.box)).put("w", ws)
+                    ln.baseline?.let { lineObj.put("baseline", JSONArray().put(it.slope.toDouble()).put(it.intercept.toDouble())) }
+                    lines.put(lineObj)
                 }
                 paras.put(JSONObject().put("b", bx(p.box)).put("l", lines))
             }
@@ -53,6 +55,17 @@ object RecognitionPayloadCodec {
         }
         val obj = JSONObject().put("w", l.sourceW).put("h", l.sourceH).put("blocks", blocks)
         obj.put("lang", l.lang ?: "")
+        obj.put("plainText", l.plainText ?: JSONObject.NULL)
+        obj.put("languageHints", JSONArray().apply { l.languageHints.sorted().forEach(::put) })
+        l.quality?.let { quality ->
+            obj.put("quality", JSONObject()
+                .put("meanConfidence", quality.meanConfidence.toDouble())
+                .put("lowConfidenceWordCount", quality.lowConfidenceWordCount)
+                .put("structureAvailable", quality.structureAvailable)
+                .put("language", quality.language ?: JSONObject.NULL)
+                .put("preprocessingProfile", quality.preprocessingProfile)
+                .put("engineVersion", quality.engineVersion))
+        }
         return HEAD2 + obj.toString()
     }
 
@@ -69,10 +82,14 @@ object RecognitionPayloadCodec {
                     val p = pa.getJSONObject(j); val la = p.getJSONArray("l")
                     CoreOcrPara(unbx(p.getJSONArray("b")), (0 until la.length()).map { k ->
                         val l = la.getJSONObject(k); val wa = l.getJSONArray("w")
+                        val baselineArray = l.optJSONArray("baseline")
+                        val baseline = if (baselineArray != null && baselineArray.length() >= 2) {
+                            Baseline(baselineArray.getDouble(0).toFloat(), baselineArray.getDouble(1).toFloat())
+                        } else null
                         CoreOcrLine(unbx(l.getJSONArray("b")), (0 until wa.length()).map { m ->
                             val w = wa.getJSONArray(m)
                             CoreOcrWord(w.getString(0), Bx(w.getInt(1), w.getInt(2), w.getInt(3), w.getInt(4)), w.getDouble(5).toFloat())
-                        })
+                        }, baseline)
                     })
                 },
                 type = bType,
@@ -80,11 +97,28 @@ object RecognitionPayloadCodec {
             )
         }
         val lang = o.optString("lang", "").ifEmpty { null }
-        return OcrLayout(o.getInt("w"), o.getInt("h"), blocks, lang)
+        val plainText = if (!o.has("plainText") || o.isNull("plainText")) null else o.getString("plainText")
+        val hintsArray = o.optJSONArray("languageHints")
+        val languageHints = if (hintsArray == null) emptySet() else
+            (0 until hintsArray.length()).mapNotNull { hintsArray.optString(it).takeIf(String::isNotBlank) }.toSet()
+        val qualityObj = o.optJSONObject("quality")
+        val quality = qualityObj?.let { value ->
+            LayoutQuality(
+                meanConfidence = value.optDouble("meanConfidence", 0.0).toFloat(),
+                lowConfidenceWordCount = value.optInt("lowConfidenceWordCount", 0),
+                structureAvailable = value.optBoolean("structureAvailable", false),
+                language = if (!value.has("language") || value.isNull("language")) null else value.optString("language"),
+                preprocessingProfile = value.optString("preprocessingProfile", "DEFAULT"),
+                engineVersion = value.optString("engineVersion", "UNKNOWN"),
+            )
+        }
+        return OcrLayout(o.getInt("w"), o.getInt("h"), blocks, lang, plainText, quality, languageHints)
     }
 
     fun encode(text: String, layout: RecognitionLayout): String {
-        return encodeLayout(layout.toOcrLayout())
+        val ocrLayout = layout.toOcrLayout()
+        val textless = ocrLayout.words.isEmpty() && ocrLayout.plainText.isNullOrEmpty()
+        return encodeLayout(if (textless) ocrLayout.copy(plainText = text) else ocrLayout)
     }
 
     fun encode(text: String, geometry: RecognitionGeometry): String {
@@ -267,9 +301,11 @@ object RecognitionPayloadCodec {
             languageHints = languageHints,
             quality = quality,
             formatVersion = version,
+            plainText = text,
         )
         validate(layout)
-        return DecodedRecognitionPayload(text, layout.toLegacyGeometry(), layout)
+        val ocrLayout = layout.toOcrLayout()
+        return DecodedRecognitionPayload(text, layout.toLegacyGeometry(), layout, ocrLayout)
     }
 
     private fun decodeLines(

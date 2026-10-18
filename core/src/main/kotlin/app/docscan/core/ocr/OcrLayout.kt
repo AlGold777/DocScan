@@ -1,6 +1,7 @@
 package app.docscan.core.ocr
 
 import app.docscan.core.store.Baseline
+import app.docscan.core.store.LayoutQuality
 
 data class OcrWord(val text: String, val box: Bx, val conf: Float)
 data class OcrLine(val box: Bx, val words: List<OcrWord>, val baseline: Baseline? = null)
@@ -16,17 +17,23 @@ data class OcrLayout(
     val sourceH: Int,
     val blocks: List<OcrBlock>,
     val lang: String? = null,
+    val plainText: String? = null,
+    val quality: LayoutQuality? = null,
+    val languageHints: Set<String> = emptySet(),
 ) {
     val words: List<OcrWord>
         get() = blocks.flatMap { b -> b.paras.flatMap { p -> p.lines.flatMap { it.words } } }
 }
 
-fun OcrLayout.toPlainText(): String =
-    blocks.joinToString("\n\n") { b ->
+fun OcrLayout.toPlainText(): String {
+    if (!plainText.isNullOrBlank()) return plainText
+    if (words.isEmpty()) return plainText.orEmpty()
+    return blocks.joinToString("\n\n") { b ->
         b.paras.joinToString("\n\n") { p ->
             p.lines.joinToString("\n") { l -> l.words.joinToString(" ") { it.text } }
         }
     }
+}
 
 fun OcrLayout.toRecognitionLayout(): app.docscan.core.store.RecognitionLayout {
     val w = maxOf(1, sourceW)
@@ -85,12 +92,21 @@ fun OcrLayout.toRecognitionLayout(): app.docscan.core.store.RecognitionLayout {
             paragraphs = paras,
         )
     }
+    val allWords = words
+    val computedQuality = LayoutQuality(
+        meanConfidence = if (allWords.isEmpty()) 0f else allWords.map { it.conf }.average().toFloat(),
+        lowConfidenceWordCount = allWords.count { it.conf < 60f },
+        structureAvailable = allWords.isNotEmpty(),
+        language = lang,
+    )
     return app.docscan.core.store.RecognitionLayout(
         sourceWidthPx = w,
         sourceHeightPx = h,
         blocks = recBlocks,
-        quality = app.docscan.core.store.LayoutQuality(80f, 0, structureAvailable = true, language = lang),
+        languageHints = languageHints,
+        quality = quality ?: computedQuality,
         formatVersion = 2,
+        plainText = plainText,
     )
 }
 
@@ -116,7 +132,15 @@ fun app.docscan.core.store.RecognitionLayout.toOcrLayout(): OcrLayout {
         }
         OcrBlock(nb(b.box), paras, b.type.name, b.id)
     }
-    return OcrLayout(w, h, ocrBlocks, quality?.language)
+    return OcrLayout(
+        sourceW = w,
+        sourceH = h,
+        blocks = ocrBlocks,
+        lang = quality?.language ?: languageHints.firstOrNull(),
+        plainText = plainText,
+        quality = quality,
+        languageHints = languageHints,
+    )
 }
 
 fun OcrLayout.scaledTo(w: Int, h: Int): OcrLayout? {
@@ -139,7 +163,12 @@ fun OcrLayout.scaledTo(w: Int, h: Int): OcrLayout? {
                             OcrLine(
                                 box = s(l.box),
                                 words = l.words.map { it.copy(box = s(it.box)) },
-                                baseline = l.baseline,
+                                baseline = l.baseline?.let { baseline ->
+                                    Baseline(
+                                        slope = (baseline.slope * fy / fx).toFloat(),
+                                        intercept = (baseline.intercept * fy).toFloat(),
+                                    )
+                                },
                             )
                         },
                     )
@@ -149,6 +178,9 @@ fun OcrLayout.scaledTo(w: Int, h: Int): OcrLayout? {
             )
         },
         lang = lang,
+        plainText = plainText,
+        quality = quality,
+        languageHints = languageHints,
     )
 }
 

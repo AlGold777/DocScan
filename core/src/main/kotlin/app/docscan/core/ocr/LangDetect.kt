@@ -32,7 +32,13 @@ object LangDetect {
             }
             if (ch in DIACRITICS) dia++
         }
-        if (letters < MIN_LETTERS) return null
+        if (letters < MIN_LETTERS) {
+            // Short receipts/titles do not provide enough stop words. ñ and inverted
+            // punctuation are stronger evidence among the supported RU/EN/ES languages.
+            if (letters < 3 || lower.none { it == 'ñ' || it == '¿' || it == '¡' }) return null
+            return if (cyr.toDouble() / letters >= CYR_SHARE_MIXED)
+                OcrLangProfile.RU_ES_EN else OcrLangProfile.ES_EN
+        }
         var es = 0.5 * dia
         var en = 0.0
         for (m in WORD.findAll(lower)) {
