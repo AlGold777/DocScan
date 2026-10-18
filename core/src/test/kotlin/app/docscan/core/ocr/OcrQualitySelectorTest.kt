@@ -51,6 +51,19 @@ class OcrQualitySelectorTest {
     }
 
     @Test
+    fun spanishDocumentWordsRouteAccentlessAutoOutputToSpanish() {
+        assertEquals(
+            OcrLangProfile.ES_EN,
+            LangDetect.decide("Manana accion Nina café pinguino Numero 4821"),
+        )
+    }
+
+    @Test
+    fun oneSpanishDocumentWordDoesNotRerouteOrdinaryEnglish() {
+        assertNull(LangDetect.decide("The invoice is ready for factura number 4821"))
+    }
+
+    @Test
     fun credibleNumberIsPreservedWhenTheOtherPassChangesIt() {
         val first = layout("Total 42", confidence = 86f)
         val second = layout("Total 43", confidence = 93f)

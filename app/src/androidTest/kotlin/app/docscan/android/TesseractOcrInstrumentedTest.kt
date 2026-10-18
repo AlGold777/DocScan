@@ -107,6 +107,21 @@ class TesseractOcrInstrumentedTest {
             }
             TesseractOcrAdapter(context).use { adapter ->
                 listOf(png, jpeg).forEach { image ->
+                    val detected = adapter.recognizeDetailed(image, mode = OcrLangMode.AUTO)
+                    val detectedLanguage = detected.layout.quality?.language.orEmpty()
+                    val detectedTokens = Regex("[\\p{L}\\p{M}\\p{N}]+")
+                        .findAll(detected.text.lowercase(Locale.ROOT)).map { it.value }.toSet()
+                    Log.i("DocScanOcrLangProbe", "${image.extension} mode=AUTO language=$detectedLanguage " +
+                        "text=${detected.text.replace('\n', '|')}")
+                    assertTrue("language AUTO should select Spanish for the Spanish invoice: $detectedLanguage",
+                        detectedLanguage.contains("spa", ignoreCase = true))
+                    val supportedAccentTokens = listOf("mañana", "acción", "niña", "café", "número", "4821")
+                    supportedAccentTokens.forEach { expected ->
+                        assertTrue("language AUTO selected Spanish but lost '$expected': ${detected.text}",
+                            expected in detectedTokens)
+                    }
+                    assertTrue("language AUTO should keep the Spanish invoice number: ${detected.text}",
+                        "4821" in detectedTokens)
                     val automatic = adapter.recognizeDetailed(image, mode = OcrLangMode.ES_EN)
                     Log.i("DocScanOcrLangProbe", "${image.extension} PSM_AUTO: ${automatic.text.replace('\n', '|')}")
                     val automaticTokens = Regex("[\\p{L}\\p{M}\\p{N}]+")
@@ -121,7 +136,6 @@ class TesseractOcrInstrumentedTest {
                         .map { it.value }
                         .toSet()
                     Log.i("DocScanOcrLangProbe", "${image.extension} PSM_SINGLE_BLOCK: ${result.text.replace('\n', '|')}")
-                    val supportedAccentTokens = listOf("mañana", "acción", "niña", "café", "número", "4821")
                     supportedAccentTokens
                         .forEach { expected ->
                             assertTrue(

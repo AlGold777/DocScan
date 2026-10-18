@@ -18,6 +18,13 @@ object LangDetect {
         "was", "on", "are", "be", "by", "this", "at", "from", "or", "an", "have", "not", "but", "which",
         "you", "all", "we", "will", "can", "has", "their", "been"
     )
+    // Typical Spanish document words remain useful when a RU/EN first pass loses accents.
+    // Two distinct cues are required; a name or a borrowed word alone is not enough.
+    private val ES_DOCUMENT = setOf(
+        "factura", "importe", "cantidad", "fecha", "numero", "documento", "direccion",
+        "pagina", "recibo", "telefono", "accion", "solicitud", "apellido", "apellidos",
+        "domicilio", "nacimiento",
+    )
     private val WORD = Regex("\\p{L}+")
 
     fun decide(text: String): OcrLangProfile? {
@@ -31,6 +38,16 @@ object LangDetect {
                 if (ch in '\u0400'..'\u04FF') cyr++
             }
             if (ch in DIACRITICS) dia++
+        }
+        val words = WORD.findAll(lower).map { it.value }.toList()
+        val enHits = words.count { it in EN }
+        val documentCues = words.map { word ->
+            java.text.Normalizer.normalize(word, java.text.Normalizer.Form.NFD)
+                .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
+        }.filter { it in ES_DOCUMENT }.toSet()
+        if (letters >= 8 && documentCues.size >= 2 && enHits < 2) {
+            return if (cyr.toDouble() / letters >= CYR_SHARE_MIXED)
+                OcrLangProfile.RU_ES_EN else OcrLangProfile.ES_EN
         }
         if (letters < MIN_LETTERS) {
             // Short receipts/titles do not provide enough stop words. ñ and inverted
