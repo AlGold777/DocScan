@@ -7,7 +7,7 @@ import org.jsoup.parser.Parser
 private val BBOX = Regex("""bbox (-?\d+) (-?\d+) (-?\d+) (-?\d+)""")
 private val WCONF = Regex("""x_wconf (\d+)""")
 private val BASELINE = Regex("""baseline\s+(-?[\d.]+)\s+(-?[\d.]+)""")
-private const val LINE_SEL = ".ocr_line, .ocr_header, .ocr_caption, .ocr_textfloat"
+private const val CONTAINER_SEL = ".ocr_carea, .ocr_header, .ocr_footer, .ocr_caption, .ocr_textfloat"
 
 private fun org.jsoup.nodes.Element.box(w: Int, h: Int): Bx? {
     val g = BBOX.find(attr("title"))?.groupValues ?: return null
@@ -22,9 +22,45 @@ fun parseHocr(hocr: String, w: Int, h: Int): OcrLayout {
     val pageW = if (w > 1) w else (pageBbox?.get(3)?.toIntOrNull() ?: maxOf(1, w))
     val pageH = if (h > 1) h else (pageBbox?.get(4)?.toIntOrNull() ?: maxOf(1, h))
 
+    fun isContainer(element: org.jsoup.nodes.Element): Boolean =
+        element.hasClass("ocr_carea") || element.hasClass("ocr_header") ||
+            element.hasClass("ocr_footer") || element.hasClass("ocr_caption") ||
+            element.hasClass("ocr_textfloat")
+
+    fun nearestContainer(element: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        var ancestor = element.parent()
+        while (ancestor != null) {
+            if (isContainer(ancestor)) return ancestor
+            ancestor = ancestor.parent()
+        }
+        return null
+    }
+
+    fun nearestLine(element: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        var ancestor = element.parent()
+        while (ancestor != null) {
+            if (ancestor.hasClass("ocr_line")) return ancestor
+            ancestor = ancestor.parent()
+        }
+        return null
+    }
+
+    fun isNonText(element: org.jsoup.nodes.Element): Boolean {
+        var ancestor: org.jsoup.nodes.Element? = element
+        while (ancestor != null) {
+            if (ancestor.hasClass("ocr_photo") || ancestor.hasClass("ocr_separator")) return true
+            ancestor = ancestor.parent()
+        }
+        return false
+    }
+
     fun parseLine(l: org.jsoup.nodes.Element): OcrLine? {
         val lb = l.box(pageW, pageH) ?: return null
-        val words = l.select(".ocrx_word").mapNotNull { e ->
+        val lineContainer = if (isContainer(l)) l else nearestContainer(l)
+        val words = l.select(".ocrx_word").filter { word ->
+            !isNonText(word) && nearestContainer(word) === lineContainer &&
+                nearestLine(word) == (if (l.hasClass("ocr_line")) l else null)
+        }.mapNotNull { e ->
             val text = sanitizeOcrText(e.text())
             val wb = e.box(pageW, pageH)
             if (text.isEmpty() || wb == null) null
@@ -39,19 +75,84 @@ fun parseHocr(hocr: String, w: Int, h: Int): OcrLayout {
         return if (words.isEmpty()) null else OcrLine(lb, words, baseline)
     }
 
-    val containers = doc.select(".ocr_carea, .ocr_header, .ocr_footer, .ocr_caption")
-    val blocks = containers.mapNotNull { area ->
-        val ab = area.box(pageW, pageH) ?: return@mapNotNull null
-        val parEls = area.select(".ocr_par")
-        val paras = if (parEls.isNotEmpty()) {
-            parEls.mapNotNull { p ->
-                val pb = p.box(pageW, pageH) ?: return@mapNotNull null
-                val lines = p.select(LINE_SEL).mapNotNull(::parseLine)
-                if (lines.isEmpty()) null else OcrPara(pb, lines)
+    val containers = doc.select(CONTAINER_SEL)
+
+    fun ownedBy(element: org.jsoup.nodes.Element, container: org.jsoup.nodes.Element): Boolean =
+        nearestContainer(element) === container
+
+    fun nearestParagraph(element: org.jsoup.nodes.Element): org.jsoup.nodes.Element? {
+        var ancestor = element.parent()
+        while (ancestor != null) {
+            if (ancestor.hasClass("ocr_par")) return ancestor
+            ancestor = ancestor.parent()
+        }
+        return null
+    }
+
+    fun lineElements(area: org.jsoup.nodes.Element): List<org.jsoup.nodes.Element> {
+        val lines = area.select(".ocr_line")
+            .filter { line -> line.selectFirst(".ocr_line") == null && !isNonText(line) }
+            .toMutableList()
+
+        // Some hOCR producers put words directly in semantic containers instead of
+        // wrapping them in an .ocr_line. Treat those containers as one line only
+        // when they have no actual line descendants.
+        if (area.selectFirst(".ocr_line") == null && area.children().any { it.hasClass("ocrx_word") }) {
+            lines += area
+        }
+        return lines
+    }
+
+    data class LineEntry(
+        val container: org.jsoup.nodes.Element,
+        val paragraph: org.jsoup.nodes.Element?,
+        val source: org.jsoup.nodes.Element,
+        val line: OcrLine,
+    )
+
+    val domOrder = doc.select("*").withIndex().associate { (index, element) -> element to index }
+    val lineEntries = containers.flatMap { area ->
+        val paragraphs = area.select(".ocr_par").filter { paragraph -> ownedBy(paragraph, area) }
+        val candidates = if (paragraphs.isNotEmpty()) {
+            paragraphs.flatMap { paragraph ->
+                lineElements(paragraph)
+                    .filter { line -> ownedBy(line, area) && (line === paragraph || nearestParagraph(line) === paragraph) }
+                    .mapNotNull { line -> parseLine(line)?.let { LineEntry(area, paragraph, line, it) } }
             }
         } else {
-            val lines = area.select(LINE_SEL).mapNotNull(::parseLine)
-            if (lines.isEmpty()) emptyList() else listOf(OcrPara(ab, lines))
+            lineElements(area)
+                .filter { line -> line === area || ownedBy(line, area) }
+                .mapNotNull { line -> parseLine(line)?.let { LineEntry(area, null, line, it) } }
+        }
+        candidates
+    }.sortedBy { entry -> domOrder[entry.source] ?: Int.MAX_VALUE }
+
+    val chunks = mutableListOf<MutableList<LineEntry>>()
+    lineEntries.forEach { entry ->
+        val current = chunks.lastOrNull()
+        if (current == null || current.last().container !== entry.container) {
+            chunks += mutableListOf(entry)
+        } else {
+            current += entry
+        }
+    }
+
+    val blocks = chunks.mapNotNull { chunk ->
+        val area = chunk.first().container
+        val ab = area.box(pageW, pageH) ?: return@mapNotNull null
+        val paraChunks = mutableListOf<MutableList<LineEntry>>()
+        chunk.forEach { entry ->
+            val current = paraChunks.lastOrNull()
+            if (current == null || current.last().paragraph !== entry.paragraph) {
+                paraChunks += mutableListOf(entry)
+            } else {
+                current += entry
+            }
+        }
+        val paras = paraChunks.mapNotNull { paraChunk ->
+            val paragraph = paraChunk.first().paragraph
+            val pb = paragraph?.box(pageW, pageH) ?: ab
+            OcrPara(pb, paraChunk.map { it.line })
         }
         val type = when {
             area.hasClass("ocr_header") -> "HEADER"
@@ -63,7 +164,7 @@ fun parseHocr(hocr: String, w: Int, h: Int): OcrLayout {
             else -> "TEXT"
         }
         val id = area.id().ifBlank { null }
-        if (paras.isEmpty()) null else OcrBlock(ab, paras, type, id)
+        OcrBlock(ab, paras, type, id)
     }
     return OcrLayout(pageW, pageH, blocks)
 }

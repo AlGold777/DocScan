@@ -117,6 +117,81 @@ class HocrParserTest {
     }
 
     @Test
+    fun nestedHeaderLinesAreEmittedOnceInDocumentOrder() {
+        val hocr = """
+            <div class='ocr_page' title='bbox 0 0 400 300'>
+             <div class='ocr_carea' id='body' title='bbox 10 10 390 290'>
+              <p class='ocr_par' id='body_par' title='bbox 10 10 390 290'>
+               <span class='ocr_line' title='bbox 10 10 390 50'>
+                <span class='ocrx_word' title='bbox 10 10 100 50'>Before</span>
+               </span>
+               <div class='ocr_header' id='nested_header' title='bbox 10 60 390 100'>
+                <span class='ocr_line' title='bbox 10 60 390 100'>
+                 <span class='ocrx_word' title='bbox 10 60 200 100'>INVOICE</span>
+                </span>
+               </div>
+               <span class='ocr_line' title='bbox 10 110 390 150'>
+                <span class='ocrx_word' title='bbox 10 110 100 150'>After</span>
+               </span>
+              </p>
+             </div>
+            </div>
+        """.trimIndent()
+
+        val layout = HocrParser.parse(hocr)
+
+        assertEquals(3, layout.blocks.size)
+        assertEquals(listOf(BlockType.PARAGRAPH, BlockType.HEADER, BlockType.PARAGRAPH), layout.blocks.map { it.type })
+        assertEquals(listOf("Before", "INVOICE", "After"), layout.blocks.flatMap { block ->
+            block.lines.flatMap { line -> line.words.map { it.text } }
+        })
+        assertEquals("Before\n\nINVOICE\n\nAfter", layout.toPlainText())
+    }
+
+    @Test
+    fun parsesStandaloneSemanticTextAndIgnoresPhotoAndSeparatorContent() {
+        val hocr = """
+            <div class='ocr_page' title='bbox 0 0 400 300'>
+             <div class='ocr_header' id='header' title='bbox 10 10 390 50'>
+              <span class='ocrx_word' title='bbox 10 10 150 50'>Header</span>
+             </div>
+             <div class='ocr_caption' id='caption' title='bbox 10 60 390 100'>
+              <span class='ocrx_word' title='bbox 10 60 150 100'>Caption</span>
+             </div>
+             <div class='ocr_footer' id='footer' title='bbox 10 110 390 150'>
+              <span class='ocrx_word' title='bbox 10 110 150 150'>Footer</span>
+             </div>
+             <div class='ocr_carea' id='body' title='bbox 10 160 390 290'>
+              <p class='ocr_par' title='bbox 10 160 390 290'>
+               <span class='ocr_line' title='bbox 10 160 390 200'>
+                <span class='ocrx_word' title='bbox 10 160 100 200'>Body</span>
+               </span>
+               <div class='ocr_photo' title='bbox 10 205 200 250'>
+                <span class='ocr_line' title='bbox 10 205 200 250'>
+                 <span class='ocrx_word' title='bbox 10 205 200 250'>PhotoText</span>
+                </span>
+               </div>
+               <div class='ocr_separator' title='bbox 10 255 390 260'>
+                <span class='ocr_line' title='bbox 10 255 390 260'>
+                 <span class='ocrx_word' title='bbox 10 255 390 260'>SeparatorText</span>
+                </span>
+               </div>
+              </p>
+             </div>
+            </div>
+        """.trimIndent()
+
+        val layout = HocrParser.parse(hocr)
+
+        assertEquals(4, layout.blocks.size)
+        assertEquals(
+            listOf(BlockType.HEADER, BlockType.CAPTION, BlockType.FOOTER, BlockType.PARAGRAPH),
+            layout.blocks.map { it.type },
+        )
+        assertEquals("Header\n\nCaption\n\nFooter\n\nBody", layout.toPlainText())
+    }
+
+    @Test
     fun handlesEmptyAndMalformedHocrGracefully() {
         val emptyLayout = HocrParser.parse("", fallbackWidthPx = 800, fallbackHeightPx = 600)
         assertEquals(800, emptyLayout.sourceWidthPx)
