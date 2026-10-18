@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.ImageDecoder
+import android.graphics.ColorSpace
 import kotlin.math.sqrt
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
@@ -21,6 +22,7 @@ object ProductImageDecoder {
             val ratio = minOf(1.0, sqrt(maxPixels.toDouble() / (width.toLong() * height)),
                 maxSide.toDouble() / maxOf(width, height))
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
             decoder.isMutableRequired = true
             decoder.setTargetSize(maxOf(1, (width * ratio).toInt()), maxOf(1, (height * ratio).toInt()))
         }

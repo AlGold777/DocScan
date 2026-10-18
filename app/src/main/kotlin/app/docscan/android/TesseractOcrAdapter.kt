@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import app.docscan.core.ocr.LangDetect
 import app.docscan.core.ocr.OcrLangMode
 import app.docscan.core.ocr.OcrLangProfile
+import app.docscan.core.ocr.OcrQualitySelector
+import app.docscan.core.ocr.toOcrLayout
 import app.docscan.core.ocr.toPlainText
 import app.docscan.core.ocr.toRecognitionLayout
 import app.docscan.core.store.OCR_WORD_COORDINATE_SPACE
@@ -21,10 +23,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 class TesseractOcrAdapter(
     context: Context,
     private val progressObserverForTest: (() -> Unit)? = null,
+    private val modelDataRootOverride: File? = null,
 ) : DocumentRecognizer {
+    // Preserve the existing trailing-lambda constructor used by capture/import clients.
+    constructor(context: Context, progressObserverForTest: () -> Unit) :
+        this(context, progressObserverForTest, null)
+
     private val appContext = context.applicationContext
     private val prefs by lazy { appContext.getSharedPreferences("docscan_app_preferences", Context.MODE_PRIVATE) }
-    private val dataRoot = File(appContext.filesDir, "docscan-tesseract/fast-8741641")
+    private val dataRoot = modelDataRootOverride ?: File(appContext.filesDir, "docscan-tesseract/fast-8741641")
     private var tess = createTessInstance()
     private val cancellationRequested = AtomicBoolean(false)
     private val nativeRecognitionActive = AtomicBoolean(false)
@@ -44,8 +51,14 @@ class TesseractOcrAdapter(
         val layout: app.docscan.core.store.RecognitionLayout,
     )
 
-    fun estimateDecodedWorkingSetBytes(file: File): Long =
-        ProductImageDecoder.estimateWorkingSetBytes(file, MAX_BITMAP_PIXELS)
+    private fun workingPixelLimit(): Long = minOf(MAX_BITMAP_PIXELS,
+        (Runtime.getRuntime().maxMemory() / 48L).coerceAtLeast(1024L * 1024L))
+
+    fun estimateDecodedWorkingSetBytes(file: File): Long {
+        require(file.isFile) { "OCR source is missing" }
+        // Bitmap, Leptonica/native work buffers, optional photometric copy and model reserve.
+        return NATIVE_RESERVE_BYTES + workingPixelLimit() * BYTES_PER_WORKING_PIXEL
+    }
 
     fun recognize(file: File): String {
         return recognizeDetailed(file).text
@@ -59,41 +72,74 @@ class TesseractOcrAdapter(
         bitmap: Bitmap,
         profile: OcrLangProfile,
         isCancelled: () -> Boolean = { false },
+        settings: OcrRunSettings = OcrRunSettings(),
     ): app.docscan.core.ocr.OcrLayout {
         throwIfCancelled(isCancelled)
         return synchronized(initLock) {
             ensureInitialized()
             ensureLang(tess, dataRoot.absolutePath, profile.tess)
-            tess.setImage(bitmap)
+            applyConfig(tess, settings)
             try {
+                tess.setImage(bitmap)
                 throwIfCancelled(isCancelled)
                 nativeRecognitionActive.set(true)
                 throwIfCancelled(isCancelled)
-
-                val hocr = try {
-                    tess.getHOCRText(0).orEmpty()
-                } catch (e: Throwable) {
-                    android.util.Log.w("OCR", "getHOCRText failed for profile ${profile.tess}", e)
-                    ""
+                // This is the wrapper's interruptible recognition entry point. Do not replace
+                // it with a standalone getUTF8Text(), which does not honor stop().
+                val nativeHocr = tess.getHOCRText(0)
+                throwIfCancelled(isCancelled)
+                val hocr = nativeHocr ?: throw IllegalStateException("OCR engine returned no result")
+                var extraction = "HOCR"
+                var layout = try {
+                    app.docscan.core.ocr.parseHocr(hocr, bitmap.width, bitmap.height)
+                } catch (failure: RuntimeException) {
+                    android.util.Log.w("OCR", "hOCR structure unavailable; reading native results", failure)
+                    app.docscan.core.ocr.OcrLayout(bitmap.width, bitmap.height, emptyList())
                 }
-
-                var ocrLayout = app.docscan.core.ocr.parseHocr(hocr, bitmap.width, bitmap.height)
-                if (ocrLayout.blocks.isEmpty() && hocr.isNotBlank()) {
-                    android.util.Log.w("OCR", "hOCR was not empty but parseHocr produced no blocks")
-                }
-
-                if (ocrLayout.blocks.isEmpty()) {
-                    val utf8 = try {
-                        tess.getUTF8Text()?.trim().orEmpty()
-                    } catch (_: Throwable) {
-                        ""
+                // Compare against the engine's cached complete transcript. A nonempty but
+                // partial DOM extraction is just as unsafe as an empty extraction.
+                val nativeText = tess.getUTF8Text().orEmpty().lines().joinToString("\n") {
+                    app.docscan.core.ocr.sanitizeOcrText(it.replace('\t', ' '))
+                }.trim()
+                throwIfCancelled(isCancelled)
+                val hocrLayout = layout
+                if (layout.words.isEmpty() || (nativeText.isNotBlank() &&
+                        normalizedOcrContent(layout.toPlainText()) != normalizedOcrContent(nativeText))) {
+                    val nativeLayout = resultIteratorExtractor.extract(tess, bitmap.width, bitmap.height,
+                        profile.tess.split('+').toSet())
+                    throwIfCancelled(isCancelled)
+                    if (nativeLayout != null) {
+                        val sourceLines = hocrLayout.blocks.flatMap { it.paras }.flatMap { it.lines }
+                        val extracted = nativeLayout.toOcrLayout()
+                        layout = extracted.copy(blocks = extracted.blocks.map { block -> block.copy(
+                            paras = block.paras.map { paragraph -> paragraph.copy(lines = paragraph.lines.map { line ->
+                                val original = sourceLines.firstOrNull { other ->
+                                    kotlin.math.abs(other.box.l - line.box.l) <= 2 && kotlin.math.abs(other.box.t - line.box.t) <= 2 &&
+                                        kotlin.math.abs(other.box.r - line.box.r) <= 2 && kotlin.math.abs(other.box.b - line.box.b) <= 2
+                                }
+                                line.copy(baseline = original?.baseline)
+                            }) },
+                        ) })
+                        extraction = "RESULT_ITERATOR"
                     }
-                    if (utf8.isNotBlank()) {
-                        ocrLayout = createFallbackOcrLayout(utf8, bitmap.width, bitmap.height)
+                    if (nativeText.isNotBlank() &&
+                        normalizedOcrContent(layout.toPlainText()) != normalizedOcrContent(nativeText)) {
+                        layout = layout.copy(plainText = nativeText, quality = layout.toRecognitionLayout().quality?.copy(
+                            structureAvailable = false,
+                        ))
+                        extraction = "PLAIN_TEXT"
+                    } else if (layout.words.isEmpty()) {
+                        layout = layout.copy(plainText = nativeText)
+                        extraction = if (nativeText.isBlank()) "EMPTY" else "PLAIN_TEXT"
                     }
                 }
-
-                ocrLayout.copy(lang = profile.tess)
+                val normalized = layout.copy(lang = profile.tess,
+                    languageHints = profile.tess.split('+').toSet()).toRecognitionLayout()
+                normalized.toOcrLayout().copy(quality = normalized.quality?.copy(
+                    language = profile.tess,
+                    preprocessingProfile = "${settings.imageProfile.name}:PSM${settings.pageSegMode}:$extraction",
+                    engineVersion = tess.version,
+                ))
             } finally {
                 nativeRecognitionActive.set(false)
                 tess.clear()
@@ -105,16 +151,20 @@ class TesseractOcrAdapter(
         bitmap: Bitmap,
         mode: OcrLangMode = readLangMode(prefs),
         isCancelled: () -> Boolean = { false },
+        settings: OcrRunSettings = OcrRunSettings(),
     ): app.docscan.core.ocr.OcrLayout {
         val first = mode.profile ?: OcrLangProfile.RU_EN
-        val r1 = runOcr(bitmap, first, isCancelled)
+        val r1 = runOcr(bitmap, first, isCancelled, settings)
         if (mode != OcrLangMode.AUTO) return r1
         val target = LangDetect.decide(r1.toPlainText()) ?: return r1
         if (target == first) return r1
         throwIfCancelled(isCancelled)
         return try {
-            val r2 = runOcr(bitmap, target, isCancelled)
-            if (r2.words.size >= r1.words.size * 0.5) r2 else r1
+            val r2 = runOcr(bitmap, target, isCancelled, settings)
+            throwIfCancelled(isCancelled)
+            OcrQualitySelector.choose(r1, r2)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             android.util.Log.w("OCR", "second pass failed", e)
             r1
@@ -125,68 +175,30 @@ class TesseractOcrAdapter(
         file: File,
         isCancelled: () -> Boolean = { false },
         mode: OcrLangMode = readLangMode(prefs),
+        settings: OcrRunSettings = OcrRunSettings(autoLighting = true),
     ): OcrResult {
         cancellationRequested.set(false)
         throwIfCancelled(isCancelled)
-        val bitmap = ProductImageDecoder.decode(
-            file,
-            MAX_BITMAP_PIXELS,
-            preferredConfig = Bitmap.Config.ARGB_8888,
-        )
-            ?: throw IllegalArgumentException("Image cannot be decoded")
-        return bitmap.useBitmap { decoded ->
-            throwIfCancelled(isCancelled)
-            check(decoded.config == Bitmap.Config.ARGB_8888) {
-                "OCR bitmap must use ARGB_8888"
+        try {
+            val bitmap = ProductImageDecoder.decodePrecisely(file, workingPixelLimit())
+            return bitmap.useBitmap { decoded ->
+                throwIfCancelled(isCancelled)
+                val resolvedSettings = if (settings.autoLighting && settings.imageProfile == OcrImageProfile.ORIGINAL)
+                    settings.copy(imageProfile = OcrImagePreparation.suggestProfile(decoded), autoLighting = false)
+                else settings
+                val prepared = OcrImagePreparation.prepare(decoded, resolvedSettings.imageProfile) {
+                    cancellationRequested.get() || isCancelled()
+                }
+                try {
+                    val ocrLayout = recognize(prepared, mode, isCancelled, resolvedSettings)
+                    throwIfCancelled(isCancelled)
+                    val finalLayout = ocrLayout.toRecognitionLayout()
+                    OcrResult(text = finalLayout.toPlainText(), geometry = finalLayout.toLegacyGeometry(), layout = finalLayout)
+                } finally { if (prepared !== decoded) prepared.recycle() }
             }
-            val ocrLayout = recognize(decoded, mode, isCancelled)
-            val finalLayout = ocrLayout.toRecognitionLayout()
-
-            OcrResult(
-                text = finalLayout.toPlainText(),
-                geometry = finalLayout.toLegacyGeometry(),
-                layout = finalLayout,
-            )
+        } catch (memory: OutOfMemoryError) {
+            throw IllegalStateException(appContext.getString(R.string.ocr_memory_error), memory)
         }
-    }
-
-    private fun createFallbackOcrLayout(
-        text: String,
-        widthPx: Int,
-        heightPx: Int,
-    ): app.docscan.core.ocr.OcrLayout {
-        val w = maxOf(1, widthPx)
-        val h = maxOf(1, heightPx)
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        val ocrLines = lines.map { lineStr ->
-            val words = lineStr.split(Regex("\\s+")).filter { it.isNotEmpty() }.map { wordText ->
-                val sanitized = app.docscan.core.ocr.sanitizeOcrText(wordText)
-                app.docscan.core.ocr.OcrWord(
-                    text = sanitized.ifEmpty { wordText },
-                    box = app.docscan.core.ocr.Bx(1, 1, w - 1, h - 1),
-                    conf = 80f,
-                )
-            }
-            app.docscan.core.ocr.OcrLine(
-                box = app.docscan.core.ocr.Bx(1, 1, w - 1, h - 1),
-                words = words,
-            )
-        }
-        val paragraph = app.docscan.core.ocr.OcrPara(
-            box = app.docscan.core.ocr.Bx(1, 1, w - 1, h - 1),
-            lines = ocrLines,
-        )
-        val block = app.docscan.core.ocr.OcrBlock(
-            box = app.docscan.core.ocr.Bx(1, 1, w - 1, h - 1),
-            paras = listOf(paragraph),
-            type = "text",
-            id = "fallback_block",
-        )
-        return app.docscan.core.ocr.OcrLayout(
-            sourceW = w,
-            sourceH = h,
-            blocks = listOf(block),
-        )
     }
 
     override fun cancelCurrentRecognition() {
@@ -206,8 +218,11 @@ class TesseractOcrAdapter(
         }
     }
 
-    private fun applyConfig(tess: TessBaseAPI) {
-        tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
+    private fun normalizedOcrContent(text: String): String =
+        java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC).filterNot(Char::isWhitespace)
+
+    private fun applyConfig(tess: TessBaseAPI, settings: OcrRunSettings = OcrRunSettings()) {
+        tess.pageSegMode = settings.pageSegMode
         tess.setVariable("user_defined_dpi", "300")
         tess.setVariable("preserve_interword_spaces", "1")
     }
@@ -222,7 +237,7 @@ class TesseractOcrAdapter(
         }
         val success = try {
             tessApi.init(dataPath, lang)
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             android.util.Log.w("OCR", "tess.init failed for $lang, recreating instance", e)
             false
         }
@@ -239,9 +254,11 @@ class TesseractOcrAdapter(
         synchronized(initLock) {
             if (initialized) return
             check(!unusable) { "Offline Russian/English/Spanish OCR is unavailable after model initialization failed" }
-            installModel("eng.traineddata", ENG_SHA256)
-            installModel("rus.traineddata", RUS_SHA256)
-            installModel("spa.traineddata", SPA_SHA256)
+            if (modelDataRootOverride == null) {
+                installModel("eng.traineddata", ENG_SHA256)
+                installModel("rus.traineddata", RUS_SHA256)
+                installModel("spa.traineddata", SPA_SHA256)
+            } else check(File(dataRoot, "tessdata").isDirectory) { "OCR model directory is missing" }
             initialized = true
         }
     }
@@ -294,7 +311,9 @@ class TesseractOcrAdapter(
 
     private companion object {
         val initLock = Any()
-        const val MAX_BITMAP_PIXELS = 12L * 1024L * 1024L
+        const val MAX_BITMAP_PIXELS = 6L * 1024L * 1024L
+        const val NATIVE_RESERVE_BYTES = 32L * 1024L * 1024L
+        const val BYTES_PER_WORKING_PIXEL = 10L
         const val ENG_SHA256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
         const val RUS_SHA256 = "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225"
         const val SPA_SHA256 = "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464"

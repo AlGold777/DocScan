@@ -419,57 +419,6 @@ object RecognitionPayloadCodec {
         val geometry = RecognitionGeometry(width, height, coordinateSpace, words, version)
         validate(geometry)
         val text = lines[1].decodeBase64().toString(StandardCharsets.UTF_8)
-        val synthesizedLayout = if (words.isNotEmpty()) {
-            val ocrWords = words.mapNotNull { w ->
-                val box = normalizeBox(w.leftPx, w.topPx, w.rightPx, w.bottomPx, width.toInt(), height.toInt())
-                if (box != null) OcrWord(w.text, box, w.confidence.toFloat()) else null
-            }
-            if (ocrWords.isNotEmpty()) {
-                val minLeft = ocrWords.minOf { it.box.left }
-                val minTop = ocrWords.minOf { it.box.top }
-                val maxRight = ocrWords.maxOf { it.box.right }
-                val maxBottom = ocrWords.maxOf { it.box.bottom }
-                val lineBox = NormalizedBox(minLeft, minTop, maxRight, maxBottom)
-                val line = OcrLine(lineBox, baseline = null, xHeight = null, words = ocrWords)
-                val paragraph = OcrParagraph(lineBox, listOf(line))
-                val block = OcrBlock(
-                    id = "block_1",
-                    type = BlockType.PARAGRAPH,
-                    box = lineBox,
-                    readingOrder = 0,
-                    paragraphs = listOf(paragraph),
-                )
-                val meanConf = ocrWords.map { it.confidence }.average().toFloat()
-                val lowConfCount = ocrWords.count { it.confidence < 70f }
-                RecognitionLayout(
-                    sourceWidthPx = width.toInt(),
-                    sourceHeightPx = height.toInt(),
-                    blocks = listOf(block),
-                    quality = LayoutQuality(
-                        meanConfidence = meanConf,
-                        lowConfidenceWordCount = lowConfCount,
-                        structureAvailable = false,
-                    ),
-                    formatVersion = 2,
-                )
-            } else {
-                RecognitionLayout(
-                    sourceWidthPx = width.toInt(),
-                    sourceHeightPx = height.toInt(),
-                    blocks = emptyList(),
-                    quality = LayoutQuality(0f, 0, structureAvailable = false),
-                    formatVersion = 2,
-                )
-            }
-        } else {
-            RecognitionLayout(
-                sourceWidthPx = width.toInt(),
-                sourceHeightPx = height.toInt(),
-                blocks = emptyList(),
-                quality = LayoutQuality(0f, 0, structureAvailable = false),
-                formatVersion = 2,
-            )
-        }
         return DecodedRecognitionPayload(text, geometry, null)
     }
 

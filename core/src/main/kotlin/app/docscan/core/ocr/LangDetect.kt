@@ -45,7 +45,11 @@ object LangDetect {
             if (m.value in ES) es += 1.0
             if (m.value in EN) en += 1.0
         }
-        if (es < MIN_ES_HITS || es < ES_OVER_EN * (en + 1)) return null   // не испанский
+        // Titles and receipts can be long yet contain no grammatical stop words.
+        // Require repeated distinctive evidence; one "señor" in English is insufficient.
+        val distinctive = lower.count { it == 'ñ' || it == '¿' || it == '¡' }
+        val strongSpanish = distinctive >= 2 && dia >= 3 && en < 2.0
+        if (!strongSpanish && (es < MIN_ES_HITS || es < ES_OVER_EN * (en + 1))) return null   // не испанский
         return if (cyr.toDouble() / letters >= CYR_SHARE_MIXED) {
             OcrLangProfile.RU_ES_EN
         } else {
