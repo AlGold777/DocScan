@@ -515,14 +515,14 @@ class ProductStorage(
         }
         var completedPages = snapshot.importedPageIndices.size
         try {
-            AndroidPdfImportReader(appContext).renderPages(
+            AndroidPdfImportReader(appContext).renderPagesDetailed(
                 source = sourceFile,
                 expectedPageCount = snapshot.sourcePageCount.toInt(),
                 skipPageIndices = snapshot.importedPageIndices,
                 scratchDirectory = appContext.cacheDir,
                 scheduler = scheduler,
                 cancellationSignal = cancellationSignal,
-            ) { index, renderedPng, recognizedText ->
+            ) { index, renderedPng, recognizedText, recognizedLayout ->
                 val pageIdentity = "${snapshot.importSessionId.value}:$index"
                 val imageArtifactId = app.docscan.core.model.ArtifactId.parse(
                     UUID.nameUUIDFromBytes("$pageIdentity:artifact".toByteArray()).toString(),
@@ -549,6 +549,7 @@ class ProductStorage(
                         sourceDisplayName = snapshot.displayName,
                         recognizedText = recognizedText,
                         recognitionId = recognizedText?.let { app.docscan.core.model.RecognitionId.new() },
+                        recognizedLayout = recognizedLayout,
                     ),
                     beforeTransactionCommitForTest = pdfImportPageTransactionBoundaryObserverForTest,
                 )

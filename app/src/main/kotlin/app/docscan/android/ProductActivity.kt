@@ -1489,7 +1489,7 @@ class ProductActivity : AppCompatActivity() {
                     )
                     activeStorage.recordVerifiedPublicExport(
                         exportId, published.pdfUri.toString(), published.pdfDisplayName,
-                        frozen.pages.size.toLong(), if (includeOcr) "FULL" else "NONE",
+                        frozen.pages.size.toLong(), if (!includeOcr) "NONE" else if (outputSet.warnings.isEmpty()) "FULL" else "PARTIAL",
                     )
                     savedName = published.pdfDisplayName
                     savedPath = published.displayPath
@@ -1518,7 +1518,7 @@ class ProductActivity : AppCompatActivity() {
                         osVersion = tuple.osVersion,
                         destinationAccessClass = tuple.accessClass,
                         outputDisplayNames = listOf(names.pdfName) + if (includeJpg) names.pageJpegNames else emptyList(),
-                        ocrStatus = if (includeOcr) "FULL" else "NONE",
+                        ocrStatus = if (!includeOcr) "NONE" else if (outputSet.warnings.isEmpty()) "FULL" else "PARTIAL",
                     )
                     val exportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet, plan)
                     runExternalExportPackage(activeStorage, gateway, exportId)
@@ -1531,7 +1531,7 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) {
                         status.text = "Сохранено: $savedPath/$savedName"
-                        showSavedSuccessDialog(savedName, publishedUri, savedPath)
+                        showSavedSuccessDialog(savedName, publishedUri, savedPath, outputSet.warnings.isNotEmpty())
                     }
                 }
             } catch (failure: Exception) {
@@ -1558,10 +1558,11 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSavedSuccessDialog(pdfName: String, uri: Uri?, displayPath: String = DocScanPublisher.getDocScanDisplayPath()) {
+    private fun showSavedSuccessDialog(pdfName: String, uri: Uri?, displayPath: String = DocScanPublisher.getDocScanDisplayPath(), textWarning: Boolean = false) {
         val builder = dialogHost.builder(this)
             .setTitle("Файл сохранён")
-            .setMessage("Файл успешно сохранён в папку $displayPath:\n$pdfName")
+            .setMessage("Файл успешно сохранён в папку $displayPath:\n$pdfName" +
+                if (textWarning) "\n\n" + getString(R.string.saved_text_layer_warning) else "")
             .setPositiveButton("OK", null)
 
         if (uri != null) {
@@ -2494,6 +2495,12 @@ class ProductActivity : AppCompatActivity() {
                             }
                         } catch (failure: Exception) {
                             android.util.Log.w("DocScan", "Rectification unavailable; keeping camera source", failure)
+                            prepared?.delete()
+                            prepared = null
+                            wasRectified = false
+                        } catch (memory: OutOfMemoryError) {
+                            // Original bytes are already durable; cropping is optional.
+                            android.util.Log.w("DocScan", "Not enough memory to rectify; retaining camera source", memory)
                             prepared?.delete()
                             prepared = null
                             wasRectified = false

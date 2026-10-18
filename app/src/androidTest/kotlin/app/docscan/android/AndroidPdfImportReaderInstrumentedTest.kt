@@ -726,6 +726,74 @@ class AndroidPdfImportReaderInstrumentedTest {
         }
     }
 
+    @Test
+    fun importedPdfRetainsAuthoritativeTranscriptAndPositionedWordGeometry() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        PDFBoxResourceLoader.init(context)
+        val pdf = File(context.cacheDir, "pdf-layout-${System.nanoTime()}.pdf")
+        val scratch = File(context.cacheDir, "pdf-layout-scratch-${System.nanoTime()}").apply { mkdirs() }
+        val scheduler = app.docscan.core.schedule.HeavyWorkScheduler()
+        val expected = "Invoice 6421\nTotal 127.45 USD"
+        try {
+            PDDocument().use { document ->
+                val page = PDPage(PDRectangle(600f, 800f))
+                document.addPage(page)
+                PDPageContentStream(document, page).use { stream ->
+                    stream.beginText()
+                    stream.setFont(PDType1Font.HELVETICA, 20f)
+                    stream.newLineAtOffset(60f, 700f)
+                    stream.showText("Invoice 6421")
+                    stream.newLineAtOffset(0f, -34f)
+                    stream.showText("Total 127.45 USD")
+                    stream.endText()
+                }
+                document.save(pdf)
+            }
+
+            val reader = AndroidPdfImportReader(context)
+            val inspection = reader.inspect(pdf)
+            assertTrue("generated page has a reusable text layer", inspection.pages.single().hasReusableTextLayer)
+            var deliveredText: String? = null
+            var deliveredLayout: app.docscan.core.store.RecognitionLayout? = null
+            var rasterWidth = 0
+            var rasterHeight = 0
+            reader.renderPagesDetailed(
+                source = pdf,
+                expectedPageCount = 1,
+                skipPageIndices = emptySet(),
+                scratchDirectory = scratch,
+                scheduler = scheduler,
+            ) { index, png, text, layout ->
+                assertEquals(0, index)
+                assertTrue(png.isFile)
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(png.absolutePath, bounds)
+                rasterWidth = bounds.outWidth
+                rasterHeight = bounds.outHeight
+                deliveredText = text
+                deliveredLayout = layout
+            }
+
+            val layout = deliveredLayout ?: throw AssertionError("PDF import did not return the reusable text layout")
+            assertEquals(expected, deliveredText?.trim())
+            assertEquals(expected, layout.toPlainText().trim())
+            assertTrue("layout reports positioned structure", layout.quality?.structureAvailable == true)
+            assertEquals(rasterWidth, layout.sourceWidthPx)
+            assertEquals(rasterHeight, layout.sourceHeightPx)
+            val words = layout.blocks.flatMap { it.lines }.flatMap { it.words }
+            assertEquals(listOf("Invoice", "6421", "Total", "127.45", "USD"), words.map { it.text })
+            assertTrue("all glyph boxes stay inside the rendered page", words.all { word ->
+                word.box.left >= 0f && word.box.top >= 0f && word.box.right <= 1f && word.box.bottom <= 1f
+            })
+            assertTrue("first line is positioned near the PDF's upper-left text origin", words.first().box.left in 0.08f..0.14f
+                && words.first().box.top in 0.09f..0.17f)
+            assertTrue("line baselines are preserved", layout.blocks.flatMap { it.lines }.all { it.baseline != null })
+        } finally {
+            pdf.delete()
+            scratch.deleteRecursively()
+        }
+    }
+
     private fun threePagePdf(context: android.content.Context, name: String): File {
         val pdf = File(context.cacheDir, name)
         PDDocument().use { document ->

@@ -225,4 +225,5 @@
     <string name="restore_camera_source">Вернуть исходный снимок</string>
     <string name="ocr_no_text">Текст не найден. Изображение страницы сохранено.</string>
     <string name="saved_text_layer_warning">У текстового слоя есть ограничения. Проверьте выделение и копирование текста в сохранённом PDF.</string>
+    <string name="ocr_memory_error">Недостаточно памяти для распознавания страницы. Исходное изображение сохранено.</string>
 </resources>

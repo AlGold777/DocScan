@@ -14,6 +14,9 @@ import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
+import com.tom_roush.pdfbox.pdmodel.font.PDType0Font
+import app.docscan.android.SearchablePdfWriter.Companion.safeText
+import app.docscan.android.SearchablePdfWriter.Companion.normalizedTextContent
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.rendering.PDFRenderer
 import java.io.File
@@ -39,6 +42,7 @@ data class FrozenSaveOutputSet internal constructor(
     val pdfFile: File,
     val pdfSha256: String,
     val pages: List<FrozenPageOutput>,
+    val warnings: List<String> = emptyList(),
 )
 
 /** Creates a locally validated candidate set from one immutable SaveManifest. */
@@ -140,7 +144,7 @@ class FrozenSaveOutputComposer(
                 )
             }
             val pdfTemp = File(staging, "document.pdf")
-            pdfWriter.write(pdfTemp, inputs, pdfSettings)
+            val writeResult = pdfWriter.write(pdfTemp, inputs, pdfSettings)
             validatePdf(pdfTemp, snapshot.pages, pageOutputs, includeOcr, pdfSettings.includeImage)
             snapshot.pages.forEach { page ->
                 check(sourceRepository.verifyPublished(page.artifactRelativePath, page.artifactSizeBytes, page.artifactSha256)) {
@@ -156,6 +160,7 @@ class FrozenSaveOutputComposer(
                 pdfFile = File(finalDir, pdfTemp.name),
                 pdfSha256 = pdfHash,
                 pages = pageOutputs,
+                warnings = writeResult.warnings,
             )
         } catch (failure: Throwable) {
             val incomplete = if (finalDir.exists()) finalDir else staging
@@ -184,16 +189,25 @@ class FrozenSaveOutputComposer(
         PDDocument.load(pdfFile, MemoryUsageSetting.setupTempFileOnly()).use { document ->
             check(document.numberOfPages == pages.size) { "PDF page count differs from frozen SaveManifest" }
             if (includeOcr) {
+                val validationFont = resourceLoaderContext.assets.open("fonts/NotoSans-Regular.ttf").use {
+                    PDType0Font.load(document, it, false)
+                }
+                val cache = HashMap<Int, Boolean>()
                 pages.forEachIndexed { index, page ->
-                    val hasText = !page.recognizedText.isNullOrBlank()
-                        || page.recognizedLayout?.blocks?.any { b -> b.lines.any { l -> l.words.any { it.text.isNotBlank() } } } == true
-                        || page.recognizedGeometry?.words?.any { it.text.isNotBlank() } == true
-                    check(includeImage || hasText) { "Text-only PDF page ${index + 1} has no recognized text" }
-                    if (hasText) {
+                    val layoutText = page.recognizedLayout?.toPlainText()?.takeIf { it.isNotBlank() }
+                    val geometryText = page.recognizedGeometry?.words?.takeIf { it.isNotEmpty() }
+                        ?.joinToString(" ") { it.text }
+                    val rawText = layoutText ?: geometryText ?: page.recognizedText.orEmpty()
+                    val expected = normalizedTextContent(validationFont.safeText(rawText, cache).orEmpty())
+                    check(includeImage || expected.isNotEmpty()) { "Text-only PDF page ${index + 1} has no supported recognized text" }
+                    if (rawText.isNotBlank()) {
                         val extracted = PDFTextStripper().apply {
                             startPage = index + 1; endPage = index + 1
-                        }.getText(document).normalizeWhitespace()
-                        check(extracted.isNotBlank()) { "PDF page ${index + 1} is missing recognized text" }
+                        }.getText(document)
+                        val matches = normalizedTextContent(extracted) == expected
+                        check(includeImage || matches) { "Text-only PDF page ${index + 1} did not preserve recognized content" }
+                        if (!matches) android.util.Log.w("FrozenSaveOutputComposer",
+                            "PDF page ${index + 1} extracted text differs from supported recognized content")
                     }
                 }
             }
@@ -227,8 +241,6 @@ class FrozenSaveOutputComposer(
         check(pdfFile.isFile && pdfFile.length() > 0L) { "PDF is empty after read-back" }
     }
 
-    private fun String.normalizeWhitespace(): String = trim().replace(Regex("\\s+"), " ")
-
     private fun scaleGeometry(
         geometry: RecognitionGeometry?,
         sourceWidth: Int,
@@ -247,20 +259,6 @@ class FrozenSaveOutputComposer(
             word.copy(leftPx = left, topPx = top, rightPx = right, bottomPx = bottom)
         }
         return geometry.copy(sourceWidthPx = outputWidth.toLong(), sourceHeightPx = outputHeight.toLong(), words = words)
-    }
-
-    private fun scaleLayout(
-        layout: app.docscan.core.store.RecognitionLayout?,
-        sourceWidth: Int,
-        sourceHeight: Int,
-        outputWidth: Int,
-        outputHeight: Int,
-    ): app.docscan.core.store.RecognitionLayout? {
-        if (layout == null) return null
-        return layout.copy(
-            sourceWidthPx = outputWidth,
-            sourceHeightPx = outputHeight,
-        )
     }
 
     private data class PageCandidate(

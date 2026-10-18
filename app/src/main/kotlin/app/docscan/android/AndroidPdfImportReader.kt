@@ -91,7 +91,7 @@ class AndroidPdfImportReader private constructor(
                 require(count in 1..MAX_PDF_PAGES) {
                     "PDF must contain between 1 and $MAX_PDF_PAGES pages (found $count)"
                 }
-                val stripper = PDFTextStripper()
+                val stripper = PDFTextStripper().apply { sortByPosition = true }
                 val pages = document.pages.mapIndexed { index, page ->
                     validatePage(page, index)
                     stripper.startPage = index + 1
@@ -131,12 +131,27 @@ class AndroidPdfImportReader private constructor(
         cancellationSignal: CancellationSignal? = null,
         onRenderedPage: (index: Int, pngFile: File, reusableText: String?) -> Unit,
     ) {
+        renderPagesDetailed(source, expectedPageCount, skipPageIndices, scratchDirectory, scheduler, cancellationSignal) {
+                index, png, text, _ -> onRenderedPage(index, png, text)
+        }
+    }
+
+    /** Layout coordinates refer to the exact PNG delivered to the callback. */
+    fun renderPagesDetailed(
+        source: File,
+        expectedPageCount: Int,
+        skipPageIndices: Set<Long>,
+        scratchDirectory: File,
+        scheduler: HeavyWorkScheduler,
+        cancellationSignal: CancellationSignal? = null,
+        onRenderedPage: (index: Int, pngFile: File, reusableText: String?, layout: app.docscan.core.store.RecognitionLayout?) -> Unit,
+    ) {
         require(expectedPageCount in 1..MAX_PDF_PAGES)
         check(scratchDirectory.isDirectory || scratchDirectory.mkdirs()) { "PDF import scratch directory is unavailable" }
         withDocument(source) { document ->
             check(document.numberOfPages == expectedPageCount) { "PDF page count changed after source snapshot" }
             val renderer = PDFRenderer(document)
-            val stripper = PDFTextStripper()
+            val stripper = PDFTextStripper().apply { sortByPosition = true }
             for (index in 0 until expectedPageCount) {
                 cancellationSignal?.throwIfCanceled()
                 if (index.toLong() in skipPageIndices) continue
@@ -148,6 +163,7 @@ class AndroidPdfImportReader private constructor(
                 val reusableText = extracted.takeIf(PdfTextLayerPolicy::isReusable)
                 val scale = renderScale(page)
                 val output = File.createTempFile("pdf-page-${index + 1}-", ".png", scratchDirectory)
+                var reusableLayout: app.docscan.core.store.RecognitionLayout? = null
                 try {
                     scheduler.withAdmission(PDF_RENDER_RESERVATION_BYTES) {
                         val bitmap = pageBitmapRenderer.render(renderer, index, scale)
@@ -156,6 +172,9 @@ class AndroidPdfImportReader private constructor(
                             check(bitmap.width > 0 && bitmap.height > 0
                                 && maxOf(bitmap.width, bitmap.height) <= MAX_RENDER_SIDE_PX
                             ) { "Rendered PDF page exceeds the bounded raster envelope" }
+                            if (reusableText != null) {
+                                reusableLayout = PdfTextLayoutExtractor.extract(document, index, bitmap.width, bitmap.height)
+                            }
                             pagePngOutputFactory.open(output).use { pageOutput ->
                                 check(pageOutput.compress(bitmap)) {
                                     "PDF page image encoding failed"
@@ -168,7 +187,7 @@ class AndroidPdfImportReader private constructor(
                         }
                     }
                     cancellationSignal?.throwIfCanceled()
-                    onRenderedPage(index, output, reusableText)
+                    onRenderedPage(index, output, reusableText, reusableLayout)
                 } finally {
                     output.delete()
                 }
