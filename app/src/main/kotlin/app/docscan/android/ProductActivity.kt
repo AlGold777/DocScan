@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.OpenableColumns
+import android.view.GestureDetector
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -55,6 +56,7 @@ import androidx.camera.view.transform.CoordinateTransform
 import androidx.camera.view.transform.ImageProxyTransformFactory
 import androidx.camera.view.transform.OutputTransform
 import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import android.content.res.ColorStateList
@@ -82,6 +84,7 @@ import app.docscan.core.edit.PageImageEditDraft
 import app.docscan.core.edit.PageImageEditState
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -115,10 +118,9 @@ class ProductActivity : AppCompatActivity() {
         isUsingRotationDegrees = false
         isUsingCropRect = false
     }
-    private val quadTemporalFilter = QuadTemporalFilter()
-    @Volatile private var quadForCapture: Pair<CropQuadrilateral, Int>? = null
-    @Volatile private var lastRotationDegrees: Int = 0
+    private val liveDetectionCoordinator = DocumentLiveDetectionCoordinator()
     private lateinit var ocrButton: Button
+    private lateinit var ocrCheckBox: CheckBox
     private var autoOcrEnabled: Boolean = true
     private lateinit var importButton: Button
     private lateinit var destinationButton: Button
@@ -129,6 +131,7 @@ class ProductActivity : AppCompatActivity() {
     private lateinit var recoverExportsButton: Button
     private lateinit var resumeExportsButton: Button
     private lateinit var deleteSelectedButton: Button
+    private lateinit var floatingDeleteButton: Button
     private lateinit var clearWorkspaceButton: Button
     private var pagesContainer: RecyclerView? = null
     private var workspacePageAdapter: WorkspacePageAdapter? = null
@@ -204,6 +207,7 @@ class ProductActivity : AppCompatActivity() {
         currentImportRequestId = savedInstanceState?.getString(STATE_IMPORT_REQUEST_ID) ?: UUID.randomUUID().toString()
         pendingMainSave = savedInstanceState?.getBoolean(STATE_PENDING_MAIN_SAVE) ?: false
         destinationPickerPending = savedInstanceState?.getBoolean(STATE_DESTINATION_PICKER_PENDING) ?: false
+        isDocumentMode = savedInstanceState?.getBoolean(STATE_DOCUMENT_MODE) ?: false
         buildContent()
         status.text = getString(R.string.storage_initializing)
         io.execute {
@@ -292,6 +296,7 @@ class ProductActivity : AppCompatActivity() {
         currentImportRequestId?.let { outState.putString(STATE_IMPORT_REQUEST_ID, it) }
         outState.putBoolean(STATE_PENDING_MAIN_SAVE, pendingMainSave)
         outState.putBoolean(STATE_DESTINATION_PICKER_PENDING, destinationPickerPending)
+        outState.putBoolean(STATE_DOCUMENT_MODE, isDocumentMode)
         super.onSaveInstanceState(outState)
     }
 
@@ -355,48 +360,47 @@ class ProductActivity : AppCompatActivity() {
     }
 
     private fun updateOcrButtonAppearance() {
-        if (!::ocrButton.isInitialized) return
-        if (autoOcrEnabled) {
-            ocrButton.text = "✅ OCR"
-            ocrButton.setTextColor(0xFF93C5FD.toInt())
-            ocrButton.background = modernButtonDrawable(
-                normalBg = 0xFF1E3A5F.toInt(),
-                pressedBg = 0xFF2563EB.toInt(),
-                strokeColor = 0xFF3B82F6.toInt(),
-                radiusDp = 12,
-            )
-        } else {
-            ocrButton.text = "OCR"
-            ocrButton.setTextColor(0xFF94A3B8.toInt())
-            ocrButton.background = modernButtonDrawable(
-                normalBg = 0xFF1E222A.toInt(),
-                pressedBg = 0xFF334155.toInt(),
-                strokeColor = 0xFF374151.toInt(),
-                radiusDp = 12,
-            )
+        if (::ocrCheckBox.isInitialized && ocrCheckBox.isChecked != autoOcrEnabled) {
+            ocrCheckBox.isChecked = autoOcrEnabled
+        }
+        if (::ocrButton.isInitialized) {
+            if (autoOcrEnabled) {
+                ocrButton.text = "✅ OCR"
+                ocrButton.setTextColor(0xFF93C5FD.toInt())
+                ocrButton.background = modernButtonDrawable(
+                    normalBg = 0xFF1E3A5F.toInt(),
+                    pressedBg = 0xFF2563EB.toInt(),
+                    strokeColor = 0xFF3B82F6.toInt(),
+                    radiusDp = 12,
+                )
+            } else {
+                ocrButton.text = "OCR"
+                ocrButton.setTextColor(0xFF94A3B8.toInt())
+                ocrButton.background = modernButtonDrawable(
+                    normalBg = 0xFF1E222A.toInt(),
+                    pressedBg = 0xFF334155.toInt(),
+                    strokeColor = 0xFF374151.toInt(),
+                    radiusDp = 12,
+                )
+            }
         }
     }
 
     private fun updateDocumentModeButtonAppearance() {
         if (!::documentModeButton.isInitialized) return
+        documentModeButton.isAllCaps = false
+        documentModeButton.text = getString(R.string.document_mode_name)
+        documentModeButton.background = null
+        documentModeButton.isSelected = isDocumentMode
+        documentModeButton.contentDescription = getString(R.string.document_mode_toggle_description)
+        androidx.core.view.ViewCompat.setStateDescription(
+            documentModeButton,
+            getString(if (isDocumentMode) R.string.document_mode_state_enabled else R.string.document_mode_state_disabled),
+        )
         if (isDocumentMode) {
-            documentModeButton.text = "Документ"
             documentModeButton.setTextColor(0xFF4ADE80.toInt())
-            documentModeButton.background = modernButtonDrawable(
-                normalBg = 0xFF064E3B.toInt(),
-                pressedBg = 0xFF047857.toInt(),
-                strokeColor = 0xFF22C55E.toInt(),
-                radiusDp = 12,
-            )
         } else {
-            documentModeButton.text = "Документ"
             documentModeButton.setTextColor(0xFF94A3B8.toInt())
-            documentModeButton.background = modernButtonDrawable(
-                normalBg = 0xFF1E222A.toInt(),
-                pressedBg = 0xFF334155.toInt(),
-                strokeColor = 0xFF374151.toInt(),
-                radiusDp = 12,
-            )
             if (::documentOverlayView.isInitialized) {
                 documentOverlayView.clear()
             }
@@ -477,6 +481,36 @@ class ProductActivity : AppCompatActivity() {
             }
         }
         updateOcrButtonAppearance()
+        ocrCheckBox = CheckBox(this).apply {
+            text = "OCR"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            isChecked = autoOcrEnabled
+            background = null
+            tag = "docscan-ocr-checkbox"
+            buttonTintList = ColorStateList.valueOf(Color.WHITE)
+            setOnCheckedChangeListener { _, isChecked ->
+                if (autoOcrEnabled != isChecked) {
+                    autoOcrEnabled = isChecked
+                    uiHapticFeedback(this)
+                    updateOcrButtonAppearance()
+                    status.text = if (autoOcrEnabled) "Авто-OCR включен" else "Авто-OCR выключен"
+                    if (autoOcrEnabled) {
+                        val activeStorage = storage
+                        if (activeStorage != null) {
+                            io.execute {
+                                val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
+                                if (projection != null) {
+                                    projection.pages.filter { it.recognizedText == null && it.artifactState == "COMMITTED" }
+                                        .forEach { scheduleOcr(activeStorage, it) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         importButton = Button(this).apply {
             text = "+"
             textSize = 22f
@@ -568,16 +602,24 @@ class ProductActivity : AppCompatActivity() {
         }
         deleteSelectedButton = Button(this).apply {
             text = "🗑"
-            textSize = 18f
+            textSize = 20f
             contentDescription = getString(R.string.delete_selected_pages)
             tag = "docscan-delete-selected-button"
-            isEnabled = false
-            background = modernButtonDrawable()
-            setTextColor(actionTextColor)
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
-            setOnClickListener { deletePageBatch(clearAll = false) }
+            visibility = View.GONE
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFF18181B.toInt())
+                setStroke(dp(1), 0x99FFFFFF.toInt())
+            }
+            elevation = dp(8).toFloat()
+            setOnClickListener {
+                uiHapticFeedback(this)
+                deletePageBatch(clearAll = false)
+                animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(150).withEndAction { visibility = View.GONE }.start()
+            }
         }
+        floatingDeleteButton = deleteSelectedButton
         clearWorkspaceButton = Button(this).apply {
             text = getString(R.string.clear_workspace)
             tag = "docscan-clear-workspace-button"
@@ -593,20 +635,21 @@ class ProductActivity : AppCompatActivity() {
         }
         permissionActionButton = Button(this).apply { visibility = View.GONE }
         documentModeButton = Button(this).apply {
-            textSize = 12f
+            isAllCaps = false
+            textSize = 13f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             visibility = if (hasCameraPermission()) View.VISIBLE else View.GONE
+            background = null
             setOnClickListener {
                 isDocumentMode = !isDocumentMode
                 updateDocumentModeButtonAppearance()
                 uiHapticFeedback(this)
-                quadTemporalFilter.reset()
-                quadForCapture = null
-                if (!isDocumentMode && ::documentOverlayView.isInitialized) {
+                liveDetectionCoordinator.invalidate()
+                if (::documentOverlayView.isInitialized) {
                     documentOverlayView.clear()
                 }
                 status.text = if (isDocumentMode) {
-                    "Режим «Документ»: автоопределение границ и выравнивание"
+                    getString(R.string.document_mode_status_enabled)
                 } else {
                     getString(R.string.camera_ready)
                 }
@@ -617,6 +660,21 @@ class ProductActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             tag = "docscan-workspace-menu"
             visibility = View.GONE
+        }
+        val menuButton = TextView(this).apply {
+            text = "⋮"
+            textSize = 24f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            contentDescription = getString(R.string.workspace_menu)
+            tag = "docscan-menu-button"
+            background = android.util.TypedValue().let { outValue ->
+                if (theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)) {
+                    androidx.core.content.ContextCompat.getDrawable(this@ProductActivity, outValue.resourceId)
+                } else null
+            }
+            setOnClickListener { showWorkspaceMenu() }
         }
         val titleView = TextView(this).apply {
             text = "DocScan"
@@ -630,15 +688,9 @@ class ProductActivity : AppCompatActivity() {
         }
         val top = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(4))
+            setPadding(dp(8), dp(4), dp(16), dp(4))
+            addView(menuButton, LinearLayout.LayoutParams(dp(40), dp(44)).apply { marginEnd = dp(4) })
             addView(titleView, LinearLayout.LayoutParams(0, dp(44), 1f))
-            addView(Button(this@ProductActivity).apply {
-                text = "⋮"
-                textSize = 24f
-                contentDescription = getString(R.string.workspace_menu)
-                tag = "docscan-workspace-menu-button"
-                setOnClickListener { showWorkspaceMenu() }
-            }, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(saveButton, LinearLayout.LayoutParams(dp(130), dp(44)))
         }
         val camera = android.widget.FrameLayout(this).apply {
@@ -650,11 +702,12 @@ class ProductActivity : AppCompatActivity() {
             status.apply { setTextColor(Color.WHITE); textSize = 12f; maxLines = 3; setPadding(dp(16), dp(8), dp(16), dp(8)) }
             addView(status, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = dp(60) })
             val shutterRow = android.widget.FrameLayout(this@ProductActivity).apply {
-                recentDocumentsButton.apply { textSize = 10f; minWidth = dp(48) }
-                addView(recentDocumentsButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
+                addView(ocrCheckBox, android.widget.FrameLayout.LayoutParams(-2, dp(48), Gravity.START or Gravity.CENTER_VERTICAL).apply {
+                    leftMargin = dp(8)
+                })
                 addView(captureButton, android.widget.FrameLayout.LayoutParams(dp(72), dp(72), Gravity.CENTER))
                 addView(permissionActionButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(56), Gravity.END or Gravity.CENTER_VERTICAL))
-                addView(documentModeButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(52), Gravity.END or Gravity.CENTER_VERTICAL))
+                addView(documentModeButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
             }
             addView(shutterRow, android.widget.FrameLayout.LayoutParams(-1, dp(88), Gravity.BOTTOM).apply { leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(8) })
         }
@@ -686,6 +739,8 @@ class ProductActivity : AppCompatActivity() {
                     if (projection != null) runOnUiThread { renderPages(projection) }
                 }
             } },
+            onDeletePage = { page -> deleteSinglePage(page.pageId) },
+            onToggleAllSelection = { toggleAllPageSelection() },
         )
         homeRail = RecyclerView(this).apply {
             tag = "docscan-home-thumbnail-scroll"
@@ -693,12 +748,12 @@ class ProductActivity : AppCompatActivity() {
             adapter = homeThumbnailAdapter
             itemAnimator = null
             isNestedScrollingEnabled = false
-            setPadding(dp(8), dp(2), dp(8), dp(2))
+            setPadding(dp(4), dp(2), dp(4), dp(2))
             clipToPadding = false
         }
         val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
             androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT,
-            0,
+            androidx.recyclerview.widget.ItemTouchHelper.DOWN,
         ) {
             private var dragStarted = false
             private var dragMoved = false
@@ -718,7 +773,15 @@ class ProductActivity : AppCompatActivity() {
                 return true
             }
 
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                if (direction == androidx.recyclerview.widget.ItemTouchHelper.DOWN) {
+                    val pos = viewHolder.bindingAdapterPosition
+                    if (pos != RecyclerView.NO_POSITION) {
+                        val page = homeThumbnailAdapter.getItem(pos).page
+                        deleteSinglePage(page.pageId)
+                    }
+                }
+            }
 
             override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                 super.onSelectedChanged(viewHolder, actionState)
@@ -766,31 +829,69 @@ class ProductActivity : AppCompatActivity() {
             }
         })
         touchHelper.attachToRecyclerView(homeRail)
+        val railGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(e: MotionEvent) {
+                if (!canInteractWorkspace()) return
+                val projection = lastWorkspaceProjection ?: return
+                if (projection.pages.isEmpty()) return
+                uiHapticFeedback(floatingDeleteButton)
+                floatingDeleteButton.visibility = View.VISIBLE
+                floatingDeleteButton.scaleX = 0f
+                floatingDeleteButton.scaleY = 0f
+                floatingDeleteButton.alpha = 0f
+                floatingDeleteButton.animate()
+                    .scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(200)
+                    .setInterpolator(android.view.animation.OvershootInterpolator())
+                    .start()
+            }
+        })
+        homeRail.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                railGestureDetector.onTouchEvent(e)
+                return false
+            }
+        })
+        val homeRailContent = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            importButton.apply {
+                isAllCaps = false
+                text = "+"
+                textSize = 34f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                background = null
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 0)
+            }
+            val importContainer = LinearLayout(this@ProductActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                addView(importButton, LinearLayout.LayoutParams(dp(44), dp(92)))
+                val bottomSpacer = View(this@ProductActivity)
+                addView(bottomSpacer, LinearLayout.LayoutParams(dp(44), dp(34)))
+            }
+            addView(importContainer, LinearLayout.LayoutParams(dp(44), ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                marginStart = dp(8)
+                marginEnd = dp(4)
+            })
+            addView(homeRail, LinearLayout.LayoutParams(0, -1, 1f))
+        }
         val homeRailFrame = android.widget.FrameLayout(this).apply {
             tag = "docscan-home-thumbnail-strip"
-            addView(homeRail, android.widget.FrameLayout.LayoutParams(-1, -1))
+            addView(homeRailContent, android.widget.FrameLayout.LayoutParams(-1, -1))
             homeEmptyLabel = TextView(this@ProductActivity).apply {
                 text = getString(R.string.no_pages)
                 setTextColor(0xffb9c0cb.toInt())
                 gravity = Gravity.CENTER
             }
-            addView(homeEmptyLabel, android.widget.FrameLayout.LayoutParams(-1, -1))
+            addView(homeEmptyLabel, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+            addView(floatingDeleteButton, android.widget.FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
+                topMargin = dp(74)
+            })
         }
         root.addView(homeRailFrame, LinearLayout.LayoutParams(-1, dp(134)))
-        val actions = LinearLayout(this).apply {
-            tag = "docscan-home-actions"
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(0), dp(6), dp(0))
-            listOf(ocrButton, importButton, selectionButton, deleteSelectedButton).forEach { button ->
-                button.minimumWidth = dp(48)
-                button.minimumHeight = dp(48)
-                addView(button, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
-                    marginStart = dp(3)
-                    marginEnd = dp(3)
-                })
-            }
-        }
-        root.addView(actions, LinearLayout.LayoutParams(-1, dp(48)))
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -809,7 +910,8 @@ class ProductActivity : AppCompatActivity() {
             tag = "docscan-workspace-menu-scroll"
             addView(workspaceMenu, ViewGroup.LayoutParams(-1, -2))
         }
-        val dialog = dialogHost.builder(this).setTitle(R.string.workspace_menu).setView(scroll)
+        val appVersion = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
+        val dialog = dialogHost.builder(this).setTitle("Версия $appVersion").setView(scroll)
             .setNegativeButton(android.R.string.cancel, null).create()
         workspaceMenuDialog = dialog
         dialog.setOnDismissListener {
@@ -824,6 +926,10 @@ class ProductActivity : AppCompatActivity() {
             workspaceMenuDialog = null
         }
         dialog.show()
+        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.apply {
+            tag = "docscan-version-label"
+            setOnClickListener { onVersionLabelTapped() }
+        }
         lastWorkspaceProjection?.let(::renderPages)
     }
 
@@ -839,35 +945,84 @@ class ProductActivity : AppCompatActivity() {
 
     private fun buildWorkspaceMenuContents() {
         workspaceMenu.removeAllViews()
-        workspaceMenu.addView(versionLabel, matchWrap())
-        workspaceMenu.addView(TextView(this).apply {
-            text = getString(R.string.default_save_folder_help)
-            tag = "docscan-default-folder-help"
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-        }, matchWrap())
-        workspaceMenu.addView(destinationButton, matchWrap())
-        workspaceMenu.addView(Button(this).apply {
-            text = "Сохранять в Download/DocScan"
-            setOnClickListener {
-                val activeStorage = storage ?: return@setOnClickListener
-                if (!canInteractWorkspace()) return@setOnClickListener
-                io.execute {
-                    try {
-                        activeStorage.useDefaultSaveFolder()
-                        runOnUiThread {
-                            status.text = "Папка сохранения: Download/DocScan"
-                            refreshDestinationGrantStatus(activeStorage)
+        workspaceMenu.setPadding(dp(16), dp(8), dp(16), dp(16))
+
+        fun createCard(): LinearLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(0xFF1E222A.toInt())
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), 0xFF334155.toInt())
+            }
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+
+        // 1. Storage Folder Card
+        val folderCard = createCard().apply {
+            val title = TextView(this@ProductActivity).apply {
+                text = "📁 Папка сохранения"
+                textSize = 14f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(0xFF93C5FD.toInt())
+                setPadding(0, 0, 0, dp(4))
+            }
+            val help = TextView(this@ProductActivity).apply {
+                text = getString(R.string.default_save_folder_help)
+                tag = "docscan-default-folder-help"
+                textSize = 12f
+                setTextColor(0xFFCBD5E1.toInt())
+                setPadding(0, 0, 0, dp(8))
+            }
+            destinationButton.apply {
+                background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 10)
+                setTextColor(Color.WHITE)
+            }
+            val defaultBtn = Button(this@ProductActivity).apply {
+                text = "Использовать /DocScan по умолчанию"
+                textSize = 12f
+                setTextColor(0xFF94A3B8.toInt())
+                background = modernButtonDrawable(normalBg = 0xFF0F172A.toInt(), pressedBg = 0xFF1E293B.toInt(), radiusDp = 10)
+                setOnClickListener {
+                    val activeStorage = storage ?: return@setOnClickListener
+                    if (!canInteractWorkspace()) return@setOnClickListener
+                    io.execute {
+                        try {
+                            activeStorage.useDefaultSaveFolder()
+                            runOnUiThread {
+                                status.text = "Папка сохранения: Download/DocScan"
+                                refreshDestinationGrantStatus(activeStorage)
+                            }
+                        } catch (failure: Exception) {
+                            runOnUiThread { status.text = failure.message ?: "Не удалось сменить папку" }
                         }
-                    } catch (failure: Exception) {
-                        runOnUiThread { status.text = failure.message ?: "Не удалось сменить папку" }
                     }
                 }
             }
-        }, matchWrap())
-        workspaceMenu.addView(ocrLangButton, matchWrap())
-        workspaceMenu.addView(recoverExportsButton, matchWrap())
-        workspaceMenu.addView(resumeExportsButton, matchWrap())
-        workspaceMenu.addView(clearWorkspaceButton, matchWrap())
+            addView(title)
+            addView(help)
+            addView(destinationButton, matchWrap())
+            addView(defaultBtn, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+        workspaceMenu.addView(folderCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+
+        // 2. OCR Language Card
+        val ocrCard = createCard().apply {
+            val title = TextView(this@ProductActivity).apply {
+                text = "🌐 Язык распознавания (OCR)"
+                textSize = 14f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(0xFF93C5FD.toInt())
+                setPadding(0, 0, 0, dp(6))
+            }
+            ocrLangButton.apply {
+                background = modernButtonDrawable(normalBg = 0xFF334155.toInt(), pressedBg = 0xFF475569.toInt(), radiusDp = 10)
+                setTextColor(Color.WHITE)
+            }
+            addView(title)
+            addView(ocrLangButton, matchWrap())
+        }
+        workspaceMenu.addView(ocrCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+
         workspaceEmptyLabel = TextView(this).apply {
             text = getString(R.string.no_pages)
             visibility = View.GONE
@@ -886,7 +1041,7 @@ class ProductActivity : AppCompatActivity() {
             isNestedScrollingEnabled = true
             setItemViewCacheSize(2)
         }
-        workspaceMenu.addView(pagesContainer, LinearLayout.LayoutParams(-1, dp(420)))
+        workspaceMenu.addView(pagesContainer, LinearLayout.LayoutParams(-1, dp(1)))
     }
 
     private fun updateOcrLangButtonText(target: Button? = if (::ocrLangButton.isInitialized) ocrLangButton else null) {
@@ -1128,7 +1283,7 @@ class ProductActivity : AppCompatActivity() {
         val pages = runCatching { activeStorage.workspaceProjection().pages }.getOrNull() ?: return
         if (pages.isEmpty()) return
         val selectAll = pages.any { !it.selected }
-        selectionButton.isEnabled = false
+        if (::selectionButton.isInitialized) selectionButton.isEnabled = false
         io.execute {
             try {
                 activeStorage.setAllVisiblePagesSelected(selectAll)
@@ -1140,7 +1295,7 @@ class ProductActivity : AppCompatActivity() {
             } catch (failure: Exception) {
                 runOnUiThread {
                     status.text = getString(R.string.selection_update_failed, failure.message ?: failure.javaClass.simpleName)
-                    selectionButton.isEnabled = true
+                    if (::selectionButton.isInitialized) selectionButton.isEnabled = true
                 }
             }
         }
@@ -2326,6 +2481,7 @@ class ProductActivity : AppCompatActivity() {
         if (workspaceActionBlocked || isFinishing || cameraStartupPending || imageCapture != null || !hasCameraPermission()) return
         cameraStartupPending = true
         val statusAtStart = status.text?.toString()
+        val currentCameraGeneration = liveDetectionCoordinator.newGeneration()
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
             try {
@@ -2351,11 +2507,10 @@ class ProductActivity : AppCompatActivity() {
                     .build()
                 analysis.setAnalyzer(cameraAnalysisExecutor) { imageProxy ->
                     if (!isDocumentMode) {
-                        quadForCapture = null
-                        val filtered = quadTemporalFilter.onMissing()
+                        liveDetectionCoordinator.onFrameMissing(currentCameraGeneration, SystemClock.elapsedRealtime())
                         runOnUiThread {
                             if (::documentOverlayView.isInitialized) {
-                                documentOverlayView.setPolygonPixels(filtered)
+                                documentOverlayView.clear()
                             }
                         }
                         imageProxy.close()
@@ -2367,7 +2522,16 @@ class ProductActivity : AppCompatActivity() {
                         return@setAnalyzer
                     }
                     lastAnalyzedTimestamp = now
-                    lastRotationDegrees = imageProxy.imageInfo.rotationDegrees
+
+                    val cropRect = imageProxy.cropRect
+                    val bufferRect = BufferRect(cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
+                    val spec = AnalysisBufferSpec(
+                        bufferWidth = imageProxy.width,
+                        bufferHeight = imageProxy.height,
+                        cropRect = bufferRect,
+                        rotationDegrees = imageProxy.imageInfo.rotationDegrees,
+                    )
+
                     try {
                         val plane = imageProxy.planes[0]
                         val detection = DocumentCropProcessor.detectCornersFromRgbaBuffer(
@@ -2377,27 +2541,34 @@ class ProductActivity : AppCompatActivity() {
                             plane.rowStride,
                         )
 
-                        if (detection == null) {
-                            quadForCapture = null
-                            val filtered = quadTemporalFilter.onMissing()
-                            runOnUiThread {
-                                if (isDocumentMode && ::documentOverlayView.isInitialized) {
-                                    documentOverlayView.setPolygonPixels(filtered)
-                                }
-                            }
+                        val liveState = if (detection == null) {
+                            liveDetectionCoordinator.onFrameMissing(currentCameraGeneration, now)
                         } else {
-                            quadForCapture = detection.toNormalized() to imageProxy.imageInfo.rotationDegrees
-                            val sourceTransform = imageTransformFactory.getOutputTransform(imageProxy)
-                            val rawPoints = detection.bufferPoints.clone()
-                            runOnUiThread {
-                                if (!isDocumentMode || !::documentOverlayView.isInitialized) return@runOnUiThread
+                            liveDetectionCoordinator.onFrameDetected(
+                                generationId = currentCameraGeneration,
+                                frameTimestampMonotonicMs = now,
+                                rawBufferPoints = detection.bufferPoints,
+                                rawScore = detection.score,
+                                spec = spec,
+                            )
+                        }
+
+                        val sourceTransform = imageTransformFactory.getOutputTransform(imageProxy)
+                        val pointsToMap = liveState.quadInBufferPixels?.clone()
+                        val isHeld = liveState.status == LiveDetectionStatus.HELD
+                        val showOverlay = (liveState.status == LiveDetectionStatus.CONFIRMED || liveState.status == LiveDetectionStatus.HELD) && pointsToMap != null
+
+                        runOnUiThread {
+                            if (!isDocumentMode || !::documentOverlayView.isInitialized) return@runOnUiThread
+                            if (!showOverlay) {
+                                documentOverlayView.clear()
+                            } else {
                                 val targetTransform = previewView.outputTransform
                                 if (targetTransform != null) {
                                     try {
                                         val coordinateTransform = CoordinateTransform(sourceTransform, targetTransform)
-                                        coordinateTransform.mapPoints(rawPoints)
-                                        val filtered = quadTemporalFilter.update(rawPoints)
-                                        documentOverlayView.setPolygonPixels(filtered)
+                                        coordinateTransform.mapPoints(pointsToMap)
+                                        documentOverlayView.setPolygonPixels(pointsToMap, isHeld = isHeld)
                                     } catch (transformError: Throwable) {
                                         android.util.Log.w("DocScan", "CoordinateTransform mapping failed", transformError)
                                     }
@@ -2447,7 +2618,7 @@ class ProductActivity : AppCompatActivity() {
         captureButton.isEnabled = false
         val pageBeingRetaken = retakeTarget
         val captureDocumentMode = isDocumentMode
-        val captureDetection = quadForCapture
+        val liveSnapshot = if (captureDocumentMode) liveDetectionCoordinator.captureSnapshot() else null
         status.text = getString(R.string.capturing)
         val temp = File(cacheDir, "capture-${System.nanoTime()}.jpg")
         val options = ImageCapture.OutputFileOptions.Builder(temp).build()
@@ -2460,50 +2631,90 @@ class ProductActivity : AppCompatActivity() {
                         // Publish the untouched camera JPEG before producing any derivative.
                         val captureSource = FileInputStream(temp).use(activeStorage::stageCapturedJpeg)
                         var wasRectified = false
+                        var cropStatusRes: Int? = null
                         var prepared: File? = null
                         try {
                             if (captureDocumentMode) {
-                                val pixelLimit = minOf(DocumentCropProcessor.MAX_CAPTURE_SOURCE_PIXELS,
-                                    (Runtime.getRuntime().maxMemory() / 40L).coerceAtLeast(2L * 1024L * 1024L))
-                                val oriented = ProductImageDecoder.decodePrecisely(temp, pixelLimit)
-                                try {
-                                    val capturedQuad = captureDetection?.first?.let {
-                                        DocumentCropProcessor.rotateNormalizedQuad(it, captureDetection.second)
+                                val jpegBounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeFile(temp.absolutePath, jpegBounds)
+                                val exif = ExifInterface(temp)
+                                val rotation = exif.rotationDegrees
+                                val orientedW = if (rotation == 90 || rotation == 270) jpegBounds.outHeight else jpegBounds.outWidth
+                                val orientedH = if (rotation == 90 || rotation == 270) jpegBounds.outWidth else jpegBounds.outHeight
+                                val jpegSpec = JpegGeometrySpec(orientedW, orientedH)
+
+                                val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(temp, 720)
+                                val stillQuad = try {
+                                    DocumentCropProcessor.detectCorners(thumbnail)?.toNormalized()
+                                } finally {
+                                    thumbnail.recycle()
+                                }
+
+                                if (stillQuad == null) {
+                                    cropStatusRes = R.string.document_not_detected_full_frame_saved
+                                } else {
+                                    val isAgreed = if (liveSnapshot != null && liveSnapshot.isUsableForAgreement &&
+                                        liveSnapshot.analysisSpec != null &&
+                                        CameraGeometryTransform.isGeometryCompatible(liveSnapshot.analysisSpec, jpegSpec)) {
+                                        val check = QuadGeometryUtils.checkAgreement(
+                                            liveSnapshot.quadInNormalizedViewPort!!,
+                                            stillQuad,
+                                            maxRelativeShiftTolerance = 0.05,
+                                            minIouTolerance = 0.85,
+                                        )
+                                        check.agrees
+                                    } else {
+                                        false
                                     }
-                                    val stillQuad = DocumentCropProcessor.detectCorners(oriented)?.toNormalized()
-                                    val disagreement = if (capturedQuad != null && stillQuad != null) {
-                                        capturedQuad.asList().zip(stillQuad.asList()).map { (a, b) ->
-                                            kotlin.math.hypot(a.x - b.x, a.y - b.y)
-                                        }.average()
-                                    } else 0.0
-                                    // A stale live frame must not cut a moved document. Keep the raw
-                                    // page when two confident detections disagree substantially.
-                                    val finalQuad = if (disagreement > 0.12) null else stillQuad ?: capturedQuad
-                                    val rectified = finalQuad?.let { DocumentCropProcessor.rectifyManual(oriented, it) }
-                                    if (rectified != null) {
+
+                                    if (!isAgreed) {
+                                        cropStatusRes = R.string.document_boundaries_not_confirmed_full_frame_saved
+                                    } else {
+                                        val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
+                                        val boundedPixels = DocumentCropMemoryCalculator.calculateBoundedPixels(
+                                            orientedW,
+                                            orientedH,
+                                            maxBudgetBytes = heavyScheduler.decodedByteBudget,
+                                        )
+                                        val workingSetBytes = DocumentCropMemoryCalculator.estimateWarpWorkingSetBytes(boundedPixels)
+                                            .coerceAtMost(heavyScheduler.decodedByteBudget)
+
+                                        val rectified = heavyScheduler.withAdmission(workingSetBytes) {
+                                            val oriented = ProductImageDecoder.decodePrecisely(temp, boundedPixels)
+                                            try {
+                                                DocumentCropProcessor.rectifyManual(oriented, stillQuad)
+                                            } finally {
+                                                oriented.recycle()
+                                            }
+                                        }
+
+                                        val output = File(cacheDir, "rectified-${System.nanoTime()}.jpg")
+                                        prepared = output
                                         try {
-                                            val output = File(cacheDir, "rectified-${System.nanoTime()}.jpg")
-                                            prepared = output
-                                            java.io.FileOutputStream(output).use { out ->
+                                            FileOutputStream(output).use { out ->
                                                 check(rectified.compress(Bitmap.CompressFormat.JPEG, 95, out))
                                                 out.fd.sync()
                                             }
                                             wasRectified = true
-                                        } finally { rectified.recycle() }
+                                            cropStatusRes = R.string.document_rectified_and_cropped
+                                        } finally {
+                                            rectified.recycle()
+                                        }
                                     }
-                                } finally { oriented.recycle() }
+                                }
                             }
                         } catch (failure: Exception) {
                             android.util.Log.w("DocScan", "Rectification unavailable; keeping camera source", failure)
                             prepared?.delete()
                             prepared = null
                             wasRectified = false
+                            cropStatusRes = R.string.document_save_error_kept_original
                         } catch (memory: OutOfMemoryError) {
-                            // Original bytes are already durable; cropping is optional.
                             android.util.Log.w("DocScan", "Not enough memory to rectify; retaining camera source", memory)
                             prepared?.delete()
                             prepared = null
                             wasRectified = false
+                            cropStatusRes = R.string.document_save_oom_kept_original
                         }
                         val artifact = try {
                             prepared?.let { FileInputStream(it).use(activeStorage::stageCapturedJpeg) } ?: captureSource
@@ -2541,8 +2752,8 @@ class ProductActivity : AppCompatActivity() {
                         runOnUiThread {
                             captureButton.isEnabled = imageCapture != null
                             retakeTarget = null
-                            status.text = if (wasRectified) {
-                                "Документ выровнен и сохранён"
+                            status.text = if (cropStatusRes != null) {
+                                getString(cropStatusRes)
                             } else {
                                 getString(if (pageBeingRetaken == null) R.string.capture_saved else R.string.retake_saved)
                             }
@@ -3042,6 +3253,46 @@ class ProductActivity : AppCompatActivity() {
         runOnUiThread {
             deleteSelectedButton.isEnabled = !externalWorkflowRunning.get() && pages.any { it.selected }
             clearWorkspaceButton.isEnabled = !externalWorkflowRunning.get() && pages.isNotEmpty()
+        }
+    }
+
+    private fun deleteSinglePage(pageId: app.docscan.core.model.PageId) {
+        val activeStorage = storage ?: return
+        if (!beginExternalWorkflow()) return
+        io.execute {
+            try {
+                val projection = activeStorage.workspaceProjection()
+                val target = projection.pages.find { it.pageId == pageId } ?: return@execute
+                (application as DocScanApplication).cancelOcrForPages(listOf(target.pageId))
+                val receipt = activeStorage.deletePages(listOf(target))
+                val refreshed = activeStorage.workspaceProjection()
+                runOnUiThread {
+                    status.text = getString(R.string.pages_deleted, 1)
+                    renderPages(refreshed)
+                    Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, 1), 8_000)
+                        .setAction(R.string.undo_delete) { undoWorkspaceDeleteBatch(receipt.batchId) }
+                        .show()
+                }
+            } catch (failure: Exception) {
+                runOnUiThread {
+                    status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                }
+            } finally {
+                externalWorkflowRunning.set(false)
+                val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
+                runOnUiThread {
+                    setWorkspaceInteractionEnabled(true)
+                    if (refreshed != null) {
+                        renderPages(refreshed)
+                        updateRecoveryActions(activeStorage)
+                    } else {
+                        saveButton.isEnabled = false
+                        updateBulkActionButtons(emptyList())
+                    }
+                    updateSaveButtonState(activeStorage)
+                    updateBulkActionButtons(refreshed?.pages.orEmpty())
+                }
+            }
         }
     }
 
@@ -4183,6 +4434,7 @@ class ProductActivity : AppCompatActivity() {
             addView(preview, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(dp(96), minOf(dp(440), root.height - dp(400)))))
         }
         var candidateBitmap: android.graphics.Bitmap? = null
+        var candidatePlan: DocumentCropPlan? = null
         var candidateReady = false
         val dialog = dialogHost.builder(this)
             .setTitle(R.string.auto_crop_title)
@@ -4194,6 +4446,7 @@ class ProductActivity : AppCompatActivity() {
             preview.setImageDrawable(null)
             candidateBitmap?.recycle()
             candidateBitmap = null
+            candidatePlan = null
         }
         dialog.setCanceledOnTouchOutside(false)
         dialog.setOnKeyListener { _, keyCode, event ->
@@ -4211,22 +4464,33 @@ class ProductActivity : AppCompatActivity() {
         dialog.show()
         val applyButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false }
         applyButton.setOnClickListener {
+            val approvedPlan = candidatePlan ?: return@setOnClickListener
             if (!candidateReady) return@setOnClickListener
             dialog.dismiss()
             status.text = getString(R.string.auto_crop_applying)
             io.execute {
                 try {
                     val projection = activeStorage.applyDocumentCrop(
-                        page,
+                        approvedPlan,
                         (application as DocScanApplication).heavyWorkScheduler,
                     )
+                    if (autoOcrEnabled) {
+                        projection.pages.firstOrNull { it.pageId == approvedPlan.pageId }?.let { updatedPage ->
+                            scheduleOcr(activeStorage, updatedPage, force = true)
+                        }
+                    }
                     runOnUiThread {
-                        status.text = getString(R.string.auto_crop_applied)
+                        status.text = getString(R.string.document_manual_crop_saved)
                         renderPages(projection)
                     }
                 } catch (failure: Exception) {
                     runOnUiThread {
-                        status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                        val errorMsg = if (failure is IllegalStateException && failure.message?.contains("устарел") == true) {
+                            getString(R.string.document_crop_plan_stale)
+                        } else {
+                            getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                        }
+                        status.text = errorMsg
                     }
                 }
             }
@@ -4234,19 +4498,20 @@ class ProductActivity : AppCompatActivity() {
         (application as DocScanApplication).let { app ->
             io.execute {
                 try {
-                    val candidate = activeStorage.createDocumentCropPreview(page, app.heavyWorkScheduler)
+                    val result = activeStorage.createDocumentCropPreview(page, app.heavyWorkScheduler)
                     runOnUiThread {
                         if (dialog.isShowing) {
-                            if (candidate == null) {
+                            if (result == null) {
                                 message.text = getString(R.string.auto_crop_not_found)
                             } else {
-                                candidateBitmap = candidate
+                                candidateBitmap = result.previewBitmap
+                                candidatePlan = result.plan
                                 candidateReady = true
-                                preview.setImageBitmap(candidate)
+                                preview.setImageBitmap(result.previewBitmap)
                                 message.text = getString(R.string.auto_crop_preview_ready)
                                 applyButton.isEnabled = true
                             }
-                        } else candidate?.recycle()
+                        } else result?.previewBitmap?.recycle()
                     }
                 } catch (failure: Exception) {
                     runOnUiThread {
@@ -4489,5 +4754,6 @@ class ProductActivity : AppCompatActivity() {
         const val STATE_IMPORT_REQUEST_ID = "pending_import_request_id"
         private const val STATE_PENDING_MAIN_SAVE = "pending_main_save"
         private const val STATE_DESTINATION_PICKER_PENDING = "destination_picker_pending"
+        private const val STATE_DOCUMENT_MODE = "state_document_mode"
     }
 }
