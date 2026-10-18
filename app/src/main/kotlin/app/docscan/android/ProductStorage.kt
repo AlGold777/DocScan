@@ -748,6 +748,7 @@ class ProductStorage(
         pageId = page.pageId,
         expectedImageVersionId = page.imageVersionId,
         expectedContentRevision = page.contentRevision,
+        processingDesiredState = IMPORT_OCR_OPERATION_KEY,
     )
 
     fun commitRecognition(candidate: RecognitionCandidate) = store.commitRecognition(candidate)
@@ -824,6 +825,10 @@ class ProductStorage(
     fun exportAttempts(exportArtifactId: ExportArtifactId) = store.exportAttempts(exportArtifactId)
 
     fun recentDocuments() = store.recentDocuments()
+
+    fun useDefaultSaveFolder() {
+        store.destinationGrant()?.let { store.clearDestinationGrant(it.treeUri) }
+    }
 
     fun renderRecentSavedPdfPage(
         recent: app.docscan.core.store.RecentDocumentSnapshot,

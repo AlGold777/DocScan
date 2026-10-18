@@ -13,6 +13,7 @@ import kotlin.math.*
 /** Finds a strong four-edge page candidate and returns a rectified preview; it never edits input. */
 object DocumentCropProcessor {
     const val MAX_SOURCE_PIXELS = 4L * 1024L * 1024L
+    const val MAX_MANUAL_SOURCE_PIXELS = 12L * 1024L * 1024L
     private const val TAG = "DocScan"
     private const val MIN_SCORE = 0.45 // Lower than this — "document not found"
 
@@ -38,7 +39,7 @@ object DocumentCropProcessor {
 
     fun rectifyManual(source: Bitmap, corners: CropQuadrilateral): Bitmap {
         require(!source.isRecycled)
-        require(source.width.toLong() * source.height in 1..MAX_SOURCE_PIXELS)
+        require(source.width.toLong() * source.height in 1..MAX_MANUAL_SOURCE_PIXELS)
         ensureOpenCvLoaded()
         val rgba = Mat()
         var warped: Mat? = null
@@ -55,7 +56,7 @@ object DocumentCropProcessor {
                 distance(sourcePoints[0], sourcePoints[3]),
                 distance(sourcePoints[1], sourcePoints[2]),
             ).roundToInt().coerceAtLeast(2)
-            require(width.toLong() * height <= MAX_SOURCE_PIXELS) {
+            require(width.toLong() * height <= MAX_MANUAL_SOURCE_PIXELS) {
                 "Manual crop output exceeds the bounded pixel area"
             }
             val from = MatOfPoint2f(*sourcePoints.toTypedArray())

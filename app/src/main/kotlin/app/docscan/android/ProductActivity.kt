@@ -116,7 +116,7 @@ class ProductActivity : AppCompatActivity() {
         isUsingCropRect = false
     }
     private val quadTemporalFilter = QuadTemporalFilter()
-    @Volatile private var quadForCapture: CropQuadrilateral? = null
+    @Volatile private var quadForCapture: Pair<CropQuadrilateral, Int>? = null
     @Volatile private var lastRotationDegrees: Int = 0
     private lateinit var ocrButton: Button
     private var autoOcrEnabled: Boolean = true
@@ -631,6 +631,13 @@ class ProductActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(8), dp(16), dp(4))
             addView(titleView, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(Button(this@ProductActivity).apply {
+                text = "⋮"
+                textSize = 24f
+                contentDescription = getString(R.string.workspace_menu)
+                tag = "docscan-workspace-menu-button"
+                setOnClickListener { showWorkspaceMenu() }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(saveButton, LinearLayout.LayoutParams(dp(130), dp(44)))
         }
         val camera = android.widget.FrameLayout(this).apply {
@@ -838,6 +845,24 @@ class ProductActivity : AppCompatActivity() {
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }, matchWrap())
         workspaceMenu.addView(destinationButton, matchWrap())
+        workspaceMenu.addView(Button(this).apply {
+            text = "Сохранять в Download/DocScan"
+            setOnClickListener {
+                val activeStorage = storage ?: return@setOnClickListener
+                if (!canInteractWorkspace()) return@setOnClickListener
+                io.execute {
+                    try {
+                        activeStorage.useDefaultSaveFolder()
+                        runOnUiThread {
+                            status.text = "Папка сохранения: Download/DocScan"
+                            refreshDestinationGrantStatus(activeStorage)
+                        }
+                    } catch (failure: Exception) {
+                        runOnUiThread { status.text = failure.message ?: "Не удалось сменить папку" }
+                    }
+                }
+            }
+        }, matchWrap())
         workspaceMenu.addView(ocrLangButton, matchWrap())
         workspaceMenu.addView(recoverExportsButton, matchWrap())
         workspaceMenu.addView(resumeExportsButton, matchWrap())
@@ -2350,7 +2375,7 @@ class ProductActivity : AppCompatActivity() {
                                 }
                             }
                         } else {
-                            quadForCapture = detection.toNormalized()
+                            quadForCapture = detection.toNormalized() to imageProxy.imageInfo.rotationDegrees
                             val sourceTransform = imageTransformFactory.getOutputTransform(imageProxy)
                             val rawPoints = detection.bufferPoints.clone()
                             runOnUiThread {
@@ -2410,17 +2435,19 @@ class ProductActivity : AppCompatActivity() {
         uiHapticFeedback(captureButton)
         captureButton.isEnabled = false
         val pageBeingRetaken = retakeTarget
+        val captureDocumentMode = isDocumentMode
+        val captureDetection = quadForCapture
         status.text = getString(R.string.capturing)
         val temp = File(cacheDir, "capture-${System.nanoTime()}.jpg")
         val options = ImageCapture.OutputFileOptions.Builder(temp).build()
         capture.takePicture(options, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                 // Instantly re-enable shutter button for non-blocking burst capture
-                captureButton.isEnabled = imageCapture != null
+                captureButton.isEnabled = pageBeingRetaken == null && imageCapture != null
                 io.execute {
                     try {
                         var wasRectified = false
-                        if (isDocumentMode) {
+                        if (captureDocumentMode) {
                             try {
                                 val orientedBitmap = ProductImageDecoder.decode(
                                     temp,
@@ -2429,10 +2456,10 @@ class ProductActivity : AppCompatActivity() {
                                 )
                                 if (orientedBitmap != null) {
                                     var rectified: Bitmap? = null
-                                    val capturedQuad = quadForCapture
+                                    val capturedQuad = captureDetection?.first
                                     if (capturedQuad != null) {
                                         try {
-                                            val orientedQuad = DocumentCropProcessor.rotateNormalizedQuad(capturedQuad, lastRotationDegrees)
+                                            val orientedQuad = DocumentCropProcessor.rotateNormalizedQuad(capturedQuad, captureDetection?.second ?: 0)
                                             rectified = DocumentCropProcessor.rectifyManual(orientedBitmap, orientedQuad)
                                         } catch (quadError: Throwable) {
                                             android.util.Log.w("DocScan", "rectifyManual with quadForCapture failed, fallback to full rectify", quadError)
@@ -3063,6 +3090,8 @@ class ProductActivity : AppCompatActivity() {
         val imageFile = activeStorage.artifactPath(page.artifactRelativePath).toFile()
         if (!imageFile.exists()) return
 
+        val viewerAtStart = pageViewer
+        val generationAtStart = ++pageViewerGeneration
         status.text = getString(R.string.edit_applying)
         uiHapticFeedback(pageViewerImage ?: root)
 
@@ -3076,9 +3105,14 @@ class ProductActivity : AppCompatActivity() {
                 if (rotated !== source) source.recycle()
                 val newProjection = activeStorage.applyPageImageEdit(page, rotated)
                 runOnUiThread {
-                    if (pageViewer?.isShowing == true) {
+                    renderPages(newProjection)
+                    if (pageViewer === viewerAtStart && pageViewer?.isShowing == true
+                        && pageViewerGeneration == generationAtStart
+                        && pageViewerPages.getOrNull(pageViewerIndex)?.pageId == page.pageId
+                    ) {
                         (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
                         pageViewerImage?.setImageBitmap(rotated)
+                        pageViewerText?.text = getString(R.string.ocr_pending_or_empty)
                         pageViewerPages = newProjection.pages.toList()
                         renderPages(newProjection)
                         refreshViewerStrip(newProjection.pages)
@@ -3125,6 +3159,10 @@ class ProductActivity : AppCompatActivity() {
             addView(selection, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(dp(120), minOf(dp(440), root.height - dp(240)))))
         }
         var sourceBitmap: android.graphics.Bitmap? = null
+        var cropApplying = false
+        var cropDismissed = false
+        val cropViewerAtStart = pageViewer
+        val cropGenerationAtStart = pageViewerGeneration
         val cropDialog = dialogHost.builder(this)
             .setTitle(R.string.manual_crop_title)
             .setView(cropContent)
@@ -3133,9 +3171,12 @@ class ProductActivity : AppCompatActivity() {
             .create()
         cropDialog.setCanceledOnTouchOutside(false)
         cropDialog.setOnDismissListener {
+            cropDismissed = true
             selection.bitmap = null
-            sourceBitmap?.recycle()
-            sourceBitmap = null
+            if (!cropApplying) {
+                sourceBitmap?.recycle()
+                sourceBitmap = null
+            }
         }
         cropDialog.show()
         val applyButton = cropDialog.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false }
@@ -3143,6 +3184,7 @@ class ProductActivity : AppCompatActivity() {
             if (!applyButton.isEnabled) return@setOnClickListener
             val source = sourceBitmap ?: return@setOnClickListener
             val quad = selection.quadrilateral
+            cropApplying = true
             applyButton.isEnabled = false
             status.text = getString(R.string.edit_applying)
             io.execute {
@@ -3153,8 +3195,17 @@ class ProductActivity : AppCompatActivity() {
                     ) { PageImageAdjustmentProcessor.render(source, PageImageEditState(crop = quad)) }
                     val newProjection = activeStorage.applyPageImageEdit(page, cropped)
                     runOnUiThread {
+                        cropApplying = false
                         cropDialog.dismiss()
-                        if (pageViewer?.isShowing == true) {
+                        if (cropDismissed) {
+                            sourceBitmap?.recycle()
+                            sourceBitmap = null
+                        }
+                        renderPages(newProjection)
+                        if (pageViewer === cropViewerAtStart && pageViewer?.isShowing == true
+                            && pageViewerGeneration == cropGenerationAtStart
+                            && pageViewerPages.getOrNull(pageViewerIndex)?.pageId == page.pageId
+                        ) {
                             (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
                             pageViewerImage?.setImageBitmap(cropped)
                             pageViewerPages = newProjection.pages.toList()
@@ -3168,7 +3219,11 @@ class ProductActivity : AppCompatActivity() {
                     }
                 } catch (failure: Exception) {
                     runOnUiThread {
-                        applyButton.isEnabled = true
+                        cropApplying = false
+                        if (cropDismissed) {
+                            sourceBitmap?.recycle()
+                            sourceBitmap = null
+                        } else applyButton.isEnabled = true
                         status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                     }
                 }
@@ -3176,7 +3231,7 @@ class ProductActivity : AppCompatActivity() {
         }
         io.execute {
             try {
-                val decoded = decodeViewerImage(imageFile) ?: throw IllegalArgumentException("Cannot decode image")
+                val decoded = decodeEditableImage(imageFile) ?: throw IllegalArgumentException("Cannot decode image")
                 sourceBitmap = decoded
                 runOnUiThread {
                     if (cropDialog.isShowing) {
@@ -3861,7 +3916,7 @@ class ProductActivity : AppCompatActivity() {
         }
         fun saveDraft() {
             if (!draft.isDirty || busy) return
-            val source = sourceBitmap ?: return
+            if (sourceBitmap == null) return
             busy = true
             updateControls()
             status.text = getString(R.string.edit_applying)
@@ -3874,7 +3929,12 @@ class ProductActivity : AppCompatActivity() {
                 try {
                     edited = (application as DocScanApplication).heavyWorkScheduler.withAdmission(
                         EDIT_WORKING_SET_BYTES,
-                    ) { PageImageAdjustmentProcessor.render(source, state) }
+                    ) {
+                        val fullSource = decodeEditableImage(activeStorage.artifactPath(page.artifactRelativePath).toFile())
+                            ?: error("Image cannot be decoded for saving")
+                        try { PageImageAdjustmentProcessor.render(fullSource, state) }
+                        finally { fullSource.recycle() }
+                    }
                     projection = activeStorage.applyPageImageEdit(page, edited)
                 } catch (problem: Exception) {
                     failure = problem
@@ -4148,6 +4208,18 @@ class ProductActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /** Preserve every pixel usable by the 3000 px PDF/JPG export, independent of preview size. */
+    private fun decodeEditableImage(file: File): Bitmap? {
+        val decoded = ProductImageDecoder.decode(file, 12L * 1024L * 1024L) ?: return null
+        val longest = maxOf(decoded.width, decoded.height)
+        if (longest <= 3000) return decoded
+        val scale = 3000.0 / longest
+        return try {
+            Bitmap.createScaledBitmap(decoded, maxOf(1, (decoded.width * scale).toInt()),
+                maxOf(1, (decoded.height * scale).toInt()), true)
+        } finally { decoded.recycle() }
     }
 
     private fun decodeViewerImage(file: File): android.graphics.Bitmap? {
