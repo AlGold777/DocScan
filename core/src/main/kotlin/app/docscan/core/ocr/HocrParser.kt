@@ -91,13 +91,15 @@ fun parseHocr(hocr: String, w: Int, h: Int): OcrLayout {
 
     fun lineElements(area: org.jsoup.nodes.Element): List<org.jsoup.nodes.Element> {
         val lines = area.select(".ocr_line")
-            .filter { line -> line.selectFirst(".ocr_line") == null && !isNonText(line) }
+            // Element.selectFirst includes the element itself when it matches.
+            // Only discard a line when it contains a distinct nested line.
+            .filter { line -> line.select(".ocr_line").none { it !== line } && !isNonText(line) }
             .toMutableList()
 
         // Some hOCR producers put words directly in semantic containers instead of
         // wrapping them in an .ocr_line. Treat those containers as one line only
         // when they have no actual line descendants.
-        if (area.selectFirst(".ocr_line") == null && area.children().any { it.hasClass("ocrx_word") }) {
+        if (area.select(".ocr_line").none { it !== area } && area.children().any { it.hasClass("ocrx_word") }) {
             lines += area
         }
         return lines

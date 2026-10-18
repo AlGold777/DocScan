@@ -7,3 +7,6 @@ local.properties
 *.iml
 .DS_Store
 __pycache__/
+
+# Regenerable debug packages; versioned copies remain available locally in dist.
+/dist/DocScan-debug*.apk

@@ -85,7 +85,7 @@ class SchemaMigrationTest {
                     null,
                 )
 
-                DocScanDatabase.Schema.migrate(driver, sourceVersion, 12L)
+                DocScanDatabase.Schema.migrate(driver, sourceVersion, 13L)
 
                 val workspace = driver.executeQuery(
                     null,
@@ -181,6 +181,7 @@ class SchemaMigrationTest {
                     "PdfImportPublicationIntent",
                     "ImageImportPublicationIntent",
                     "SavedPdfEditComposition",
+                    "PublicExportPublication",
                 )) {
                     val tableCount = driver.executeQuery(
                         null,
@@ -199,25 +200,44 @@ class SchemaMigrationTest {
     }
 
     @Test
-    fun versionElevenToTwelveCreatesImageImportPublicationIntentTable() {
+    fun versionTwelveToThirteenCreatesPublicExportPublicationTable() {
         val driver = JdbcSqliteDriver(
             JdbcSqliteDriver.IN_MEMORY,
             Properties().apply { setProperty("foreign_keys", "false") },
         )
         try {
             DocScanDatabase.Schema.create(driver)
-            driver.execute(null, "DROP TABLE ImageImportPublicationIntent", 0, null)
+            driver.execute(null, "DROP TABLE PublicExportPublication", 0, null)
+            driver.execute(null, "ALTER TABLE ExternalExportPackage DROP COLUMN include_jpg", 0, null)
 
-            DocScanDatabase.Schema.migrate(driver, 11L, 12L)
+            DocScanDatabase.Schema.migrate(driver, 12L, 13L)
 
             val tableCount = driver.executeQuery(
                 null,
-                "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='ImageImportPublicationIntent'",
+                "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='PublicExportPublication'",
                 { cursor -> cursor.next(); QueryResult.Value(cursor.getLong(0)) },
                 0,
                 null,
             ).value
             assertEquals(1L, tableCount)
+
+            val includeJpgColumn = driver.executeQuery(
+                null,
+                "PRAGMA table_info(ExternalExportPackage)",
+                { cursor ->
+                    while (cursor.next().value) {
+                        if (cursor.getString(1) == "include_jpg") {
+                            return@executeQuery QueryResult.Value(
+                                Triple(cursor.getLong(3), cursor.getString(4), cursor.getLong(5)),
+                            )
+                        }
+                    }
+                    QueryResult.Value(null)
+                },
+                0,
+                null,
+            ).value
+            assertEquals(Triple(1L, "1", 0L), includeJpgColumn)
         } finally {
             driver.close()
         }

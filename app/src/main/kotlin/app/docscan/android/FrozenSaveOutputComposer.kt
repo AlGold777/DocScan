@@ -184,28 +184,16 @@ class FrozenSaveOutputComposer(
         PDDocument.load(pdfFile, MemoryUsageSetting.setupTempFileOnly()).use { document ->
             check(document.numberOfPages == pages.size) { "PDF page count differs from frozen SaveManifest" }
             if (includeOcr) {
-                val expectedWords = pages.flatMap { page ->
-                    val layout = page.recognizedLayout
-                    val geometry = page.recognizedGeometry
-                    when {
-                        layout != null -> layout.blocks.flatMap { it.lines.flatMap { line -> line.words.map { w -> w.text } } }
-                        geometry != null -> geometry.words.map { it.text }
-                        else -> emptyList()
-                    }
-                }.filter { it.isNotBlank() }
-                if (expectedWords.isNotEmpty()) {
-                    val extracted = PDFTextStripper().getText(document).normalizeWhitespace()
-                    check(extracted.isNotBlank()) {
-                        "PDF read-back is missing frozen searchable OCR text"
-                    }
-                    val cleanTokens = expectedWords
-                        .map { it.filter { c -> c.isLetterOrDigit() } }
-                        .filter { it.length >= 2 }
-                    if (cleanTokens.isNotEmpty()) {
-                        val anyMatched = cleanTokens.any { extracted.contains(it, ignoreCase = true) }
-                        if (!anyMatched) {
-                            android.util.Log.w("FrozenSaveOutputComposer", "PDF read-back text did not match any expected clean tokens: extracted='$extracted'")
-                        }
+                pages.forEachIndexed { index, page ->
+                    val hasText = !page.recognizedText.isNullOrBlank()
+                        || page.recognizedLayout?.blocks?.any { b -> b.lines.any { l -> l.words.any { it.text.isNotBlank() } } } == true
+                        || page.recognizedGeometry?.words?.any { it.text.isNotBlank() } == true
+                    check(includeImage || hasText) { "Text-only PDF page ${index + 1} has no recognized text" }
+                    if (hasText) {
+                        val extracted = PDFTextStripper().apply {
+                            startPage = index + 1; endPage = index + 1
+                        }.getText(document).normalizeWhitespace()
+                        check(extracted.isNotBlank()) { "PDF page ${index + 1} is missing recognized text" }
                     }
                 }
             }

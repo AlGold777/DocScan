@@ -98,7 +98,11 @@ class SearchablePdfWriter(context: Context) {
                 && recognition.formatVersion == 1L
             ) { "OCR geometry does not match the oriented PDF source bitmap" }
         }
-        val ocrLayout = layout?.toOcrLayout()
+        val ocrLayout = layout?.toOcrLayout()?.takeIf { it.words.isNotEmpty() }
+        val hasText = ocrLayout?.words?.any { it.text.isNotBlank() } == true
+            || recognition?.words?.any { it.text.isNotBlank() } == true || !textFallback.isNullOrBlank()
+        require(settings.includeImage || hasText) { "Text-only PDF requires recognized text on every page" }
+        check(!hasText || font != null) { "PDF text font is unavailable" }
         val pageWidth = if (bitmap.width >= bitmap.height) settings.a4LongSidePoints else settings.a4ShortSidePoints
         val pageHeight = if (bitmap.width >= bitmap.height) settings.a4ShortSidePoints else settings.a4LongSidePoints
         val scale = minOf(pageWidth / bitmap.width, pageHeight / bitmap.height)
@@ -144,7 +148,7 @@ class SearchablePdfWriter(context: Context) {
                         }
                         cs.endText()
                     }
-                } else if (recognition != null) {
+                } else if (recognition?.words?.isNotEmpty() == true) {
                     recognition.words.forEach { w ->
                         val text = font.safeText(w.text, cache) ?: return@forEach
                         val fontSize = ((w.bottomPx - w.topPx) * scale * 0.8f).coerceIn(4f, 72f)
@@ -167,23 +171,18 @@ class SearchablePdfWriter(context: Context) {
                         cs.endText()
                     }
                 } else if (!textFallback.isNullOrBlank()) {
-                    val lines = textFallback.lines()
-                    val fontSize = 12f
-                    val leading = fontSize * 1.3f
-                    var y = pageHeight - 50f
-                    val startX = 50f
+                    val (fontSize, lines) = fitPlainText(font, textFallback, pageWidth - 80f, pageHeight - 80f, cache)
+                    var y = pageHeight - 40f - fontSize
                     for (lineText in lines) {
-                        if (y < 40f) break
-                        val safe = font.safeText(lineText, cache)
-                        if (!safe.isNullOrBlank()) {
+                        if (lineText.isNotEmpty()) {
                             cs.beginText()
                             cs.setFont(font, fontSize)
                             cs.setRenderingMode(renderingMode)
-                            cs.setTextMatrix(Matrix.getTranslateInstance(startX, y))
-                            cs.showText(safe)
+                            cs.setTextMatrix(Matrix.getTranslateInstance(40f, y))
+                            cs.showText(lineText)
                             cs.endText()
                         }
-                        y -= leading
+                        y -= fontSize * 1.3f
                     }
                 }
             }
@@ -207,6 +206,47 @@ class SearchablePdfWriter(context: Context) {
                 )
             }
         }
+    }
+
+    /** Plain imported text has no geometry: wrap and fit the entire input on its source page. */
+    private fun fitPlainText(
+        font: PDType0Font, raw: String, width: Float, height: Float, cache: HashMap<Int, Boolean>,
+    ): Pair<Float, List<String>> {
+        val paragraphs = raw.lines().map { font.safeText(it, cache).orEmpty() }
+        check(paragraphs.any { it.isNotBlank() }) { "Recognized text has no supported PDF glyphs" }
+        fun wrap(size: Float): List<String> = buildList {
+            for (paragraph in paragraphs) {
+                if (paragraph.isEmpty()) { add(""); continue }
+                val line = StringBuilder()
+                var lineWidth = 0f
+                val widths = HashMap<Int, Float>()
+                // Wrap at whitespace when possible, split long unbroken strings at code points.
+                for (token in paragraph.split(Regex("\\s+"))) {
+                    val tokenWidth = font.getStringWidth(token) * size / 1000f
+                    val spaceWidth = font.getStringWidth(" ") * size / 1000f
+                    if (line.isNotEmpty() && lineWidth + spaceWidth + tokenWidth > width) {
+                        add(line.toString()); line.setLength(0); lineWidth = 0f
+                    }
+                    if (line.isNotEmpty()) { line.append(' '); lineWidth += spaceWidth }
+                    token.codePoints().forEach { cp ->
+                        val charWidth = widths.getOrPut(cp) { font.getStringWidth(String(Character.toChars(cp))) * size / 1000f }
+                        if (line.isNotEmpty() && lineWidth + charWidth > width) {
+                            add(line.toString()); line.setLength(0); lineWidth = 0f
+                        }
+                        line.appendCodePoint(cp); lineWidth += charWidth
+                    }
+                }
+                add(line.toString())
+            }
+        }
+        var low = 0.1f
+        var high = 12f
+        check(wrap(low).size * low * 1.3f <= height) { "Recognized text is too large for one PDF page" }
+        repeat(20) {
+            val mid = (low + high) / 2f
+            if (wrap(mid).size * mid * 1.3f <= height) low = mid else high = mid
+        }
+        return low to wrap(low)
     }
 
     private fun resolveFont(document: PDDocument): PDType0Font? {

@@ -5,8 +5,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.database.sqlite.SQLiteDatabase
+import android.content.ContentUris
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.provider.MediaStore
+import android.os.Environment
 import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -26,11 +29,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class SaveSetupInstrumentedTest {
@@ -38,17 +42,14 @@ class SaveSetupInstrumentedTest {
     val cameraPermission: GrantPermissionRule = GrantPermissionRule.grant(Manifest.permission.CAMERA)
 
     @Test
-    fun firstSaveRunsRealDestinationSetupThenReadsBackPdfAndCompanionImage() {
+    fun firstSavePublishesVerifiedPublicPdfAndCompanionImageWithoutSafSetup() {
         val fixture = fixture("first-save")
         var scenario: ActivityScenario<ProductActivity>? = null
-        var tree: Uri? = null
-        var createdOutputUris = emptyList<Uri>()
+        var recentPdfUri: Uri? = null
+        var savedPdfName: String? = null
         var primaryFailure: Throwable? = null
         var cleanupFailure: Throwable? = null
-        var pickerLaunchActivity: ProductActivity? = null
         val basename = "docscan-first-save-${fixture.suffix}"
-        val evidenceDirectory = File(fixture.context.noBackupFilesDir, SafRuntimeDestinationCheck.CHECK_DIRECTORY)
-        val evidenceBefore = evidenceDirectory.listFiles().orEmpty().map { it.name }.toSet()
         try {
             assertTrue("The isolated workspace starts with one real source Page", fixture.storage.workspaceProjection().pages.isEmpty())
             val source = jpegFixture()
@@ -73,99 +74,59 @@ class SaveSetupInstrumentedTest {
             }
             clickSave(activeScenario)
             val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            assertTrue("First Save opens the real system destination picker",
-                device.wait(Until.hasObject(By.pkg(DOCUMENTS_UI)), TIMEOUT_MILLIS))
-            activeScenario.onActivity { activity ->
-                pickerLaunchActivity = activity
-                assertTrue("Save setup continuation remains pending across recreation",
-                    activityBoolean(activity, "pendingMainSave"))
-                assertTrue("The real picker is marked pending before recreation",
-                    activityBoolean(activity, "destinationPickerPending"))
-                val save = requireNotNull(activity.window.decorView.findViewWithTag<View>("docscan-save-button"))
-                assertFalse("Save is disabled while destination setup is pending", save.isEnabled)
-                save.performClick()
-            }
-            // Recreate asynchronously while DocumentsUI owns the foreground. ActivityScenario.recreate()
-            // waits for RESUMED, which cannot happen until the external picker returns.
-            activeScenario.onActivity { it.recreate() }
-            assertTrue("Activity recreation leaves the real picker and pending Save intact",
-                device.wait(Until.hasObject(By.pkg(DOCUMENTS_UI)), TIMEOUT_MILLIS))
-            SafPickerTestActions.chooseTreeDirectory(device, activeScenario, listOf("Documents"))
-            await("The picker result resumes the recreated Activity instance") {
-                var resumedNewInstance = false
-                activeScenario.onActivity { activity ->
-                    resumedNewInstance = activity !== pickerLaunchActivity && activity.lifecycle.currentState == Lifecycle.State.RESUMED
-                }
-                resumedNewInstance
-            }
-            val selectedGrant = awaitValue("The real picker grant is persisted") { fixture.storage.destinationGrant() }
-            val selectedTree = Uri.parse(selectedGrant.treeUri)
-            tree = selectedTree
-            assertEquals("The fixture selects the primary Documents tree", "primary:Documents", DocumentsContract.getTreeDocumentId(selectedTree))
-
-            val runtime = awaitValue("The actual runtime destination check becomes ready") {
-                val grant = fixture.storage.destinationGrant() ?: return@awaitValue null
-                SafRuntimeDestinationCheck(fixture.context, fixture.storage).findReady(grant.treeUri)
-            }
-            assertEquals(selectedTree.toString(), org.json.JSONObject(runtime.qualifiedCapabilitiesPayload).getString("treeUri"))
-            val runtimePayload = org.json.JSONObject(runtime.qualifiedCapabilitiesPayload)
-            assertEquals("RUNTIME_CAPABILITY_CHECK", runtimePayload.getString("provenance"))
-            assertFalse("A runtime check is not a formal qualification", runtimePayload.getBoolean("formalQualification"))
-            assertTrue("The actual check retained its raw evidence", File(runtimePayload.getString("evidencePath")).isFile)
-            val exactTuple = SafProviderIdentity.resolve(fixture.context, selectedTree.toString())
-            val tupleRecords = fixture.storage.providerQualificationsFor(
-                exactTuple.adapterId, exactTuple.providerVersion, exactTuple.osVersion, exactTuple.accessClass,
-            )
-            assertEquals("Only the actual runtime check qualifies this provider tuple", 1, tupleRecords.size)
-            assertTrue("The Save setup has not inserted a test qualification", tupleRecords.all {
-                org.json.JSONObject(it.qualifiedCapabilitiesPayload).optString("provenance") == "RUNTIME_CAPABILITY_CHECK"
-            })
-            val freshEvidence = evidenceDirectory.listFiles().orEmpty().filter { it.name !in evidenceBefore }
-            assertEquals("Two rapid Save taps through one setup and recreation start exactly one runtime probe", 1,
-                freshEvidence.count { it.name.startsWith("evidence-") && it.name.endsWith(".json") })
-            assertTrue("The basename prompt appears only after destination setup completes",
+            assertTrue("First Save opens the public save-name dialog without launching the SAF picker",
                 device.wait(Until.hasObject(By.clazz("android.widget.EditText")), TIMEOUT_MILLIS))
-
+            assertFalse("A fresh default-folder Save does not launch DocumentsUI", device.hasObject(By.pkg(DOCUMENTS_UI)))
+            activeScenario.onActivity { activity ->
+                assertFalse("Public Save does not leave a pending SAF picker", activityBoolean(activity, "destinationPickerPending"))
+                assertFalse("Public Save does not wait for folder setup", activityBoolean(activity, "pendingMainSave"))
+            }
             val prompt = device.findObject(By.clazz("android.widget.EditText"))
             prompt.text = basename
-            val saveAction = By.text("Save selected pages")
-            assertTrue("The basename confirmation is shown", device.wait(Until.hasObject(saveAction), TIMEOUT_MILLIS))
+            val ocrCheckbox = device.findObject(By.text("OCR"))
+            assertTrue("The save dialog exposes the OCR choice", ocrCheckbox != null)
+            if (ocrCheckbox.isChecked) ocrCheckbox.click()
+            assertFalse("The test disables OCR to avoid native recognition work", ocrCheckbox.isChecked)
+            val saveAction = By.res("android", "button1")
+            assertTrue("The Android positive action is Save", device.wait(Until.hasObject(saveAction), TIMEOUT_MILLIS))
+            assertEquals("Save", device.findObject(saveAction).text)
             device.findObject(saveAction).click()
 
-            val recent = awaitValue("The real external Save is confirmed in Recent") {
+            val recent = awaitValue("The public MediaStore Save is confirmed in Recent") {
                 fixture.storage.recentDocuments().singleOrNull()
             }
-            val exportPackage = requireNotNull(fixture.storage.externalExportPackage(recent.exportArtifactId))
-            assertEquals("The two-file output package completes", "SUCCEEDED", exportPackage.state)
+            recentPdfUri = Uri.parse(recent.documentUri)
+            savedPdfName = recent.displayName
+            assertTrue("Recent points to the actual public MediaStore Download", recent.documentUri.startsWith("content://media/"))
+            assertEquals("The unique requested basename is retained", "$basename.pdf", recent.displayName)
+            assertNull("Public Save does not create a SAF ExternalExportPackage",
+                fixture.storage.externalExportPackage(recent.exportArtifactId))
+            assertNull("Public Save does not persist a SAF destination grant", fixture.storage.destinationGrant())
+            assertEquals("Public Save does not create provider qualification rows", 0,
+                countProviderQualifications(fixture.context.getDatabasePath(fixture.databaseName)))
             val committed = fixture.storage.committedExportOutputs(recent.exportArtifactId).associateBy { it.artifactId }
-            val attempts = fixture.storage.exportAttempts(recent.exportArtifactId).associateBy { it.outputArtifactId }
             assertEquals(2, committed.size)
-            assertEquals(2, attempts.size)
-            assertTrue("PDF and companion image both have successful provider read-back", attempts.values.all { it.state == "SUCCEEDED" })
-            val outputNames = exportPackage.outputs.associateBy { it.outputArtifactId }
-            assertEquals(setOf("$basename.pdf", "$basename — 01.jpg"), outputNames.values.map { it.displayName }.toSet())
-            val outputBytes = attempts.mapValues { (_, attempt) ->
-                requireNotNull(fixture.context.contentResolver.openInputStream(Uri.parse(requireNotNull(attempt.externalIdentity)))).use { it.readBytes() }
-            }
-            outputBytes.forEach { (artifactId, bytes) ->
-                val privateOutput = requireNotNull(committed[artifactId])
-                assertEquals("Provider byte count matches the committed local output", privateOutput.sizeBytes, bytes.size.toLong())
-                assertEquals("Provider bytes match the committed local SHA-256", privateOutput.sha256, sha256(bytes))
-            }
-            val pdfOutput = outputNames.values.single { it.displayName == "$basename.pdf" }
-            val imageOutput = outputNames.values.single { it.displayName == "$basename — 01.jpg" }
-            val pdfBytes = requireNotNull(outputBytes[pdfOutput.outputArtifactId])
+            val pdfOutput = committed.values.single { it.mimeType == "application/pdf" }
+            val imageOutput = committed.values.single { it.mimeType == "image/jpeg" }
+            assertTrue("The local PDF is committed and checksum-valid", fixture.storage.verifyExportOutput(pdfOutput))
+            assertTrue("The local companion JPG is committed and checksum-valid", fixture.storage.verifyExportOutput(imageOutput))
             PDFBoxResourceLoader.init(fixture.context)
-            PDDocument.load(ByteArrayInputStream(pdfBytes)).use { document ->
+            PDDocument.load(fixture.storage.exportOutputFile(pdfOutput)).use { document ->
                 assertEquals("Image-only input remains a one-page PDF", 1, document.numberOfPages)
             }
-            val jpgBytes = requireNotNull(outputBytes[imageOutput.outputArtifactId])
+            val downloadedPdfBytes = requireNotNull(fixture.context.contentResolver.openInputStream(recentPdfUri!!)).use { it.readBytes() }
+            assertEquals("Public PDF bytes match the verified local artifact", pdfOutput.sha256, sha256(downloadedPdfBytes))
+            val jpgBytes = fixture.storage.exportOutputFile(imageOutput).readBytes()
             val decoded = BitmapFactory.decodeByteArray(jpgBytes, 0, jpgBytes.size)
-            assertNotNull("The companion JPG is a valid image", decoded)
+            assertNotNull("The local companion JPG is a valid image", decoded)
             decoded?.recycle()
-            val children = listChildren(fixture.context, selectedTree)
-            createdOutputUris = children.filter { it.displayName in setOf("$basename.pdf", "$basename — 01.jpg") }.map { it.uri }
-            assertEquals("Both expected output files are present in the selected real tree", 2, createdOutputUris.size)
+            val expectedJpgName = "${recent.displayName.removeSuffix(".pdf")}.jpg"
+            val downloadNames = listOf(recent.displayName, expectedJpgName)
+            val downloadUris = listDownloadUris(fixture.context, downloadNames)
+            assertEquals("PDF and companion JPG are present in public Downloads", 2, downloadUris.size)
+            val downloadedJpg = downloadUris.single { it.second == expectedJpgName }.first
+            val downloadedJpgBytes = requireNotNull(fixture.context.contentResolver.openInputStream(downloadedJpg)).use { it.readBytes() }
+            assertEquals("Public companion JPG matches the verified local artifact", imageOutput.sha256, sha256(downloadedJpgBytes))
             assertEquals("Successful Save consumes its selected source Page", 0, fixture.storage.workspaceProjection().pages.size)
             assertTrue("The source artifact remains unchanged in the isolated workspace evidence",
                 sourcePath.isFile && sha256(sourcePath.readBytes()) == sourceSha)
@@ -176,24 +137,35 @@ class SaveSetupInstrumentedTest {
                 assertTrue("Home rail exits the external-workflow busy state after Save",
                     activity.window.decorView.findViewWithTag<androidx.recyclerview.widget.RecyclerView>("docscan-home-thumbnail-scroll")?.isEnabled == true)
             }
-            android.util.Log.i(TAG, "FIRST_SAVE_SETUP_PASS tree=$selectedTree runtime_formal=false outputs=2 page_consumed=true")
+            activeScenario.close()
+            scenario = null
+            fixture.storage.close()
+            val reopened = ProductStorage(fixture.context, fixture.databaseName, fixture.artifactDirectory, fixture.candidateDirectory)
+            try {
+                assertFalse("Reopening public Recent does not trigger startup integrity blocking", reopened.startupIntegrityBlocked)
+                assertEquals("Public Recent survives a fresh ProductStorage open", recent,
+                    reopened.recentDocuments().single())
+            } finally {
+                reopened.close()
+            }
+            android.util.Log.i(TAG, "FIRST_PUBLIC_SAVE_PASS uri=${recent.documentUri} outputs=2 page_consumed=true")
         } catch (failure: Throwable) {
             primaryFailure = failure
         } finally {
             scenario?.close()
-            val selectedTree = tree
-            if (selectedTree != null) {
-                val knownUris = (createdOutputUris + listChildren(fixture.context, selectedTree)
-                    .filter { it.displayName == "$basename.pdf" || it.displayName == "$basename — 01.jpg" }
-                    .map { it.uri }).distinct()
-                knownUris.forEach { uri ->
-                    runCatching { DocumentsContract.deleteDocument(fixture.context.contentResolver, uri) }
-                        .onFailure { cleanupFailure = it }
+            val names = savedPdfName?.let { listOf(it, "${it.removeSuffix(".pdf")}.jpg") }
+                ?: listOf("$basename.pdf", "$basename.jpg")
+            val discoveredUris = runCatching { listDownloadUris(fixture.context, names).map { it.first } }
+                .onFailure { cleanupFailure = it }
+                .getOrDefault(emptyList())
+            val exactUris = (listOfNotNull(recentPdfUri) + discoveredUris).distinct()
+            exactUris.forEach { uri ->
+                runCatching {
+                    check(fixture.context.contentResolver.delete(uri, null, null) == 1) {
+                        "MediaStore did not remove test output $uri"
+                    }
                 }
-                if (selectedTree.toString() !in fixture.priorPermissionUris) {
-                    runCatching { SafDestinationGrantManager(fixture.context).releasePersistedGrant(selectedTree.toString()) }
-                        .onFailure { cleanupFailure = it }
-                }
+                    .onFailure { cleanupFailure = it }
             }
             fixture.close()
             cleanupFailure?.let { if (primaryFailure == null) primaryFailure = it else primaryFailure!!.addSuppressed(it) }
@@ -244,7 +216,91 @@ class SaveSetupInstrumentedTest {
     }
 
     @Test
-    fun cancelingRealPickerFromPendingSavePreservesPageAndCreatesNoReadinessOrOutput() {
+    fun manuallyChosenFolderCanSaveAfterReadinessCheck() {
+        val fixture = fixture("manual-folder-save")
+        val madeFolder = SafPickerTestActions.createDefaultFolderFixture()
+        var scenario: ActivityScenario<ProductActivity>? = null
+        var selectedTreeUri: String? = null
+        var outputNames: List<String> = emptyList()
+        val basename = "docscan-manual-save-${fixture.suffix}"
+        try {
+            val page = fixture.storage.importImage(jpegFixture().inputStream(), "image/jpeg", "manual-save-source.jpg")
+            fixture.storage.setSelected(page.pageId, true)
+            scenario = ActivityScenario.launch(ProductActivity::class.java)
+            val activeScenario = requireNotNull(scenario)
+            await("manual-save Activity is initialized") {
+                var enabled = false
+                activeScenario.onActivity {
+                    enabled = it.window.decorView.findViewWithTag<View>("docscan-save-button")?.isEnabled == true
+                }
+                enabled
+            }
+
+            activeScenario.onActivity { activity ->
+                requireNotNull(activity.window.decorView.findViewWithTag<View>("docscan-workspace-menu-button")).performClick()
+            }
+            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            val chooseFolder = By.desc(Pattern.compile("(?i)^choose save folder$"))
+            assertTrue("Workspace menu exposes the accessible folder chooser",
+                device.wait(Until.hasObject(chooseFolder), TIMEOUT_MILLIS))
+            device.findObject(chooseFolder).click()
+            assertTrue("Manual folder chooser launches DocumentsUI",
+                device.wait(Until.hasObject(By.pkg(DOCUMENTS_UI)), TIMEOUT_MILLIS))
+            SafPickerTestActions.chooseTreeDirectory(device, activeScenario, listOf("Docscan"))
+
+            await("manual folder grant passes its readiness check") {
+                var enabled = false
+                activeScenario.onActivity {
+                    enabled = it.window.decorView.findViewWithTag<View>("docscan-save-button")?.isEnabled == true
+                }
+                enabled && fixture.storage.destinationGrant() != null
+            }
+            val grant = requireNotNull(fixture.storage.destinationGrant())
+            selectedTreeUri = grant.treeUri
+            assertEquals(
+                DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents", "primary:Docscan").toString(),
+                grant.treeUri,
+            )
+
+            clickSave(activeScenario)
+            val editText = By.clazz("android.widget.EditText")
+            assertTrue("Ready manual destination opens the Save dialog", device.wait(Until.hasObject(editText), TIMEOUT_MILLIS))
+            device.findObject(editText).text = basename
+            val ocrCheckbox = device.findObject(By.text("OCR"))
+            if (ocrCheckbox.isChecked) ocrCheckbox.click()
+            device.findObject(By.res("android", "button1")).click()
+
+            val recent = awaitValue("Manual folder Save reaches Recent") {
+                fixture.storage.recentDocuments().singleOrNull()
+            }
+            val packageRecord = awaitValue("Manual folder package becomes terminal") {
+                fixture.storage.externalExportPackage(recent.exportArtifactId)?.takeIf { it.state == "SUCCEEDED" }
+            }
+            assertEquals("SUCCEEDED", packageRecord.state)
+            assertEquals("The selected basename is saved as PDF", "$basename.pdf", recent.displayName)
+            assertTrue("Recent links to the selected SAF tree", recent.documentUri.startsWith("content://"))
+            outputNames = packageRecord.outputs.map { it.displayName }
+            assertEquals("PDF and JPG are committed to the selected folder", 2, outputNames.size)
+            assertTrue("Every package output is verified locally", fixture.storage.committedExportOutputs(recent.exportArtifactId)
+                .all(fixture.storage::verifyExportOutput))
+        } finally {
+            scenario?.close()
+            outputNames.forEach { name ->
+                runCatching {
+                    InstrumentationRegistry.getInstrumentation().uiAutomation
+                        .executeShellCommand("rm -f '/sdcard/Docscan/$name'").let { descriptor ->
+                            android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+                        }
+                }
+            }
+            selectedTreeUri?.let { runCatching { SafDestinationGrantManager(fixture.context).releasePersistedGrant(it) } }
+            fixture.close()
+            SafPickerTestActions.removeDefaultFolderFixture(madeFolder)
+        }
+    }
+
+    @Test
+    fun cancelingFolderSelectionPickerPreservesPageAndCreatesNoReadinessOrOutput() {
         val fixture = fixture("cancel-save-picker")
         var scenario: ActivityScenario<ProductActivity>? = null
         var primaryFailure: Throwable? = null
@@ -255,6 +311,7 @@ class SaveSetupInstrumentedTest {
             fixture.storage.setSelected(imported.pageId, true)
             val page = fixture.storage.workspaceProjection().pages.single()
             val sourceSha = sha256(fixture.storage.artifactPath(page.artifactRelativePath).toFile().readBytes())
+            val noOutputNames = listOf("${fixture.suffix}.pdf", "${fixture.suffix} — 01.jpg")
             assertNull("Cancellation test begins without saved destination metadata", fixture.storage.destinationGrant())
             assertEquals(0, countProviderQualifications(fixture.context.getDatabasePath(fixture.databaseName)))
 
@@ -265,17 +322,31 @@ class SaveSetupInstrumentedTest {
                 activeScenario.onActivity { enabled = it.window.decorView.findViewWithTag<View>("docscan-save-button")?.isEnabled == true }
                 enabled
             }
-            clickSave(activeScenario)
+            activeScenario.onActivity { activity ->
+                requireNotNull(activity.window.decorView.findViewWithTag<View>("docscan-workspace-menu-button")).performClick()
+            }
+            val chooseFolder = By.text("CHOOSE SAVE FOLDER")
             val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            assertTrue("Pending Save launches the real picker", device.wait(Until.hasObject(By.pkg(DOCUMENTS_UI)), TIMEOUT_MILLIS))
+            assertTrue("The real workspace menu exposes Choose save folder",
+                device.wait(Until.hasObject(chooseFolder), TIMEOUT_MILLIS))
+            device.findObject(chooseFolder).click()
+            assertTrue("Choose save folder launches the real picker", device.wait(Until.hasObject(By.pkg(DOCUMENTS_UI)), TIMEOUT_MILLIS))
+            activeScenario.onActivity { activity ->
+                assertTrue("Folder selection marks only the picker as pending", activityBoolean(activity, "destinationPickerPending"))
+                assertFalse("Folder selection does not create a pending Save", activityBoolean(activity, "pendingMainSave"))
+            }
             cancelPickerWithBoundedBack(device, activeScenario)
-            await("Cancelled destination setup re-enables the Save entry") {
+            activeScenario.onActivity { activity ->
+                assertFalse("Cancellation clears the picker-pending state", activityBoolean(activity, "destinationPickerPending"))
+                assertFalse("Folder cancellation leaves no pending main Save", activityBoolean(activity, "pendingMainSave"))
+            }
+            await("Cancelled folder selection leaves the workspace interactive") {
                 var enabled = false
                 activeScenario.onActivity { enabled = it.window.decorView.findViewWithTag<View>("docscan-save-button")?.isEnabled == true }
                 enabled
             }
-            assertNull("Cancelling destination setup stores no destination", fixture.storage.destinationGrant())
-            assertEquals("Cancelling destination setup stores no runtime readiness", 0,
+            assertNull("Cancelling folder selection stores no destination", fixture.storage.destinationGrant())
+            assertEquals("Cancelling folder selection stores no runtime readiness", 0,
                 countProviderQualifications(fixture.context.getDatabasePath(fixture.databaseName)))
             assertEquals("Cancellation retains the selected Page", 1, fixture.storage.workspaceProjection().pages.count { it.selected })
             val retained = fixture.storage.workspaceProjection().pages.single()
@@ -286,6 +357,8 @@ class SaveSetupInstrumentedTest {
                 countTableRows(fixture.context.getDatabasePath(fixture.databaseName), "ExternalExportPackage"))
             assertEquals("Cancellation creates no export artifact", 0,
                 countTableRows(fixture.context.getDatabasePath(fixture.databaseName), "ExportArtifact"))
+            assertTrue("Cancelled folder selection publishes no Download outputs",
+                listDownloadUris(fixture.context, noOutputNames).isEmpty())
             activeScenario.onActivity { activity ->
                 assertTrue("After cancellation the selected Page can enter setup again",
                     activity.window.decorView.findViewWithTag<View>("docscan-save-button")?.isEnabled == true)
@@ -294,7 +367,7 @@ class SaveSetupInstrumentedTest {
                 assertTrue("Home rail is enabled after picker cancellation", rail?.isEnabled == true)
                 assertTrue("Retained Page selection remains enabled after picker cancellation", checkbox?.isEnabled == true)
             }
-            android.util.Log.i(TAG, "SAVE_PICKER_CANCEL_PASS page_retained=true readiness=0 exports=0")
+            android.util.Log.i(TAG, "SAVE_FOLDER_PICKER_CANCEL_PASS page_retained=true readiness=0 exports=0")
         } catch (failure: Throwable) {
             primaryFailure = failure
         } finally {
@@ -335,11 +408,10 @@ class SaveSetupInstrumentedTest {
         val storage = ProductStorage(context, databaseName, artifactDirectory, candidateDirectory)
         val priorOverride = app.productStorageOverrideForTest
         val priorProvider = app.productStorageProviderForTest
-        val priorPermissionUris = context.contentResolver.persistedUriPermissions.map { it.uri.toString() }.toSet()
         app.productStorageProviderForTest = null
         app.productStorageOverrideForTest = storage
         return Fixture(context, app, storage, databaseName, artifactDirectory, candidateDirectory,
-            priorOverride, priorProvider, priorPermissionUris, suffix)
+            priorOverride, priorProvider, suffix)
     }
 
     private fun jpegFixture(): ByteArray {
@@ -354,20 +426,28 @@ class SaveSetupInstrumentedTest {
         }
     }
 
-    private fun listChildren(context: Context, tree: Uri): List<Child> {
-        val documentId = DocumentsContract.getTreeDocumentId(tree)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, documentId)
-        val result = mutableListOf<Child>()
-        context.contentResolver.query(childrenUri,
-            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-            null, null, null)?.use { cursor ->
-            val id = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-            val name = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-            while (cursor.moveToNext()) {
-                val childId = cursor.getString(id) ?: continue
-                result += Child(DocumentsContract.buildDocumentUriUsingTree(tree, childId), cursor.getString(name).orEmpty())
-            }
-        } ?: throw AssertionError("The selected provider did not return a child listing")
+    private fun listDownloadUris(context: Context, displayNames: List<String>): List<Pair<Uri, String>> {
+        require(displayNames.isNotEmpty())
+        val result = mutableListOf<Pair<Uri, String>>()
+        val relativePath = "${Environment.DIRECTORY_DOWNLOADS}/DocScan/"
+        displayNames.forEach { displayName ->
+            context.contentResolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                arrayOf(relativePath, displayName),
+                null,
+            )?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    result += ContentUris.withAppendedId(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        cursor.getLong(idColumn),
+                    ) to cursor.getString(nameColumn)
+                }
+            } ?: throw AssertionError("MediaStore returned no Downloads listing for $displayName")
+        }
         return result
     }
 
@@ -433,8 +513,6 @@ class SaveSetupInstrumentedTest {
         throw AssertionError("ProductActivity did not resume after bounded real-picker Back cancellation")
     }
 
-    private data class Child(val uri: Uri, val displayName: String)
-
     private class Fixture(
         val context: Context,
         private val app: DocScanApplication,
@@ -444,7 +522,6 @@ class SaveSetupInstrumentedTest {
         val candidateDirectory: String,
         private val priorOverride: ProductStorage?,
         private val priorProvider: (() -> ProductStorage)?,
-        val priorPermissionUris: Set<String>,
         val suffix: String,
     ) {
         fun close() {

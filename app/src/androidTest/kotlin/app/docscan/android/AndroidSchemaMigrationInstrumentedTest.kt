@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.docscan.core.db.DocScanDatabase
 import app.docscan.core.model.PageId
 import app.docscan.core.model.ImageVersionId
 import app.docscan.core.store.StoredPage
@@ -139,7 +140,11 @@ class AndroidSchemaMigrationInstrumentedTest {
             assertEquals(sourceImageBytes.toList(), openedStorage.artifactPath(page.artifactRelativePath).toFile().readBytes().toList())
 
             SQLiteDatabase.openDatabase(databaseFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { database ->
-                assertEquals("ProductStorage upgrades v$sourceVersion to v12", 12, database.version)
+                assertEquals(
+                    "ProductStorage upgrades v$sourceVersion to the current schema",
+                    DocScanDatabase.Schema.version.toInt(),
+                    database.version,
+                )
                 assertColumns(database, "ExportAttempt", "output_artifact_id")
                 assertTable(database, "DestinationGrant")
                 assertTable(database, "ExternalExportPackage")
@@ -235,6 +240,35 @@ class AndroidSchemaMigrationInstrumentedTest {
                 database.execSQL("DROP TABLE SaveOutputPublicationIntent")
                 database.execSQL("DROP TABLE PdfImportPublicationIntent")
                 database.execSQL("DROP TABLE ImageImportPublicationIntent")
+                database.execSQL("DROP TABLE PublicExportPublication")
+                database.execSQL("DROP TABLE ExternalExportPackageOutput")
+                database.execSQL("DROP TABLE ExternalExportPackage")
+                database.execSQL(
+                    """CREATE TABLE ExternalExportPackage (
+                        export_artifact_id TEXT NOT NULL PRIMARY KEY REFERENCES ExportArtifact(export_artifact_id),
+                        destination_tree_uri TEXT NOT NULL,
+                        common_basename TEXT NOT NULL,
+                        provider_qualification_id TEXT NOT NULL REFERENCES ProviderQualification(qualification_id),
+                        adapter_id TEXT NOT NULL,
+                        provider_version TEXT NOT NULL,
+                        os_version TEXT NOT NULL,
+                        destination_access_class TEXT NOT NULL,
+                        state TEXT NOT NULL CHECK (state IN ('READY', 'WRITING_EXTERNAL', 'UNKNOWN_OUTCOME', 'PARTIAL', 'SUCCEEDED', 'FAILED_KNOWN')),
+                        last_error TEXT,
+                        ocr_status TEXT NOT NULL DEFAULT 'NONE'
+                    )""",
+                )
+                database.execSQL(
+                    """CREATE TABLE ExternalExportPackageOutput (
+                        export_artifact_id TEXT NOT NULL REFERENCES ExternalExportPackage(export_artifact_id),
+                        output_artifact_id TEXT NOT NULL REFERENCES ArtifactRecord(artifact_id),
+                        display_name TEXT NOT NULL,
+                        ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+                        PRIMARY KEY (export_artifact_id, output_artifact_id),
+                        UNIQUE (export_artifact_id, display_name),
+                        UNIQUE (export_artifact_id, ordinal)
+                    )""",
+                )
                 database.execSQL("ALTER TABLE Page DROP COLUMN select_when_ready")
                 database.version = 8
                 assertEquals("Fixture must represent schema v8", 8, database.version)
@@ -260,6 +294,18 @@ class AndroidSchemaMigrationInstrumentedTest {
                     null,
                 ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
                 assertEquals("v8 fixture must omit the v12 image publication-intent table", 0, imageIntentCount)
+                val publicExportPublicationCount = database.rawQuery(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='PublicExportPublication'",
+                    null,
+                ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+                assertEquals("v8 fixture must omit the v13 public export publication table", 0, publicExportPublicationCount)
+                val externalPackageColumns = database.rawQuery("PRAGMA table_info(ExternalExportPackage)", null).use { cursor ->
+                    buildSet {
+                        val nameIndex = cursor.getColumnIndexOrThrow("name")
+                        while (cursor.moveToNext()) add(cursor.getString(nameIndex))
+                    }
+                }
+                assertFalse("v8 fixture must omit the v13 JPG inclusion column", "include_jpg" in externalPackageColumns)
             }
 
             migratedStorage = ProductStorage(context, databaseName, artifactDirectory)
@@ -275,7 +321,11 @@ class AndroidSchemaMigrationInstrumentedTest {
             }
 
             SQLiteDatabase.openDatabase(databaseFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { database ->
-                assertEquals("ProductStorage must migrate Android user_version to current schema 12", 12, database.version)
+                assertEquals(
+                    "ProductStorage must migrate Android user_version to the current schema",
+                    DocScanDatabase.Schema.version.toInt(),
+                    database.version,
+                )
                 val publicationIntentTableCount = database.rawQuery(
                     "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='SaveOutputPublicationIntent'",
                     null,
@@ -291,6 +341,11 @@ class AndroidSchemaMigrationInstrumentedTest {
                     null,
                 ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
                 assertEquals("v11→v12 migration must create the image publication-intent table once", 1, imageIntentCount)
+                val publicExportPublicationCount = database.rawQuery(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='PublicExportPublication'",
+                    null,
+                ).use { cursor -> cursor.moveToFirst(); cursor.getInt(0) }
+                assertEquals("v12→v13 migration must create the public export publication table once", 1, publicExportPublicationCount)
                 database.rawQuery("SELECT page_id, select_when_ready FROM Page ORDER BY order_index", null).use { cursor ->
                     var rows = 0
                     while (cursor.moveToNext()) {

@@ -17,6 +17,7 @@ class OcrTaskQueueTest {
     fun `same request is deduplicated and newer request replaces running work`() {
         val executor = Executors.newSingleThreadExecutor()
         val releaseOld = CountDownLatch(1)
+        val oldStarted = CountDownLatch(1)
         val newTaskRan = CountDownLatch(1)
         val stopped = AtomicInteger()
         try {
@@ -25,8 +26,10 @@ class OcrTaskQueueTest {
                 releaseOld.countDown()
             })
             assertTrue(queue.enqueue("page", requestKey = "1:1:eng") { cancelled ->
+                oldStarted.countDown()
                 while (!cancelled()) releaseOld.await(10, TimeUnit.MILLISECONDS)
             })
+            assertTrue(oldStarted.await(2, TimeUnit.SECONDS), "The previous recognition must be active before replacement")
             assertFalse(queue.enqueue("page", requestKey = "1:1:eng") { error("duplicate ran") })
             assertTrue(queue.enqueue("page", requestKey = "1:1:rus") { newTaskRan.countDown() })
 
@@ -64,7 +67,10 @@ class OcrTaskQueueTest {
                 }
             }
             assertTrue(stopEntered.await(2, TimeUnit.SECONDS))
-            assertFalse("Replacement must remain queued until native stop returns", replacementStarted.await(100, TimeUnit.MILLISECONDS))
+            assertFalse(
+                replacementStarted.await(100, TimeUnit.MILLISECONDS),
+                "Replacement must remain queued until native stop returns",
+            )
             releaseStop.countDown()
 
             assertTrue(replacement.get(2, TimeUnit.SECONDS))

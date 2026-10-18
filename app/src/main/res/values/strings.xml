@@ -210,7 +210,7 @@
     <string name="home_select_all">Select all</string>
     <string name="home_deselect_all">Clear all</string>
     <string name="home_delete">Delete</string>
-    <string name="default_save_folder_help">Default folder: /Docscan in internal storage. In the system picker, open Docscan and allow access. If it does not exist, create it in internal storage first. You can choose another folder; your choice is remembered.</string>
+    <string name="default_save_folder_help">Default: Download/DocScan. Use the folder picker to save somewhere else; the selection is remembered. The menu can restore the default folder.</string>
     <string name="save_destination_checking">Checking the save folder…</string>
     <string name="save_destination_setup_hint">Tap Save PDF to finish setting up your save folder.</string>
     <string name="save_destination_check_failed">The save folder could not be verified. Your pages are safe. Choose a folder in internal storage and try again. Details: %1$s</string>

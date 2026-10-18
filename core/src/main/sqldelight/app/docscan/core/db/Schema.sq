@@ -219,6 +219,7 @@ CREATE TABLE ExternalExportPackage (
   destination_access_class TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('READY', 'WRITING_EXTERNAL', 'UNKNOWN_OUTCOME', 'PARTIAL', 'SUCCEEDED', 'FAILED_KNOWN')),
   last_error TEXT,
+  include_jpg INTEGER NOT NULL DEFAULT 1,
   ocr_status TEXT NOT NULL DEFAULT 'NONE'
 );
 
@@ -263,6 +264,14 @@ CREATE TABLE RecentDocument (
   display_name TEXT NOT NULL,
   page_count INTEGER NOT NULL CHECK (page_count > 0),
   saved_wall INTEGER NOT NULL CHECK (saved_wall >= 0),
+  ocr_status TEXT NOT NULL CHECK (ocr_status IN ('FULL', 'PARTIAL', 'NONE'))
+);
+
+CREATE TABLE PublicExportPublication (
+  export_artifact_id TEXT NOT NULL PRIMARY KEY REFERENCES ExportArtifact(export_artifact_id),
+  document_uri TEXT NOT NULL CHECK (substr(document_uri, 1, 10) = 'content://'),
+  display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
+  page_count INTEGER NOT NULL CHECK (page_count > 0),
   ocr_status TEXT NOT NULL CHECK (ocr_status IN ('FULL', 'PARTIAL', 'NONE'))
 );
 
@@ -617,7 +626,7 @@ WITH findings AS (
   WHERE NOT EXISTS (
     SELECT 1 FROM ExternalExportPackageOutput o
     WHERE o.export_artifact_id = ep.export_artifact_id AND o.output_artifact_id = a.artifact_id
-  )
+  ) AND (ep.include_jpg != 0 OR a.relative_storage_path NOT LIKE '%.jpg')
   UNION ALL
   SELECT i.source_snapshot_artifact_id, 'IMPORT_SESSION', i.import_session_id, 'IMPORT_SESSION_REFERENCE_MISSING'
   FROM ImportSession i
@@ -702,7 +711,8 @@ WITH findings AS (
   LEFT JOIN ExternalExportPackage ep ON ep.export_artifact_id = rd.export_artifact_id
   LEFT JOIN ExternalExportPackageOutput pdf
     ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
-  WHERE ep.export_artifact_id IS NULL OR ep.state != 'SUCCEEDED'
+  WHERE (ep.export_artifact_id IS NULL OR ep.state != 'SUCCEEDED')
+    AND rd.export_artifact_id NOT IN (SELECT export_artifact_id FROM PublicExportPublication)
   UNION ALL
   SELECT ea.export_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
     'RECENT_DOCUMENT_PDF_OUTPUT_MISSING'
@@ -711,6 +721,7 @@ WITH findings AS (
   LEFT JOIN ExternalExportPackageOutput pdf
     ON pdf.export_artifact_id = rd.export_artifact_id AND pdf.ordinal = 0
   WHERE pdf.output_artifact_id IS NULL
+    AND rd.export_artifact_id NOT IN (SELECT export_artifact_id FROM PublicExportPublication)
   UNION ALL
   SELECT pdf.output_artifact_id, 'RECENT_DOCUMENT', rd.export_artifact_id,
     'RECENT_DOCUMENT_PDF_ATTEMPT_MISSING'
@@ -761,8 +772,10 @@ WITH findings AS (
     WHEN edit.save_manifest_id IS NOT NULL THEN
       CASE WHEN edit.output_page_order = '[]' THEN 0
         ELSE length(edit.output_page_order) - length(replace(edit.output_page_order, ',', '')) + 1 END
-    ELSE (SELECT COUNT(*) FROM ExternalExportPackageOutput page
-      WHERE page.export_artifact_id = rd.export_artifact_id AND page.ordinal > 0)
+    ELSE (SELECT COUNT(*) FROM ArtifactReference jpg_ref
+      JOIN ArtifactRecord jpg ON jpg.artifact_id = jpg_ref.artifact_id
+      WHERE jpg_ref.ref_kind = 'EXPORT_ARTIFACT' AND jpg_ref.ref_owner_id = rd.export_artifact_id
+        AND jpg.artifact_kind = 'EXPORT_OUTPUT' AND jpg.relative_storage_path LIKE '%.jpg')
   END
 )
 SELECT finding_code, artifact_id, ref_kind, ref_owner_id
@@ -1088,6 +1101,13 @@ insertRecentDocument:
 INSERT INTO RecentDocument(recent_id, export_artifact_id, document_uri, display_name, page_count, saved_wall, ocr_status)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
+publicExportPublicationById:
+SELECT * FROM PublicExportPublication WHERE export_artifact_id = ?;
+
+insertPublicExportPublication:
+INSERT INTO PublicExportPublication(export_artifact_id, document_uri, display_name, page_count, ocr_status)
+VALUES (?, ?, ?, ?, ?);
+
 recentDocumentByExport:
 SELECT * FROM RecentDocument WHERE export_artifact_id = ?;
 
@@ -1102,6 +1122,47 @@ SELECT ExternalExportPackage.export_artifact_id FROM ExternalExportPackage
 WHERE ExternalExportPackage.state = 'SUCCEEDED'
   AND NOT EXISTS (SELECT 1 FROM RecentDocument WHERE RecentDocument.export_artifact_id = ExternalExportPackage.export_artifact_id)
 ORDER BY ExternalExportPackage.rowid ASC;
+
+publicRecentDocumentIntegrityFindings:
+SELECT publication.export_artifact_id AS artifact_id, 'RECENT_DOCUMENT' AS ref_kind,
+  publication.export_artifact_id AS ref_owner_id, 'PUBLIC_EXPORT_PDF_REFERENCE_MISSING' AS finding_code
+FROM PublicExportPublication publication
+JOIN ExportArtifact ea ON ea.export_artifact_id = publication.export_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1 FROM ArtifactReference ar
+  JOIN ArtifactRecord pdf ON pdf.artifact_id = ar.artifact_id
+  WHERE ar.ref_kind = 'EXPORT_ARTIFACT' AND ar.ref_owner_id = publication.export_artifact_id
+    AND ar.protection_class = 'EXPORT' AND pdf.artifact_kind = 'EXPORT_OUTPUT'
+    AND pdf.relative_storage_path LIKE '%.pdf' AND pdf.state = 'COMMITTED'
+    AND pdf.storage_state = 'PRESENT' AND pdf.size_bytes > 0
+    AND pdf.checksum GLOB '[0-9a-f]*'
+    AND instr(ea.artifact_set_payload, '"artifactId":"' || pdf.artifact_id || '"') > 0
+)
+UNION ALL
+SELECT publication.export_artifact_id, 'RECENT_DOCUMENT', publication.export_artifact_id,
+  CASE
+    WHEN recent.document_uri != publication.document_uri THEN 'RECENT_DOCUMENT_URI_MISMATCH'
+    WHEN recent.display_name != publication.display_name THEN 'RECENT_DOCUMENT_DISPLAY_NAME_MISMATCH'
+    WHEN recent.ocr_status != publication.ocr_status THEN 'RECENT_DOCUMENT_OCR_STATUS_MISMATCH'
+    ELSE 'RECENT_DOCUMENT_PAGE_COUNT_MISMATCH'
+  END
+FROM PublicExportPublication publication
+JOIN RecentDocument recent ON recent.export_artifact_id = publication.export_artifact_id
+JOIN ExportArtifact published_export ON published_export.export_artifact_id = publication.export_artifact_id
+WHERE recent.document_uri != publication.document_uri
+  OR recent.display_name != publication.display_name
+  OR recent.page_count != publication.page_count
+  OR recent.ocr_status != publication.ocr_status
+  OR publication.page_count != (
+    SELECT COUNT(*) FROM SaveDependencyResult dependency
+    WHERE dependency.save_manifest_id = published_export.save_manifest_id
+      AND dependency.dependency_kind = 'LOCAL_OUTPUT_COMPOSITION'
+  )
+ORDER BY finding_code, artifact_id, ref_kind, ref_owner_id
+LIMIT ?;
+
+markExternalPackagePdfOnly:
+UPDATE ExternalExportPackage SET include_jpg = 0 WHERE export_artifact_id = ?;
 
 updateExternalExportPackageState:
 UPDATE ExternalExportPackage SET state = ?, last_error = ? WHERE export_artifact_id = ?;

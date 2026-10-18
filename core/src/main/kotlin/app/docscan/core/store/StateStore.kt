@@ -764,14 +764,26 @@ class StateStore(
     /** Bounded read-only audit of known ArtifactReference owner/artifact/protection links. */
     fun artifactReferenceOwnerIntegrityFindings(limit: Long): List<ArtifactReferenceIntegrityFinding> {
         require(limit in 1L..MAX_ARTIFACT_REFERENCE_FINDINGS)
-        return queries.artifactReferenceOwnerIntegrityFindings(limit).executeAsList().map { row ->
-            ArtifactReferenceIntegrityFinding(
-                code = row.finding_code,
-                artifactId = ArtifactId.parse(row.artifact_id),
-                refKind = row.ref_kind,
-                refOwnerId = row.ref_owner_id,
-            )
-        }
+        val findings = queries.artifactReferenceOwnerIntegrityFindings(MAX_ARTIFACT_REFERENCE_FINDINGS)
+            .executeAsList().map { row ->
+                ArtifactReferenceIntegrityFinding(
+                    code = row.finding_code,
+                    artifactId = ArtifactId.parse(row.artifact_id),
+                    refKind = row.ref_kind,
+                    refOwnerId = row.ref_owner_id,
+                )
+            } + queries.publicRecentDocumentIntegrityFindings(MAX_ARTIFACT_REFERENCE_FINDINGS)
+            .executeAsList().map { row ->
+                ArtifactReferenceIntegrityFinding(
+                    code = row.finding_code,
+                    artifactId = ArtifactId.parse(row.artifact_id),
+                    refKind = row.ref_kind,
+                    refOwnerId = row.ref_owner_id,
+                )
+            }
+        return findings.sortedWith(
+            compareBy<ArtifactReferenceIntegrityFinding>({ it.code }, { it.artifactId.value }, { it.refKind }, { it.refOwnerId }),
+        ).take(limit.toInt())
     }
 
     /** Read-only bounded cross-record check; it never repairs or rewrites workspace state. */
@@ -1322,7 +1334,11 @@ class StateStore(
                     || qualification.os_version != external.osVersion
                     || qualification.destination_access_class != external.destinationAccessClass
                 ) throw StoreInvariantViolation("External export package provider tuple is not qualified")
-                if (external.outputs.map { it.outputArtifactId.value } != command.files.map { it.file.artifactId.value }) {
+                val externalOutputIds = external.outputs.map { it.outputArtifactId.value }
+                val committedOutputIds = command.files.map { it.file.artifactId.value }
+                if (externalOutputIds != listOf(committedOutputIds.first())
+                    && externalOutputIds != committedOutputIds
+                ) {
                     throw StoreInvariantViolation("External package outputs differ from the committed output set")
                 }
                 queries.insertExternalExportPackage(
@@ -1336,6 +1352,9 @@ class StateStore(
                     destination_access_class = external.destinationAccessClass,
                     ocr_status = external.ocrStatus,
                 )
+                if (external.outputs.size == 1 && command.files.size > 1) {
+                    queries.markExternalPackagePdfOnly(command.exportArtifactId.value)
+                }
                 external.outputs.forEach { output ->
                     queries.insertExternalExportPackageOutput(
                         export_artifact_id = command.exportArtifactId.value,
@@ -1346,6 +1365,85 @@ class StateStore(
                 }
             }
             queries.deleteSaveManifestArtifactReferences(command.saveManifestId.value)
+        }
+    }
+
+    /**
+     * Records a verified public MediaStore publication after its local ExportArtifact is committed.
+     * The durable publication confirmation, RecentDocument index, and unchanged-page consumption
+     * are one transaction so startup integrity can distinguish this path from SAF exports.
+     */
+    fun recordVerifiedPublicExport(
+        exportArtifactId: ExportArtifactId,
+        documentUri: String,
+        displayName: String,
+        pageCount: Long,
+        ocrStatus: String,
+    ) {
+        require(documentUri.startsWith("content://")) { "Public export URI must be a content URI" }
+        require(displayName.isNotBlank()) { "Public export display name must not be blank" }
+        require(pageCount > 0L) { "Public export page count must be positive" }
+        require(ocrStatus in setOf("FULL", "NONE", "PARTIAL")) { "Public export OCR status is invalid" }
+
+        database.transaction {
+            val export = queries.exportArtifactById(exportArtifactId.value).executeAsOneOrNull()
+                ?: throw StoreInvariantViolation("Public export requires a committed ExportArtifact")
+            if (export.output_kind != "PDF_WITH_JPG_PAGE_SET"
+                || queries.savedPdfEditCompositionByManifest(export.save_manifest_id).executeAsOneOrNull() != null
+                || queries.externalExportPackageById(exportArtifactId.value).executeAsOneOrNull() != null
+            ) throw StoreInvariantViolation("Public export requires a normal local PDF save without an ExternalExportPackage")
+
+            val dependencies = queries.saveOutputCompositionDependencies(export.save_manifest_id).executeAsList()
+            if (dependencies.isEmpty()
+                || dependencies.map { it.image_version_id }.distinct().size != dependencies.size
+                || dependencies.any {
+                    it.dependency_kind != "LOCAL_OUTPUT_COMPOSITION"
+                        || it.dependency_spec != "frozen-image-version:${it.image_version_id}"
+                        || queries.imageVersionById(it.image_version_id).executeAsOneOrNull() == null
+                }
+                || pageCount != dependencies.size.toLong()
+            ) throw StoreInvariantViolation("Public export page count differs from the frozen SaveManifest dependencies")
+
+            val outputIds = queries.exportArtifactOutputReferences(exportArtifactId.value).executeAsList()
+            val pdfOutputs = outputIds.mapNotNull { artifactId ->
+                queries.artifactById(artifactId).executeAsOneOrNull()?.takeIf {
+                    it.relative_storage_path.endsWith(".pdf", ignoreCase = true)
+                }
+            }
+            if (pdfOutputs.size != 1) throw StoreInvariantViolation("Public export requires exactly one referenced PDF output")
+            val pdf = pdfOutputs.single()
+            if (pdf.artifact_kind != "EXPORT_OUTPUT" || pdf.state != "COMMITTED"
+                || pdf.storage_state != "PRESENT" || pdf.size_bytes <= 0L
+                || pdf.checksum?.matches(Regex("[0-9a-f]{64}")) != true
+                || queries.artifactReferenceForExportOutput(pdf.artifact_id, exportArtifactId.value).executeAsOne() != 1L
+                || !export.artifact_set_payload.contains("\"artifactId\":\"${pdf.artifact_id}\"")
+            ) throw StoreInvariantViolation("Public export PDF is not a committed, protected member of its ExportArtifact")
+
+            val publication = queries.publicExportPublicationById(exportArtifactId.value).executeAsOneOrNull()
+            if (publication == null) {
+                queries.insertPublicExportPublication(
+                    exportArtifactId.value, documentUri, displayName, pageCount, ocrStatus,
+                )
+            } else if (publication.document_uri != documentUri || publication.display_name != displayName
+                || publication.page_count != pageCount || publication.ocr_status != ocrStatus
+            ) throw StoreInvariantViolation("Public export publication was already recorded with different metadata")
+
+            val recent = queries.recentDocumentByExport(exportArtifactId.value).executeAsOneOrNull()
+            if (recent == null) {
+                queries.insertRecentDocument(
+                    recent_id = exportArtifactId.value,
+                    export_artifact_id = exportArtifactId.value,
+                    document_uri = documentUri,
+                    display_name = displayName,
+                    page_count = pageCount,
+                    saved_wall = clock.read().wallTimeMillis,
+                    ocr_status = ocrStatus,
+                )
+            } else if (recent.document_uri != documentUri || recent.display_name != displayName
+                || recent.page_count != pageCount || recent.ocr_status != ocrStatus
+            ) throw StoreInvariantViolation("RecentDocument differs from its verified public export")
+
+            consumeFrozenPagesForSuccessfulSave(exportArtifactId.value)
         }
     }
 
@@ -1635,8 +1733,16 @@ class StateStore(
             val editedComposition = queries.savedPdfEditCompositionByManifest(export.save_manifest_id)
                 .executeAsOneOrNull()
             if (editedComposition == null) consumeFrozenPagesForSuccessfulSave(exportArtifactId)
-            val pageCount = editedComposition?.let { editedPdfOutputPageCount(it.output_page_order) }
-                ?: packageOutputs.count { it.ordinal > 0L }.toLong()
+            val pageCount = editedComposition?.let { editedPdfOutputPageCount(it.output_page_order) } ?: run {
+                val dependencies = queries.saveOutputCompositionDependencies(export.save_manifest_id).executeAsList()
+                if (dependencies.isEmpty()
+                    || dependencies.any {
+                        it.dependency_kind != "LOCAL_OUTPUT_COMPOSITION"
+                            || it.dependency_spec != "frozen-image-version:${it.image_version_id}"
+                    }
+                ) throw StoreInvariantViolation("Successful package differs from its frozen SaveManifest dependencies")
+                dependencies.size.toLong()
+            }
             if (pageCount <= 0L) throw StoreInvariantViolation("Recent saved PDF must contain a page")
             val existing = queries.recentDocumentByExport(exportArtifactId).executeAsOneOrNull()
             if (existing == null) {

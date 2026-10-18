@@ -796,6 +796,59 @@ class StateStoreTest {
     }
 
     @Test
+    fun pdfOnlySafPackageRecentUsesFrozenPageCountRatherThanExternalJpgOutputs() {
+        val fixture = committedExportPackageFixture(pageCount = 2, pdfOnly = true)
+        val pdf = store.committedExportOutputs(fixture.export.exportArtifactId)
+            .single { it.mimeType == "application/pdf" }
+        val command = beginAttempt(fixture.export, fixture.provider).copy(
+            outputArtifactId = pdf.artifactId,
+            plannedDisplayName = "Scan.pdf",
+            mimeType = "application/pdf",
+        )
+
+        store.beginExportAttempt(command)
+        store.finishWritingExportAttempt(
+            command.exportAttemptId,
+            ExportAttemptOutcome.SUCCEEDED,
+            "content://test.provider/document/pdf-only",
+            null,
+            false,
+            observation("pdf-only-success", "PDF read-back matched"),
+        )
+
+        val recent = store.recentDocuments(1_000L).single()
+        assertEquals(2L, recent.pageCount)
+        assertEquals("SUCCEEDED", store.externalExportPackage(fixture.export.exportArtifactId)?.state)
+        assertEquals(0L, database.schemaQueries.externalExportPackageById(fixture.export.exportArtifactId.value)
+            .executeAsOne().include_jpg)
+        assertTrue(store.artifactReferenceOwnerIntegrityFindings(100L).none {
+            it.refKind == "RECENT_DOCUMENT" || it.refKind == "EXTERNAL_EXPORT_PACKAGE_OUTPUT"
+        })
+    }
+
+    @Test
+    fun fullSafPackageStillFlagsMissingJpgOutputMapping() {
+        val fixture = committedExportPackageFixture(pageCount = 2)
+        val jpg = store.committedExportOutputs(fixture.export.exportArtifactId)
+            .first { it.mimeType == "image/jpeg" }
+        driver.execute(
+            null,
+            "DELETE FROM ExternalExportPackageOutput WHERE export_artifact_id = '${fixture.export.exportArtifactId.value}' AND output_artifact_id = '${jpg.artifactId.value}'",
+            0,
+            null,
+        )
+
+        val findings = store.artifactReferenceOwnerIntegrityFindings(100L).filter {
+            it.code == "EXTERNAL_PACKAGE_OUTPUT_MAPPING_MISSING"
+        }
+        assertEquals(1, findings.size)
+        assertEquals(jpg.artifactId, findings.single().artifactId)
+        assertEquals(fixture.export.exportArtifactId.value, findings.single().refOwnerId)
+        assertEquals(1L, database.schemaQueries.externalExportPackageById(fixture.export.exportArtifactId.value)
+            .executeAsOne().include_jpg)
+    }
+
+    @Test
     fun artifactReferenceClosureFindsMissingCurrentImportAndActiveExportEdges() {
         val pageArtifact = durableArtifact()
         store.recordStagedDurableArtifact(pageArtifact)
@@ -1422,6 +1475,94 @@ class StateStoreTest {
         }
         assertEquals(1, database.schemaQueries.exportArtifactsBySaveManifest(manifest.saveManifestId.value)
             .executeAsList().size)
+    }
+
+    @Test
+    fun verifiedPublicExportCreatesRecentConsumesOnlyUnchangedPagesAndIsIdempotent() {
+        val pages = (0 until 2).map {
+            val source = durableArtifact()
+            store.recordStagedDurableArtifact(source)
+            captureCommand(source).copy(selected = true).also(store::commitCapture)
+        }
+        val manifest = store.freezeSelectedPagesForSave(workspaceId)
+        store.beginLocalOutputComposition(manifest)
+        val pdf = durableExportFile("pdf")
+        val jpgs = pages.map { durableExportFile("jpg") }
+        val files = listOf(LocalExportFileCommand(pdf, "PDF", null)) + pages.mapIndexed { index, page ->
+            LocalExportFileCommand(jpgs[index], "JPG_PAGE", page.imageVersionId)
+        }
+        files.forEach { store.recordStagedExportFile(manifest.saveManifestId, it.file) }
+        val exportId = ExportArtifactId.new()
+        store.commitLocalExportArtifact(CommitLocalExportCommand(exportId, manifest.saveManifestId, files))
+
+        driver.execute(
+            null,
+            "UPDATE Page SET content_revision = content_revision + 1 WHERE page_id = '${pages[1].pageId.value}'",
+            0,
+            null,
+        )
+        val uri = "content://media/external/document/scan-1"
+        store.recordVerifiedPublicExport(exportId, uri, "Scan.pdf", 2L, "PARTIAL")
+
+        assertEquals(1L, database.schemaQueries.pageById(pages[0].pageId.value).executeAsOne().tombstone)
+        assertEquals(0L, database.schemaQueries.pageById(pages[1].pageId.value).executeAsOne().tombstone)
+        assertEquals(1L, store.visiblePageCount(workspaceId))
+        val recent = store.recentDocuments(1_000L).single()
+        assertEquals(uri, recent.documentUri)
+        assertEquals("Scan.pdf", recent.displayName)
+        assertEquals(2L, recent.pageCount)
+        assertEquals("PARTIAL", recent.ocrStatus)
+        assertEquals(2L, database.schemaQueries.publicExportPublicationById(exportId.value)
+            .executeAsOne().page_count)
+        assertTrue(store.artifactReferenceOwnerIntegrityFindings(100L).none {
+            it.refKind == "RECENT_DOCUMENT"
+        })
+
+        store.recordVerifiedPublicExport(exportId, uri, "Scan.pdf", 2L, "PARTIAL")
+        assertEquals(recent, store.recentDocuments(1_000L).single())
+        assertEquals(1L, store.visiblePageCount(workspaceId))
+        assertThrows(StoreInvariantViolation::class.java) {
+            store.recordVerifiedPublicExport(exportId, uri, "Other.pdf", 2L, "PARTIAL")
+        }
+
+        driver.execute(
+            null,
+            "UPDATE RecentDocument SET page_count = 1 WHERE export_artifact_id = '${exportId.value}'",
+            0,
+            null,
+        )
+        assertEquals(
+            listOf("RECENT_DOCUMENT_PAGE_COUNT_MISMATCH"),
+            store.artifactReferenceOwnerIntegrityFindings(100L)
+                .filter { it.refKind == "RECENT_DOCUMENT" }.map { it.code },
+        )
+        driver.execute(
+            null,
+            "UPDATE RecentDocument SET page_count = 2 WHERE export_artifact_id = '${exportId.value}'",
+            0,
+            null,
+        )
+
+        assertTrue(store.recentDocuments(Long.MAX_VALUE).isEmpty())
+        assertEquals(exportId.value, database.schemaQueries.publicExportPublicationById(exportId.value)
+            .executeAsOne().export_artifact_id)
+        assertTrue(store.artifactReferenceOwnerIntegrityFindings(100L).none {
+            it.refKind == "RECENT_DOCUMENT"
+        })
+    }
+
+    @Test
+    fun publicExportCannotBeRecordedBeforeLocalExportCommit() {
+        val exportId = ExportArtifactId.new()
+
+        assertThrows(StoreInvariantViolation::class.java) {
+            store.recordVerifiedPublicExport(
+                exportId, "content://media/external/document/scan", "Scan.pdf", 1L, "NONE",
+            )
+        }
+
+        assertEquals(null, database.schemaQueries.publicExportPublicationById(exportId.value).executeAsOneOrNull())
+        assertTrue(store.recentDocuments(1_000L).isEmpty())
     }
 
     @Test
@@ -3126,7 +3267,7 @@ class StateStoreTest {
         val provider: ProviderQualificationCommand,
     )
 
-    private fun committedExportPackageFixture(pageCount: Int = 1): CommittedExportPackageFixture {
+    private fun committedExportPackageFixture(pageCount: Int = 1, pdfOnly: Boolean = false): CommittedExportPackageFixture {
         require(pageCount > 0)
         val pages = (0 until pageCount).map {
             val source = durableArtifact()
@@ -3158,6 +3299,7 @@ class StateStoreTest {
                     provider.osVersion,
                     provider.destinationAccessClass,
                     listOf(ExternalExportPackageOutputCommand(pdf.artifactId, "Scan.pdf", 0L)) +
+                        if (pdfOnly) emptyList() else
                         jpgs.mapIndexed { index, jpg ->
                             ExternalExportPackageOutputCommand(
                                 jpg.artifactId,

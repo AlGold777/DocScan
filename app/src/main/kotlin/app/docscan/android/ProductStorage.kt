@@ -826,6 +826,11 @@ class ProductStorage(
 
     fun recentDocuments() = store.recentDocuments()
 
+    fun recordVerifiedPublicExport(
+        exportArtifactId: ExportArtifactId, documentUri: String, displayName: String,
+        pageCount: Long, ocrStatus: String,
+    ) = store.recordVerifiedPublicExport(exportArtifactId, documentUri, displayName, pageCount, ocrStatus)
+
     fun useDefaultSaveFolder() {
         store.destinationGrant()?.let { store.clearDestinationGrant(it.treeUri) }
     }
@@ -1015,7 +1020,7 @@ class ProductStorage(
             files += LocalExportFileCommand(output, "JPG_PAGE", snapshot.pages[index].imageVersionId)
         }
         val durableExternalPackage = externalPackage?.let { plan ->
-            require(plan.outputDisplayNames.size == files.size) {
+            require(plan.outputDisplayNames.size == files.size || plan.outputDisplayNames.size == 1) {
                 "External package names do not match the committed output count"
             }
             ExternalExportPackageCommand(
@@ -1026,7 +1031,7 @@ class ProductStorage(
                 plan.providerVersion,
                 plan.osVersion,
                 plan.destinationAccessClass,
-                files.mapIndexed { index, file ->
+                files.take(plan.outputDisplayNames.size).mapIndexed { index, file ->
                     ExternalExportPackageOutputCommand(file.file.artifactId, plan.outputDisplayNames[index], index.toLong())
                 },
                 plan.ocrStatus,

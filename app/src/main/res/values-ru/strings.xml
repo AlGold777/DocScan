@@ -206,7 +206,7 @@
     <string name="home_select_all">Выбрать</string>
     <string name="home_deselect_all">Снять</string>
     <string name="home_delete">Удалить</string>
-    <string name="default_save_folder_help">По умолчанию: /Docscan во внутренней памяти. В системном окне откройте Docscan и разрешите доступ. Если папки нет, сначала создайте её во внутренней памяти. Можно выбрать другую папку — приложение запомнит выбор.</string>
+    <string name="default_save_folder_help">По умолчанию: Download/DocScan. Выберите другую папку через системное окно — приложение запомнит выбор. Вернуться к стандартной папке можно в меню.</string>
     <string name="save_destination_checking">Проверяем папку сохранения…</string>
     <string name="save_destination_setup_hint">Нажмите Save PDF, чтобы настроить папку сохранения.</string>
     <string name="save_destination_check_failed">Не удалось проверить папку сохранения. Ваши страницы сохранены в приложении. Выберите папку во внутренней памяти и попробуйте ещё раз. Подробности: %1$s</string>

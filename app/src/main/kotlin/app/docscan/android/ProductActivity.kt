@@ -494,6 +494,7 @@ class ProductActivity : AppCompatActivity() {
         }
         destinationButton = Button(this).apply {
             text = getString(R.string.choose_save_folder)
+            contentDescription = getString(R.string.choose_save_folder)
             tag = "docscan-destination-button"
             isEnabled = false
             setOnClickListener {
@@ -1058,11 +1059,10 @@ class ProductActivity : AppCompatActivity() {
         }
         val data = result.data ?: return
         val continueSave = destinationSetupRunning.get() || pendingMainSave
-        if (continueSave) {
-            destinationSetupRunning.set(true)
-            destinationButton.isEnabled = false
-            status.text = getString(R.string.save_destination_checking)
-        }
+        destinationSetupRunning.set(true)
+        destinationButton.isEnabled = false
+        updateSaveButtonState(activeStorage)
+        status.text = getString(R.string.save_destination_checking)
         io.execute {
             try {
                 val manager = SafDestinationGrantManager(this)
@@ -1075,22 +1075,18 @@ class ProductActivity : AppCompatActivity() {
                 providerSaveReady = hasQualifiedProvider(activeStorage, saved.treeUri)
                 val oldGrantCleanupFailed = previous?.treeUri?.takeIf { it != uri }
                     ?.let { oldUri -> runCatching { manager.releasePersistedGrant(oldUri) }.isFailure } == true
-                if (continueSave) {
-                    checkSaveDestination(activeStorage, uri)
-                } else {
+                // A folder selected from the menu needs the same readiness probe as Save setup.
+                checkSaveDestination(activeStorage, uri)
+                if (!continueSave && providerSaveReady) {
                     runOnUiThread {
                         if (!isFinishing && !isDestroyed) status.text = getString(
                             if (oldGrantCleanupFailed) R.string.destination_saved_cleanup_failed else R.string.destination_saved,
                         )
                     }
-                    updateSaveButtonState(activeStorage)
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    if (continueSave) finishDestinationSetup(failure)
-                    else if (!isFinishing && !isDestroyed) status.text = getString(
-                        R.string.destination_failed, failure.message ?: failure.javaClass.simpleName,
-                    )
+                    finishDestinationSetup(failure)
                 }
             }
         }
@@ -1169,7 +1165,7 @@ class ProductActivity : AppCompatActivity() {
 
         // Header: /DocScan (no comments or explanations)
         val headerView = TextView(this).apply {
-            text = "/DocScan"
+            text = if (activeStorage.destinationGrant() == null) DocScanPublisher.getDocScanDisplayPath() else "Выбранная папка"
             textSize = 20f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
@@ -1438,7 +1434,7 @@ class ProductActivity : AppCompatActivity() {
         val activeStorage = storage ?: return
         if (!beginExternalWorkflow()) return
         saveButton.isEnabled = false
-        status.text = "Сохранение в /DocScan..."
+        status.text = "Сохранение…"
         io.execute {
             try {
                 val selectedCount = activeStorage.workspaceProjection().pages.count { it.selected }
@@ -1451,10 +1447,18 @@ class ProductActivity : AppCompatActivity() {
                     val pagesNeedingOcr = activeStorage.workspaceProjection().pages.filter { it.selected && it.recognizedText == null }
                     if (pagesNeedingOcr.isNotEmpty()) {
                         runOnUiThread { status.text = "Распознавание текста перед сохранением…" }
-                        for (page in pagesNeedingOcr) {
-                            scheduleOcr(activeStorage, page)
-                        }
-                        (application as DocScanApplication).awaitOcrForPages(pagesNeedingOcr.map { it.pageId })
+                        pagesNeedingOcr.forEach { scheduleOcr(activeStorage, it) }
+                    }
+                    // ReOCR may still be replacing an older, already available recognition.
+                    (application as DocScanApplication).awaitOcrForPages(
+                        activeStorage.workspaceProjection().pages.filter { it.selected }.map { it.pageId },
+                    )
+                    val selected = activeStorage.workspaceProjection().pages.filter { it.selected }
+                    check(selected.all { it.recognizedText != null }) {
+                        "Распознавание не завершено. Повторите OCR перед сохранением."
+                    }
+                    check(includeJpg || selected.all { !it.recognizedText.isNullOrBlank() }) {
+                        "На одной из страниц не найден текст. Включите JPG или повторите OCR."
                     }
                 }
 
@@ -1463,66 +1467,72 @@ class ProductActivity : AppCompatActivity() {
                     activeStorage.cancelUnstartedSaveManifest(frozen.saveManifestId)
                     error(getString(R.string.export_selection_changed))
                 }
-                val baseName = cleanPdfName.removeSuffix(".pdf")
                 val outputSet = activeStorage.composeFrozenSaveOutputSet(
                     frozen,
                     PdfOutputSettings(595.28f, 841.89f, 0.85f, 300, includeImage = includeJpg),
                     companionJpegQuality = 85,
                     includeOcr = includeOcr,
                 )
-                val jpegFiles = outputSet.pages.map { it.jpegFile }
-                val jpegNames = outputSet.pages.mapIndexed { idx, _ ->
-                    if (outputSet.pages.size == 1) "$baseName.jpg" else "${baseName}_page_${idx + 1}.jpg"
-                }
-
-                val publishedUri = DocScanPublisher.publish(
-                    context = this@ProductActivity,
-                    pdfSource = outputSet.pdfFile,
-                    pdfFileName = cleanPdfName,
-                    jpegSources = jpegFiles,
-                    jpegFileNames = jpegNames,
-                    saveJpg = includeJpg,
-                )
-
-                // Optional: mirror to SAF if configured, but never fail if SAF is absent or unqualified
-                runCatching {
-                    val grant = activeStorage.destinationGrant()
-                    if (grant != null) {
-                        val manager = SafDestinationGrantManager(this@ProductActivity)
-                        if (manager.revalidate(grant, activeStorage)) {
-                            val tuple = resolveProviderTuple(grant.treeUri)
-                            val qualification = SafRuntimeDestinationCheck(this@ProductActivity, activeStorage).findReady(grant.treeUri)
-                            if (qualification != null) {
-                                val namesInOrder = listOf(cleanPdfName) + jpegNames
-                                val externalPackage = ExternalExportPackagePlan(
-                                    destinationTreeUri = grant.treeUri,
-                                    commonBasename = baseName,
-                                    providerQualificationId = qualification.qualificationId,
-                                    adapterId = tuple.adapterId,
-                                    providerVersion = tuple.providerVersion,
-                                    osVersion = tuple.osVersion,
-                                    destinationAccessClass = tuple.accessClass,
-                                    outputDisplayNames = namesInOrder,
-                                    ocrStatus = if (includeOcr) "FULL" else "NONE",
-                                )
-                                val committedExportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet, externalPackage)
-                                val gateway = SafExportGateway(this@ProductActivity, activeStorage)
-                                runExternalExportPackage(activeStorage, gateway, committedExportId)
-                            }
-                        }
+                var savedName: String
+                var savedPath: String
+                var publishedUri: Uri
+                val grant = activeStorage.destinationGrant()
+                if (grant == null) {
+                    val exportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet)
+                    val published = DocScanPublisher.publish(
+                        context = this@ProductActivity,
+                        pdfSource = outputSet.pdfFile,
+                        pdfFileName = cleanPdfName,
+                        jpegSources = outputSet.pages.map { it.jpegFile },
+                        jpegFileNames = emptyList(),
+                        saveJpg = includeJpg,
+                    )
+                    activeStorage.recordVerifiedPublicExport(
+                        exportId, published.pdfUri.toString(), published.pdfDisplayName,
+                        frozen.pages.size.toLong(), if (includeOcr) "FULL" else "NONE",
+                    )
+                    savedName = published.pdfDisplayName
+                    savedPath = published.displayPath
+                    publishedUri = published.pdfUri
+                } else {
+                    check(SafDestinationGrantManager(this).revalidate(grant, activeStorage)) {
+                        "Нет доступа к выбранной папке. Выберите её повторно через меню ⋮."
                     }
+                    val qualification = SafRuntimeDestinationCheck(this, activeStorage).findReady(grant.treeUri)
+                        ?: error("Выбранная папка не готова. Выберите её повторно через меню ⋮.")
+                    val tuple = resolveProviderTuple(grant.treeUri)
+                    val gateway = SafExportGateway(this, activeStorage)
+                    val resolution = if (includeJpg) gateway.resolveOutputNames(grant.treeUri, cleanPdfName, frozen.pages.size)
+                        else gateway.resolveSinglePdfName(grant.treeUri, cleanPdfName)
+                    val names = when (resolution) {
+                        is OutputNameResolution.Resolved -> resolution.names
+                        is OutputNameResolution.Invalid -> error(resolution.reason)
+                        is OutputNameResolution.Collision -> error("Имя уже занято: ${resolution.conflictingNames}")
+                    }
+                    val plan = ExternalExportPackagePlan(
+                        destinationTreeUri = grant.treeUri,
+                        commonBasename = names.basename,
+                        providerQualificationId = qualification.qualificationId,
+                        adapterId = tuple.adapterId,
+                        providerVersion = tuple.providerVersion,
+                        osVersion = tuple.osVersion,
+                        destinationAccessClass = tuple.accessClass,
+                        outputDisplayNames = listOf(names.pdfName) + if (includeJpg) names.pageJpegNames else emptyList(),
+                        ocrStatus = if (includeOcr) "FULL" else "NONE",
+                    )
+                    val exportId = activeStorage.commitLocalExportOutputSet(frozen, outputSet, plan)
+                    runExternalExportPackage(activeStorage, gateway, exportId)
+                    publishedUri = Uri.parse(activeStorage.recentDocuments().first { it.exportArtifactId == exportId }.documentUri)
+                    savedName = names.pdfName
+                    savedPath = "выбранная папка"
                 }
-
-                runCatching {
-                    activeStorage.cleanupCommittedLocalOutputCandidate(frozen.saveManifestId)
-                }
-                runCatching {
-                    updateRecentDocuments(activeStorage)
-                }
-
+                activeStorage.cleanupCommittedLocalOutputCandidate(frozen.saveManifestId)
+                updateRecentDocuments(activeStorage)
                 runOnUiThread {
-                    status.text = "Сохранено: /DocScan/$cleanPdfName"
-                    showSavedSuccessDialog(cleanPdfName, publishedUri)
+                    if (!isFinishing && !isDestroyed) {
+                        status.text = "Сохранено: $savedPath/$savedName"
+                        showSavedSuccessDialog(savedName, publishedUri, savedPath)
+                    }
                 }
             } catch (failure: Exception) {
                 val message = "Ошибка сохранения: ${failure.message ?: failure.javaClass.simpleName}"
@@ -1548,10 +1558,10 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSavedSuccessDialog(pdfName: String, uri: Uri?) {
+    private fun showSavedSuccessDialog(pdfName: String, uri: Uri?, displayPath: String = DocScanPublisher.getDocScanDisplayPath()) {
         val builder = dialogHost.builder(this)
             .setTitle("Файл сохранён")
-            .setMessage("Файл успешно сохранён в папку /DocScan:\n$pdfName")
+            .setMessage("Файл успешно сохранён в папку $displayPath:\n$pdfName")
             .setPositiveButton("OK", null)
 
         if (uri != null) {
@@ -1701,7 +1711,7 @@ class ProductActivity : AppCompatActivity() {
         }
         val outputsById = activeStorage.committedExportOutputs(exportArtifactId).associateBy { it.artifactId }
         val expectedCount = exportPackage.outputs.size
-        check(expectedCount == outputsById.size) { "Package output mapping differs from committed ExportArtifact" }
+        check(expectedCount > 0 && exportPackage.outputs.all { it.outputArtifactId in outputsById }) { "Package output mapping differs from committed ExportArtifact" }
         var confirmed = 0
         exportPackage.outputs.forEach { packageOutput ->
             val output = outputsById[packageOutput.outputArtifactId]
@@ -4280,16 +4290,15 @@ class ProductActivity : AppCompatActivity() {
                 } catch (_: app.docscan.core.store.StoreConflict) {
                     // A Retake/Edit/Delete can make this disposable candidate stale.
                 } catch (failure: Exception) {
-                    runOnUiThread {
-                        if (!isFinishing) status.text = getString(R.string.ocr_failed, failure.message ?: "")
-                    }
+                    throw failure
                 }
-            } catch (_: java.util.concurrent.CancellationException) {
-                // Deleted/replaced Pages discard their in-flight native OCR result.
+            } catch (cancelled: java.util.concurrent.CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 runOnUiThread {
                     if (!isFinishing) status.text = getString(R.string.ocr_failed, failure.message ?: "")
                 }
+                throw failure
             }
         }
     }
