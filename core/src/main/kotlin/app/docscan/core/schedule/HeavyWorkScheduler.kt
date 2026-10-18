@@ -3,7 +3,7 @@ package app.docscan.core.schedule
 /** Runtime admission for non-interactive image work. Capture must not use this gate. */
 class HeavyWorkScheduler(
     private val maxConcurrentJobs: Int = DEFAULT_MAX_CONCURRENT_JOBS,
-    private val decodedByteBudget: Long = DEFAULT_DECODED_BYTE_BUDGET,
+    val decodedByteBudget: Long = DEFAULT_DECODED_BYTE_BUDGET,
 ) {
     private val lock = Any()
     private var runningJobs = 0

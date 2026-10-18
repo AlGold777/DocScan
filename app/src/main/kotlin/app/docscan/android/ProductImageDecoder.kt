@@ -28,6 +28,14 @@ object ProductImageDecoder {
         }
     }
 
+    /**
+     * Decodes a bounded lightweight copy (max 720px) specifically for corner detection,
+     * avoiding the allocation of full-size 12MP RGBA buffers.
+     */
+    fun decodeThumbnailForDetection(file: File, maxSide: Int = 720): Bitmap {
+        return decodePrecisely(file, maxPixels = maxSide.toLong() * maxSide.toLong(), maxSide = maxSide)
+    }
+
     fun estimateWorkingSetBytes(file: File, maxPixels: Long): Long {
         val bounds = bounds(file)
         val sample = sampleSize(bounds.outWidth, bounds.outHeight, maxPixels)

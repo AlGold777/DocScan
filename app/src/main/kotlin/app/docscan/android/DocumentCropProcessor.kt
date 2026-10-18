@@ -324,14 +324,14 @@ object DocumentCropProcessor {
             Imgproc.findContours(work, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE)
             val top = contours
                 .map { it to Imgproc.contourArea(it) }
-                .filter { it.second > frameArea * 0.07 && it.second < frameArea * 0.96 }
+                .filter { it.second > frameArea * 0.015 && it.second < frameArea * 0.99 }
                 .sortedByDescending { it.second }
-                .take(10)
+                .take(15)
 
             for ((cnt, _) in top) {
                 val hull = hullOf(cnt) ?: continue
                 val peri = Imgproc.arcLength(hull, true)
-                if (peri < min(gray.cols(), gray.rows()) * 0.8) {
+                if (peri < min(gray.cols(), gray.rows()) * 0.45) {
                     hull.release()
                     continue
                 }
@@ -418,6 +418,11 @@ object DocumentCropProcessor {
     }
 
     // ---------------- Скоринг ----------------
+    enum class DocumentCategory {
+        PAGE,
+        RECEIPT,
+    }
+
     private fun scoreQuad(
         p: List<Point>,
         gray: Mat,
@@ -430,7 +435,7 @@ object DocumentCropProcessor {
         val h = gray.rows()
         val area = polygonArea(p)
         val areaRatio = area / frameArea
-        if (areaRatio < 0.07 || areaRatio > 0.96) return null
+        if (areaRatio < 0.015 || areaRatio > 0.99) return null
 
         val sides = doubleArrayOf(
             dist(p[0], p[1]),
@@ -438,44 +443,90 @@ object DocumentCropProcessor {
             dist(p[2], p[3]),
             dist(p[3], p[0]),
         )
-        if (sides.any { it < min(w, h) * 0.06 }) return null
+        // Minimum short side must be at least 20px on the detector copy
+        if (sides.any { it < 20.0 }) return null
 
         val angles = DoubleArray(4) { cornerAngle(p[(it + 3) % 4], p[it], p[(it + 1) % 4]) }
-        // Предел 45..135 отсекает перспективные "стрелы"
-        if (angles.any { it < 45.0 || it > 135.0 }) return null
+        // Cutoff angles for perspective sanity
+        if (angles.any { it < 35.0 || it > 145.0 }) return null
 
         val width = (sides[0] + sides[2]) / 2.0
         val height = (sides[1] + sides[3]) / 2.0
-        val aspect = max(width, height) / max(1.0, min(width, height))
-        if (aspect > 3.3) return null
+        val maxSide = max(width, height)
+        val minSide = max(1.0, min(width, height))
+        val aspect = maxSide / minSide
+        if (aspect > 12.0) return null
 
-        // Параллельность проверяем и направлением, и длинами противоположных сторон
+        val category = if (aspect <= 2.8) DocumentCategory.PAGE else DocumentCategory.RECEIPT
+
         val parDir = (parallelDir(p[0], p[1], p[3], p[2]) + parallelDir(p[0], p[3], p[1], p[2])) / 2.0
-        val parLen = (min(sides[0], sides[2]) / max(sides[0], sides[2]) + min(sides[1], sides[3]) / max(sides[1], sides[3])) / 2.0
-        if (parLen < 0.50) return null
+        val parLenOpp1 = min(sides[0], sides[2]) / max(sides[0], sides[2])
+        val parLenOpp2 = min(sides[1], sides[3]) / max(sides[1], sides[3])
+        val parLen = (parLenOpp1 + parLenOpp2) / 2.0
 
-        // ---- Взвешенный score ----
-        val areaScore = ((areaRatio - 0.07) / 0.65).coerceIn(0.0, 1.0)
+        if (category == DocumentCategory.PAGE) {
+            if (parLen < 0.50) return null
+            if (areaRatio < 0.05) return null
+        } else {
+            val longOppRatio = if (width > height) parLenOpp1 else parLenOpp2
+            if (longOppRatio < 0.65) return null
+            if (maxSide < max(w, h) * 0.35) return null
+        }
+
+        // Weighted scores
+        val areaScore = if (category == DocumentCategory.PAGE) {
+            when {
+                areaRatio < 0.15 -> (areaRatio - 0.05) / 0.10
+                areaRatio <= 0.88 -> 1.0
+                else -> 1.0 - (areaRatio - 0.88) * 1.5
+            }.coerceIn(0.0, 1.0)
+        } else {
+            (areaRatio / 0.15).coerceIn(0.5, 1.0)
+        }
+
         val angleScore = exp(-angles.map { abs(it - 90.0) }.average() / 24.0)
         val parallelScore = (parDir + parLen) / 2.0
-        val aspectScore = when {
-            aspect <= 1.8 -> 1.0
-            aspect <= 2.4 -> 1.0 - (aspect - 1.8) / 1.2
-            else -> (0.5 - (aspect - 2.4) / 1.8).coerceAtLeast(0.0)
-        }
-        val edgeSupport = edgeSupportScore(p, edgeMap) // есть ли реальные края вдоль сторон
-        val contrast = ringContrastScore(p, gray) // бумага отличается от фона по кольцу
-        val centerScore = centerScore(p, w, h)
-        val borderPenalty = borderPenalty(p, w, h) // касание краёв = признак стола
 
-        return 0.20 * areaScore +
-                0.22 * angleScore +
-                0.14 * parallelScore +
-                0.12 * aspectScore +
-                0.12 * edgeSupport +
-                0.10 * contrast +
-                0.10 * centerScore -
-                0.20 * borderPenalty
+        val aspectScore = if (category == DocumentCategory.PAGE) {
+            when {
+                aspect <= 1.8 -> 1.0
+                aspect <= 2.4 -> 1.0 - (aspect - 1.8) / 1.2
+                else -> (0.5 - (aspect - 2.4) / 0.8).coerceAtLeast(0.1)
+            }
+        } else {
+            when {
+                aspect <= 8.0 -> 0.90
+                aspect <= 12.0 -> 0.90 - (aspect - 8.0) * 0.05
+                else -> 0.5
+            }
+        }
+
+        val edgeSupport = edgeSupportScore(p, edgeMap)
+        val contrast = ringContrastScore(p, gray)
+        val centerScore = centerScore(p, w, h)
+        val borderPenalty = borderPenalty(p, w, h)
+
+        val baseScore = if (category == DocumentCategory.PAGE) {
+            0.15 * areaScore +
+            0.22 * angleScore +
+            0.14 * parallelScore +
+            0.12 * aspectScore +
+            0.15 * edgeSupport +
+            0.12 * contrast +
+            0.10 * centerScore -
+            0.20 * borderPenalty
+        } else {
+            0.10 * areaScore +
+            0.18 * angleScore +
+            0.20 * parallelScore +
+            0.14 * aspectScore +
+            0.20 * edgeSupport +
+            0.12 * contrast +
+            0.06 * centerScore -
+            0.15 * borderPenalty
+        }
+
+        return baseScore
     }
 
     // --- Геометрия ---
@@ -685,14 +736,33 @@ object DocumentCropProcessor {
             val lPrev = lines[(i + 3) % 4]
             val lCur = lines[i]
             val pt = intersect(lPrev, lCur)
-            if (pt == null || dist(pt, pts[i]) > max(20.0, 0.15 * dist(pts[i], pts[(i + 1) % 4]))) {
+            if (pt == null || !pt.x.isFinite() || !pt.y.isFinite() ||
+                dist(pt, pts[i]) > max(20.0, 0.15 * dist(pts[i], pts[(i + 1) % 4]))) {
                 return pts
             }
             refined.add(pt)
         }
 
         if (!isConvex(refined)) return pts
-        return orderCorners(refined.toTypedArray()) ?: pts
+        val ordered = orderCorners(refined.toTypedArray()) ?: return pts
+
+        // Strict post-fitLine geometric sanity checks:
+        if (ordered.any { !it.x.isFinite() || !it.y.isFinite() }) return pts
+
+        for (i in 0 until 4) {
+            if (dist(ordered[i], ordered[(i + 1) % 4]) < 15.0) return pts
+        }
+
+        val origArea = polygonArea(pts)
+        val refArea = polygonArea(ordered)
+        if (origArea > 0 && (refArea < 0.70 * origArea || refArea > 1.30 * origArea)) return pts
+
+        val diag = hypot(pts[2].x - pts[0].x, pts[2].y - pts[0].y)
+        for (i in 0 until 4) {
+            if (dist(ordered[i], pts[i]) > max(20.0, 0.12 * diag)) return pts
+        }
+
+        return ordered
     }
 
     private fun houghLinesFallback(edgeMask: Mat, gray: Mat, frameArea: Double): Candidate? {
