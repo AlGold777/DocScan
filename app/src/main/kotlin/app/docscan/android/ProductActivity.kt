@@ -4236,7 +4236,11 @@ class ProductActivity : AppCompatActivity() {
         val app = application as DocScanApplication
         val prefs = getSharedPreferences("docscan_app_preferences", Context.MODE_PRIVATE)
         val mode = langMode ?: readLangMode(prefs)
-        app.enqueueOcr(page.pageId) { ocrAdapter, isCancelled ->
+        app.enqueueOcr(
+            page.pageId,
+            replaceExisting = force,
+            requestKey = "${page.imageVersionId.value}:${page.contentRevision}:${mode.name}",
+        ) { ocrAdapter, isCancelled ->
             try {
                 if (isCancelled()) return@enqueueOcr
                 val imageFile = activeStorage.artifactPath(page.artifactRelativePath).toFile()
@@ -4293,6 +4297,7 @@ class ProductActivity : AppCompatActivity() {
     private fun importSelectedDocuments(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val activeStorage = storage ?: return
+        val importRequestId = currentImportRequestId ?: UUID.randomUUID().toString()
         status.text = getString(R.string.importing_documents)
         importExecutor.execute {
             val importedPageIds = mutableSetOf<PageId>()
@@ -4318,7 +4323,7 @@ class ProductActivity : AppCompatActivity() {
                                 activeStorage.importPdf(
                                     input,
                                     displayName,
-                                    stablePdfImportSessionId(currentImportRequestId ?: UUID.randomUUID().toString(), index),
+                                    stablePdfImportSessionId(importRequestId, index),
                                     scheduler,
                                 ) { completed, total ->
                                     runOnUiThread {
@@ -4338,7 +4343,7 @@ class ProductActivity : AppCompatActivity() {
                                 { contentResolver.openInputStream(uri) },
                                 mimeType,
                                 displayName,
-                                stableImageImportSessionId(currentImportRequestId ?: UUID.randomUUID().toString(), index),
+                                stableImageImportSessionId(importRequestId, index),
                             )
                             importedPageIds += captured.pageId
                         }
