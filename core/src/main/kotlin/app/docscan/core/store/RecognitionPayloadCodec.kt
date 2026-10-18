@@ -1,5 +1,16 @@
 package app.docscan.core.store
 
+import app.docscan.core.ocr.Bx
+import app.docscan.core.ocr.OcrBlock as CoreOcrBlock
+import app.docscan.core.ocr.OcrLine as CoreOcrLine
+import app.docscan.core.ocr.OcrPara as CoreOcrPara
+import app.docscan.core.ocr.OcrWord as CoreOcrWord
+import app.docscan.core.ocr.OcrLayout
+import app.docscan.core.ocr.toOcrLayout
+import app.docscan.core.ocr.toPlainText
+import app.docscan.core.ocr.toRecognitionLayout
+import org.json.JSONArray
+import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
@@ -7,96 +18,73 @@ data class DecodedRecognitionPayload(
     val text: String,
     val geometry: RecognitionGeometry?,
     val layout: RecognitionLayout? = null,
+    val ocrLayout: OcrLayout? = null,
 )
 
 /** Backward-compatible envelope stored in the existing Recognition.payload column. */
 object RecognitionPayloadCodec {
     private const val MAGIC_V1 = "DOCSCAN-OCR-GEOMETRY/1"
     private const val MAGIC_V2 = "DOCSCAN-OCR-LAYOUT/2"
+    private const val HEAD2 = "DOCSCAN-OCR-LAYOUT/2\n"
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
-    fun encode(text: String, layout: RecognitionLayout): String {
-        validate(layout)
-        val lines = mutableListOf(
-            MAGIC_V2,
-            text.toByteArray(StandardCharsets.UTF_8).encodeBase64(),
-            listOf(
-                "H",
-                layout.sourceWidthPx,
-                layout.sourceHeightPx,
-                layout.formatVersion,
-                layout.blocks.size,
-                layout.languageHints.joinToString(","),
-            ).joinToString("|"),
-        )
-        val quality = layout.quality
-        if (quality != null) {
-            lines += listOf(
-                "Q",
-                quality.meanConfidence,
-                quality.lowConfidenceWordCount,
-                if (quality.structureAvailable) 1 else 0,
-                quality.language.orEmpty(),
-                quality.preprocessingProfile,
-                quality.engineVersion,
-            ).joinToString("|")
-        }
-        layout.blocks.forEach { block ->
-            lines += listOf(
-                "B",
-                block.id.toByteArray(StandardCharsets.UTF_8).encodeBase64(),
-                block.type.name,
-                block.box.left,
-                block.box.top,
-                block.box.right,
-                block.box.bottom,
-                block.readingOrder,
-                block.paragraphs.size,
-            ).joinToString("|")
-            block.paragraphs.forEach { paragraph ->
-                lines += listOf(
-                    "P",
-                    paragraph.box.left,
-                    paragraph.box.top,
-                    paragraph.box.right,
-                    paragraph.box.bottom,
-                    paragraph.lines.size,
-                ).joinToString("|")
-                paragraph.lines.forEach { line ->
-                    val hasBaseline = if (line.baseline != null) 1 else 0
-                    val slope = line.baseline?.slope ?: 0f
-                    val intercept = line.baseline?.intercept ?: 0f
-                    val hasXHeight = if (line.xHeight != null) 1 else 0
-                    val xHeight = line.xHeight ?: 0f
-                    lines += listOf(
-                        "L",
-                        line.box.left,
-                        line.box.top,
-                        line.box.right,
-                        line.box.bottom,
-                        hasBaseline,
-                        slope,
-                        intercept,
-                        hasXHeight,
-                        xHeight,
-                        line.words.size,
-                    ).joinToString("|")
-                    line.words.forEach { word ->
-                        lines += listOf(
-                            "W",
-                            word.text.toByteArray(StandardCharsets.UTF_8).encodeBase64(),
-                            word.box.left,
-                            word.box.top,
-                            word.box.right,
-                            word.box.bottom,
-                            word.confidence,
-                        ).joinToString("|")
-                    }
+    private fun bx(b: Bx) = JSONArray().put(b.l).put(b.t).put(b.r).put(b.b)
+    private fun unbx(a: JSONArray) = Bx(a.getInt(0), a.getInt(1), a.getInt(2), a.getInt(3))
+
+    fun encodeLayout(l: OcrLayout): String {
+        val blocks = JSONArray()
+        for (b in l.blocks) {
+            val paras = JSONArray()
+            for (p in b.paras) {
+                val lines = JSONArray()
+                for (ln in p.lines) {
+                    val ws = JSONArray()
+                    for (w in ln.words) ws.put(JSONArray()
+                        .put(w.text).put(w.box.l).put(w.box.t).put(w.box.r).put(w.box.b).put(w.conf.toDouble()))
+                    lines.put(JSONObject().put("b", bx(ln.box)).put("w", ws))
                 }
+                paras.put(JSONObject().put("b", bx(p.box)).put("l", lines))
             }
+            val blockObj = JSONObject().put("b", bx(b.box)).put("p", paras)
+            if (b.type != null) blockObj.put("t", b.type)
+            if (b.id != null) blockObj.put("id", b.id)
+            blocks.put(blockObj)
         }
-        return lines.joinToString("\n")
+        val obj = JSONObject().put("w", l.sourceW).put("h", l.sourceH).put("blocks", blocks)
+        obj.put("lang", l.lang ?: "")
+        return HEAD2 + obj.toString()
+    }
+
+    fun decodeLayout(payload: String): OcrLayout {
+        val o = JSONObject(payload.removePrefix(HEAD2))
+        val blocks = (0 until o.getJSONArray("blocks").length()).map { i ->
+            val b = o.getJSONArray("blocks").getJSONObject(i)
+            val pa = b.getJSONArray("p")
+            val bType = b.optString("t", "").ifEmpty { null }
+            val bId = b.optString("id", "").ifEmpty { null }
+            CoreOcrBlock(
+                box = unbx(b.getJSONArray("b")),
+                paras = (0 until pa.length()).map { j ->
+                    val p = pa.getJSONObject(j); val la = p.getJSONArray("l")
+                    CoreOcrPara(unbx(p.getJSONArray("b")), (0 until la.length()).map { k ->
+                        val l = la.getJSONObject(k); val wa = l.getJSONArray("w")
+                        CoreOcrLine(unbx(l.getJSONArray("b")), (0 until wa.length()).map { m ->
+                            val w = wa.getJSONArray(m)
+                            CoreOcrWord(w.getString(0), Bx(w.getInt(1), w.getInt(2), w.getInt(3), w.getInt(4)), w.getDouble(5).toFloat())
+                        })
+                    })
+                },
+                type = bType,
+                id = bId,
+            )
+        }
+        val lang = o.optString("lang", "").ifEmpty { null }
+        return OcrLayout(o.getInt("w"), o.getInt("h"), blocks, lang)
+    }
+
+    fun encode(text: String, layout: RecognitionLayout): String {
+        return encodeLayout(layout.toOcrLayout())
     }
 
     fun encode(text: String, geometry: RecognitionGeometry): String {
@@ -128,9 +116,23 @@ object RecognitionPayloadCodec {
     /** Decodes V2 layout, V1 geometry, or plain legacy UTF-8 text. */
     fun decode(payload: String): DecodedRecognitionPayload {
         return when {
-            payload.startsWith("$MAGIC_V2\n") -> decodeV2(payload)
+            payload.startsWith(HEAD2) -> {
+                val body = payload.removePrefix(HEAD2).trimStart()
+                if (body.startsWith("{")) {
+                    val ocrLayout = decodeLayout(payload)
+                    val recLayout = ocrLayout.toRecognitionLayout()
+                    DecodedRecognitionPayload(
+                        text = ocrLayout.toPlainText(),
+                        geometry = recLayout.toLegacyGeometry(),
+                        layout = recLayout,
+                        ocrLayout = ocrLayout,
+                    )
+                } else {
+                    decodeV2(payload)
+                }
+            }
             payload.startsWith("$MAGIC_V1\n") -> decodeV1(payload)
-            else -> DecodedRecognitionPayload(payload, null, null)
+            else -> DecodedRecognitionPayload(payload, null, null, null)
         }
     }
 
@@ -432,7 +434,7 @@ object RecognitionPayloadCodec {
                 formatVersion = 2,
             )
         }
-        return DecodedRecognitionPayload(text, geometry, synthesizedLayout)
+        return DecodedRecognitionPayload(text, geometry, null)
     }
 
     private fun validate(layout: RecognitionLayout) {

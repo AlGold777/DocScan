@@ -459,7 +459,7 @@ class WorkspaceThumbnailLoaderInstrumentedTest {
             }
 
             scenario.onActivity { activity ->
-                activity.window.decorView.findViewWithTag<View>("docscan-menu-button").performClick()
+                activity.showWorkspaceMenu()
             }
             await("Opening Menu binds only visible Page rows") {
                 var ready = false
@@ -493,7 +493,7 @@ class WorkspaceThumbnailLoaderInstrumentedTest {
             await("Menu dismisses and Home remains usable") {
                 var dismissed = false
                 scenario.onActivity { activity ->
-                    dismissed = activity.window.decorView.findViewWithTag<View>("docscan-menu-button")?.isLaidOut == true &&
+                    dismissed = activity.window.decorView.findViewWithTag<View>("docscan-title")?.isLaidOut == true &&
                         activity.window.decorView.findViewWithTag<RecyclerView>("docscan-home-thumbnail-scroll")?.adapter?.itemCount == 101 &&
                         activity.workspacePagesListForTest == null &&
                         activity.workspaceThumbnailLoader.pendingCount == 0 &&
@@ -511,7 +511,7 @@ class WorkspaceThumbnailLoaderInstrumentedTest {
             }
 
             scenario.onActivity { activity ->
-                activity.window.decorView.findViewWithTag<View>("docscan-menu-button").performClick()
+                activity.showWorkspaceMenu()
             }
             await("Reopening Menu creates a fresh lazy list for the same 101 Pages") {
                 var reopened = false

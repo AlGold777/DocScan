@@ -151,24 +151,4 @@ fun normalizeBox(
     return NormalizedBox(left, top, right, bottom)
 }
 
-fun sanitizeOcrText(raw: String): String {
-    if (raw.isEmpty()) return ""
-    val sb = StringBuilder(raw.length)
-    for (cp in raw.codePoints()) {
-        when {
-            cp == 0x200B || cp == 0xFEFF || cp == 0x00AD -> {
-                // Strip zero-width space, BOM, soft hyphen
-            }
-            cp < 0x20 && cp != '\t'.code && cp != '\n'.code && cp != '\r'.code -> {
-                // Strip unprintable control characters
-            }
-            cp in 0x7F..0x9F -> {
-                // Strip C1 control codes
-            }
-            else -> {
-                sb.append(Character.toChars(cp))
-            }
-        }
-    }
-    return sb.toString().trim()
-}
+fun sanitizeOcrText(raw: String): String = app.docscan.core.ocr.sanitizeOcrText(raw)

@@ -103,19 +103,27 @@
     <string name="edit_rotation">Изменить поворот</string>
     <string name="edit_image">Редактировать изображение</string>
     <string name="edit_crop_four_points">Ручная обрезка по 4 точкам</string>
-    <string name="manual_crop_title">Задайте углы страницы</string>
+    <string name="manual_crop_title">Задайте границы страницы</string>
     <string name="manual_crop_preparing">Подготовка предпросмотра…</string>
-    <string name="manual_crop_instruction">Перетащите четыре маркера на углы страницы.</string>
+    <string name="manual_crop_instruction">Перетащите угловые маркеры или границы для настройки области страницы.</string>
     <string name="manual_crop_apply">Применить обрезку</string>
-    <string name="manual_crop_view_description">Перетащите четыре фиолетовых маркера, чтобы задать границы страницы.</string>
+    <string name="manual_crop_view_description">Перетащите угловые маркеры или границы, чтобы задать область страницы.</string>
     <string name="manual_crop_corner_top_left">Левый верхний угол обрезки</string>
     <string name="manual_crop_corner_top_right">Правый верхний угол обрезки</string>
     <string name="manual_crop_corner_bottom_right">Правый нижний угол обрезки</string>
     <string name="manual_crop_corner_bottom_left">Левый нижний угол обрезки</string>
+    <string name="manual_crop_edge_top">Верхняя граница обрезки</string>
+    <string name="manual_crop_edge_right">Правая граница обрезки</string>
+    <string name="manual_crop_edge_bottom">Нижняя граница обрезки</string>
+    <string name="manual_crop_edge_left">Левая граница обрезки</string>
     <string name="manual_crop_move_left">Сместить угол влево</string>
     <string name="manual_crop_move_right">Сместить угол вправо</string>
     <string name="manual_crop_move_up">Сместить угол вверх</string>
     <string name="manual_crop_move_down">Сместить угол вниз</string>
+    <string name="manual_crop_move_edge_left">Сместить границу влево</string>
+    <string name="manual_crop_move_edge_right">Сместить границу вправо</string>
+    <string name="manual_crop_move_edge_up">Сместить границу вверх</string>
+    <string name="manual_crop_move_edge_down">Сместить границу вниз</string>
     <string name="edit_image_title">Редактировать страницу</string>
     <string name="edit_brightness">Яркость (−100…+100)</string>
     <string name="edit_contrast" formatted="false">Контраст (0–200%; 100% — исходный)</string>
@@ -202,4 +210,16 @@
     <string name="save_destination_checking">Проверяем папку сохранения…</string>
     <string name="save_destination_setup_hint">Нажмите Save PDF, чтобы настроить папку сохранения.</string>
     <string name="save_destination_check_failed">Не удалось проверить папку сохранения. Ваши страницы сохранены в приложении. Выберите папку во внутренней памяти и попробуйте ещё раз. Подробности: %1$s</string>
+    <string name="prefix_template">template</string>
+    <string name="prefix_edit_title">Префиксы</string>
+    <string name="prefix_new_hint">Новый префикс…</string>
+    <string name="prefix_add">Добавить</string>
+    <string name="prefix_save">Save</string>
+    <string name="prefix_cancel">Cancel</string>
+    <string name="ocr_lang_setting_title">Язык распознавания</string>
+    <string name="ocr_lang_auto">Авто</string>
+    <string name="ocr_lang_ru_en">Русский + English</string>
+    <string name="ocr_lang_es_en">Español + English</string>
+    <string name="ocr_lang_ru_es_en">Русский + Español + English</string>
+    <string name="reocr_with_lang">Распознать заново с языком…</string>
 </resources>

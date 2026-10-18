@@ -14,7 +14,7 @@ internal fun nativeWorkspaceRoot(activity: ProductActivity): View {
 
 internal fun openWorkspaceMenuForTest(scenario: ActivityScenario<ProductActivity>) {
     scenario.onActivity { activity ->
-        if (nativeWorkspaceRoot(activity) === activity.window.decorView) activity.window.decorView.findViewWithTag<View>("docscan-menu-button").performClick()
+        if (nativeWorkspaceRoot(activity) === activity.window.decorView) activity.showWorkspaceMenu()
     }
     val end = SystemClock.uptimeMillis() + 10000
     while (true) {

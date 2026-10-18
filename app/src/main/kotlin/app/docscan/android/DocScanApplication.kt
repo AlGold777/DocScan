@@ -55,6 +55,19 @@ class DocScanApplication : Application() {
         }
     }
 
+    fun awaitOcrForPages(pageIds: Collection<PageId>, timeoutMs: Long = 60_000L) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        for (pageId in pageIds) {
+            val remaining = maxOf(100L, deadline - System.currentTimeMillis())
+            val job = ocrJobs[pageId]
+            if (job != null) {
+                try {
+                    job.future?.get(remaining, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     private val defaultProductStorage: ProductStorage by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ProductStorage(this)
     }

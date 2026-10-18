@@ -32,7 +32,7 @@ object OutputBasenameSuggester {
                 || category == Character.PARAGRAPH_SEPARATOR.toInt()
             }
             .replace(Regex("\\s+"), " ")
-            .trim(' ', '.')
+            .trim(' ', '.', '¿', '¡')
         return if (safe.any(Character::isLetterOrDigit)) safe else ""
     }
 

@@ -17,6 +17,16 @@ class OutputNameResolverTest {
     }
 
     @Test
+    fun suggestsSpanishLettersWithoutForbiddenChars() {
+        val result = OutputBasenameSuggester.suggest(
+            listOf("¿Qué año, señor?"),
+            LocalDateTime.of(2026, 10, 18, 12, 0),
+        )
+
+        assertEquals("Qué año, señor 2026-10-18 12-00", result)
+    }
+
+    @Test
     fun fallsBackToScanWhenNoSafeOcrLineExistsAndNeverUsesPathSeparators() {
         val result = OutputBasenameSuggester.suggest(
             listOf("///", "\\\\", " ### ", "   "),

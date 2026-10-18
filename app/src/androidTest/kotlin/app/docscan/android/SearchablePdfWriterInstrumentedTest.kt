@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.docscan.core.ocr.toRecognitionLayout
 import app.docscan.core.store.OCR_WORD_COORDINATE_SPACE
 import app.docscan.core.store.RecognitionGeometry
 import app.docscan.core.store.RecognizedWord
@@ -159,5 +160,102 @@ class SearchablePdfWriterInstrumentedTest {
         assertTrue("$word ends inside/after its transformed OCR region: $actualRight !> $expectedLeft", actualRight > expectedLeft)
         assertTrue("$word glyph region should overlap transformed OCR top: $actualBottom !> $expectedTop", actualBottom > expectedTop)
         assertTrue("$word glyph region should overlap transformed OCR bottom: $actualTop !< $expectedBottom", actualTop < expectedBottom)
+    }
+
+    @Test
+    fun exportWithMissingGlyphAndZeroWidthWordDoesNotCrash() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.WHITE)
+        val wordWithoutGlyph = app.docscan.core.ocr.OcrWord("∑", app.docscan.core.ocr.Bx(10, 10, 50, 40), 90f)
+        val zeroWidthWord = app.docscan.core.ocr.OcrWord("Zero", app.docscan.core.ocr.Bx(50, 10, 50, 40), 90f)
+        val normalWord = app.docscan.core.ocr.OcrWord("Норма", app.docscan.core.ocr.Bx(60, 10, 120, 40), 95f)
+        val line = app.docscan.core.ocr.OcrLine(app.docscan.core.ocr.Bx(10, 10, 120, 40), listOf(wordWithoutGlyph, zeroWidthWord, normalWord))
+        val para = app.docscan.core.ocr.OcrPara(app.docscan.core.ocr.Bx(10, 10, 120, 40), listOf(line))
+        val block = app.docscan.core.ocr.OcrBlock(app.docscan.core.ocr.Bx(10, 10, 120, 40), listOf(para))
+        val ocrLayout = app.docscan.core.ocr.OcrLayout(400, 400, listOf(block))
+        val layout = ocrLayout.toRecognitionLayout()
+
+        val output = File(context.cacheDir, "test-missing-glyph-${System.nanoTime()}.pdf")
+        try {
+            val result = SearchablePdfWriter(context).write(
+                output,
+                listOf(PdfInputPage({ bitmap.copy(Bitmap.Config.ARGB_8888, false) }, null, layout)),
+                PdfOutputSettings(595f, 842f, 0.85f, 300),
+            )
+            assertEquals(1, result.pageCount)
+            assertTrue(result.fileSizeBytes > 0L)
+            assertTrue(output.exists())
+        } finally {
+            bitmap.recycle()
+            output.delete()
+        }
+    }
+
+    @Test
+    fun safeTextPreservesAllSpanishCharactersExactly() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val spanishText = "¿Qué año, señor? Ñandú ÁÉÍÓÚ ü ¡Hola!"
+        PDDocument().use { doc ->
+            val font = com.tom_roush.pdfbox.pdmodel.font.PDType0Font.load(
+                doc,
+                context.assets.open("fonts/NotoSans-Regular.ttf"),
+                true,
+            )
+            val cache = HashMap<Int, Boolean>()
+            val safe = with(SearchablePdfWriter) { font.safeText(spanishText, cache) }
+            assertEquals(spanishText, safe)
+        }
+    }
+
+    @Test
+    fun pdfBoxWritesVisibleTextWithoutImageWhenIncludeImageIsFalse() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = Bitmap.createBitmap(600, 800, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.WHITE)
+        val geometry = RecognitionGeometry(
+            600L, 800L, OCR_WORD_COORDINATE_SPACE,
+            listOf(
+                RecognizedWord("VisibleOCR", 100L, 300L, 350L, 350L, 99.0),
+            ),
+        )
+        val output = File(context.cacheDir, "visible-ocr-${System.nanoTime()}.pdf")
+        try {
+            val result = SearchablePdfWriter(context).write(
+                output,
+                listOf(PdfInputPage({ bitmap.copy(Bitmap.Config.ARGB_8888, false) }, geometry)),
+                PdfOutputSettings(595f, 842f, 0.85f, 300, includeImage = false),
+            )
+            assertEquals(1, result.pageCount)
+            assertTrue(result.fileSizeBytes > 0L)
+
+            PDDocument.load(output).use { document ->
+                assertEquals(1, document.numberOfPages)
+                val page = document.getPage(0)
+                val images = page.resources.xObjectNames.mapNotNull { name ->
+                    page.resources.getXObject(name) as? com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
+                }
+                assertTrue("Page must not contain image XObjects when includeImage is false", images.isEmpty())
+
+                val extracted = PDFTextStripper().getText(document)
+                assertTrue("Extracted text must contain VisibleOCR", extracted.contains("VisibleOCR"))
+
+                val rendered = PDFRenderer(document).renderImage(0)
+                try {
+                    var darkPixels = 0
+                    for (y in 0 until rendered.height) {
+                        for (x in 0 until rendered.width) {
+                            if (Color.red(rendered.getPixel(x, y)) < 128) darkPixels++
+                        }
+                    }
+                    assertTrue("Visible text mode must render visible dark glyph pixels on the page", darkPixels > 0)
+                } finally {
+                    rendered.recycle()
+                }
+            }
+        } finally {
+            bitmap.recycle()
+            output.delete()
+        }
     }
 }

@@ -87,15 +87,16 @@ internal class InsetDialogHost(private val background: View) {
         blur(background, true)
         val railHeight = rail?.layoutParams?.height?.takeIf { it > 0 } ?: dp(172)
         val region = FrameLayout(dialog.context)
+        val hostBottomMargin = if (rail != null) railHeight + dp(20) else dp(24)
         host.addView(region, FrameLayout.LayoutParams(-1, -1).apply {
-            leftMargin = dp(20); rightMargin = dp(20); topMargin = dp(24); bottomMargin = maxOf(dp(192), railHeight + dp(20))
+            leftMargin = dp(20); rightMargin = dp(20); topMargin = dp(24); bottomMargin = hostBottomMargin
         })
         val value = android.util.TypedValue()
         dialog.context.theme.resolveAttribute(android.R.attr.colorBackground, value, true)
         panel.background = GradientDrawable().apply { setColor(value.data); cornerRadius = dp(20).toFloat() }
         panel.clipToOutline = true
         panel.tag = PANEL_TAG
-        region.addView(panel, FrameLayout.LayoutParams(-1, if (rail != null) -1 else -2, Gravity.CENTER))
+        region.addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
         if (rail != null) {
             rail.background = ColorDrawable(0xff17191d.toInt())
             host.addView(rail, FrameLayout.LayoutParams(-1, railHeight, Gravity.BOTTOM))

@@ -107,19 +107,27 @@
     <string name="edit_rotation">Edit rotation</string>
     <string name="edit_image">Edit image</string>
     <string name="edit_crop_four_points">Manual 4-point crop</string>
-    <string name="manual_crop_title">Set page corners</string>
+    <string name="manual_crop_title">Set page corners and edges</string>
     <string name="manual_crop_preparing">Preparing crop preview…</string>
-    <string name="manual_crop_instruction">Drag the four handles to the page corners.</string>
+    <string name="manual_crop_instruction">Drag the corner handles or edges to adjust the page boundary.</string>
     <string name="manual_crop_apply">Use crop</string>
-    <string name="manual_crop_view_description">Drag the four purple handles to define the page boundary.</string>
+    <string name="manual_crop_view_description">Drag the corner handles or edges to define the page boundary.</string>
     <string name="manual_crop_corner_top_left">Top-left crop corner</string>
     <string name="manual_crop_corner_top_right">Top-right crop corner</string>
     <string name="manual_crop_corner_bottom_right">Bottom-right crop corner</string>
     <string name="manual_crop_corner_bottom_left">Bottom-left crop corner</string>
+    <string name="manual_crop_edge_top">Top crop edge</string>
+    <string name="manual_crop_edge_right">Right crop edge</string>
+    <string name="manual_crop_edge_bottom">Bottom crop edge</string>
+    <string name="manual_crop_edge_left">Left crop edge</string>
     <string name="manual_crop_move_left">Move corner left</string>
     <string name="manual_crop_move_right">Move corner right</string>
     <string name="manual_crop_move_up">Move corner up</string>
     <string name="manual_crop_move_down">Move corner down</string>
+    <string name="manual_crop_move_edge_left">Move edge left</string>
+    <string name="manual_crop_move_edge_right">Move edge right</string>
+    <string name="manual_crop_move_edge_up">Move edge up</string>
+    <string name="manual_crop_move_edge_down">Move edge down</string>
     <string name="edit_image_title">Edit page image</string>
     <string name="edit_brightness">Brightness (−100 to +100)</string>
     <string name="edit_contrast" formatted="false">Contrast (0% to 200%; 100% is original)</string>
@@ -206,4 +214,16 @@
     <string name="save_destination_checking">Checking the save folder…</string>
     <string name="save_destination_setup_hint">Tap Save PDF to finish setting up your save folder.</string>
     <string name="save_destination_check_failed">The save folder could not be verified. Your pages are safe. Choose a folder in internal storage and try again. Details: %1$s</string>
+    <string name="prefix_template">template</string>
+    <string name="prefix_edit_title">Filename prefixes</string>
+    <string name="prefix_new_hint">New prefix…</string>
+    <string name="prefix_add">Add</string>
+    <string name="prefix_save">Save</string>
+    <string name="prefix_cancel">Cancel</string>
+    <string name="ocr_lang_setting_title">Recognition language</string>
+    <string name="ocr_lang_auto">Auto</string>
+    <string name="ocr_lang_ru_en">Russian + English</string>
+    <string name="ocr_lang_es_en">Spanish + English</string>
+    <string name="ocr_lang_ru_es_en">Russian + Spanish + English</string>
+    <string name="reocr_with_lang">Re-recognize with language…</string>
 </resources>

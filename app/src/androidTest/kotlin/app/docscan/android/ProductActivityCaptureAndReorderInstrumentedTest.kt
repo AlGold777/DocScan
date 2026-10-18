@@ -79,7 +79,6 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             assertEquals("Visible Home action names are distinct:\n$inventory", labels.size, labels.toSet().size)
             val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
             val expected = listOf(
-                context.getString(R.string.workspace_menu),
                 context.getString(R.string.capture_page),
                 context.getString(R.string.import_images_or_pdf),
                 context.getString(R.string.export_selected_pages),

@@ -161,8 +161,7 @@ class CameraFirstLayoutInstrumentedTest {
     }
 
     @Test fun menuAndNestedEditorsUseSameInsetsAndRestoreTheirParent() = fixture { scenario, storage, device ->
-        waitUntil { var ready = false; scenario.onActivity { ready = it.window.decorView.findViewWithTag<View>("docscan-menu-button")?.isLaidOut == true }; ready }
-        scenario.onActivity { it.window.decorView.findViewWithTag<View>("docscan-menu-button").performClick() }
+        scenario.onActivity { it.showWorkspaceMenu() }
         waitUntil { topHost(scenario)?.isLaidOut == true }
         scrollWorkspaceListToPositionForTest(scenario, 0)
         scenario.onActivity { activity ->

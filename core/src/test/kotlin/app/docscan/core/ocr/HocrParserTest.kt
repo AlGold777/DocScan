@@ -130,4 +130,43 @@ class HocrParserTest {
         assertEquals(200, malformedLayout.sourceHeightPx)
         assertTrue(malformedLayout.blocks.isEmpty())
     }
+
+    @Test
+    fun testParseHocrSnippetFromPlan() {
+        val hocr = """
+            <div class='ocr_page' title='bbox 0 0 1000 1400'>
+             <div class='ocr_carea' title='bbox 100 100 900 200'><p class='ocr_par' title='bbox 100 100 900 200'>
+              <span class='ocr_line' title='bbox 100 100 900 150'>
+               <span class='ocrx_word' title='bbox 100 100 300 150; x_wconf 95'>Привет</span>
+               <span class='ocrx_word' title='bbox 320 100 500 150; x_wconf 93'>мир</span></span>
+              <span class='ocr_line' title='bbox 100 160 900 200'>
+               <span class='ocrx_word' title='bbox 100 160 400 200; x_wconf 90'>Вторая</span></span>
+             </p></div>
+             <div class='ocr_carea' title='bbox 100 300 900 350'><p class='ocr_par' title='bbox 100 300 900 350'>
+              <span class='ocr_line' title='bbox 100 300 900 350'>
+               <span class='ocrx_word' title='bbox 100 300 400 350; x_wconf 90'>Другой</span></span>
+             </p></div></div>
+        """.trimIndent()
+
+        val layout = parseHocr(hocr, 1000, 1400)
+        assertEquals("Привет мир\nВторая\n\nДругой", layout.toPlainText())
+    }
+
+    @Test
+    fun testWordWithRightExceedingWidthAndInvisibleChar() {
+        val hocr = """
+            <div class='ocr_page' title='bbox 0 0 100 100'>
+             <div class='ocr_carea' title='bbox 0 0 100 100'><p class='ocr_par' title='bbox 0 0 100 100'>
+              <span class='ocr_line' title='bbox 0 0 100 50'>
+               <span class='ocrx_word' title='bbox 10 10 105 40; x_wconf 90'>Слово</span>
+               <span class='ocrx_word' title='bbox 10 10 20 40; x_wconf 90'>&#x200B;</span>
+              </span>
+             </p></div></div>
+        """.trimIndent()
+
+        val layout = parseHocr(hocr, 100, 100)
+        assertEquals(1, layout.words.size)
+        assertEquals("Слово", layout.words[0].text)
+        assertEquals(100, layout.words[0].box.r)
+    }
 }
