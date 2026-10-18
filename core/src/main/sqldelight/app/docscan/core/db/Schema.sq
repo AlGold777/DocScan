@@ -509,6 +509,22 @@ artifactReferenceOwnerIntegrityFindings:
 WITH findings AS (
   SELECT ar.artifact_id, ar.ref_kind, ar.ref_owner_id,
     CASE
+      WHEN ar.ref_kind = 'CAPTURE_SOURCE' AND NOT EXISTS (
+        SELECT 1 FROM ImageVersion iv JOIN Page p ON p.page_id = iv.page_id
+        WHERE iv.image_version_id = ar.ref_owner_id
+      ) THEN 'CAPTURE_SOURCE_OWNER_MISSING'
+      WHEN ar.ref_kind = 'CAPTURE_SOURCE' AND ar.protection_class != 'AUTHORITATIVE'
+        THEN 'CAPTURE_SOURCE_PROTECTION_MISMATCH'
+      WHEN ar.ref_kind = 'CAPTURE_SOURCE' AND NOT EXISTS (
+        SELECT 1 FROM ArtifactRecord a WHERE a.artifact_id = ar.artifact_id
+          AND a.artifact_kind = 'DOCUMENT_PAGE' AND a.state = 'COMMITTED'
+          AND a.storage_state = 'PRESENT' AND a.size_bytes > 0
+          AND a.checksum IS NOT NULL AND a.producer_epoch IS NOT NULL
+      ) THEN 'CAPTURE_SOURCE_ARTIFACT_INVALID'
+      WHEN ar.ref_kind = 'CAPTURE_SOURCE' AND (
+        SELECT COUNT(*) FROM ArtifactReference sources
+        WHERE sources.ref_kind = 'CAPTURE_SOURCE' AND sources.ref_owner_id = ar.ref_owner_id
+      ) != 1 THEN 'CAPTURE_SOURCE_MULTIPLE_ARTIFACTS'
       WHEN ar.ref_kind = 'IMAGE_VERSION' AND NOT EXISTS (
         SELECT 1 FROM ImageVersion iv WHERE iv.image_version_id = ar.ref_owner_id
       ) THEN 'IMAGE_VERSION_OWNER_MISSING'
@@ -560,7 +576,7 @@ WITH findings AS (
       ) THEN 'IMPORT_SESSION_ARTIFACT_MISMATCH'
       WHEN ar.ref_kind = 'IMPORT_SESSION' AND ar.protection_class != 'RECOVERY'
         THEN 'IMPORT_SESSION_PROTECTION_MISMATCH'
-      WHEN ar.ref_kind NOT IN ('IMAGE_VERSION', 'SAVE_MANIFEST', 'EXPORT_ARTIFACT', 'EXPORT_ATTEMPT', 'IMPORT_SESSION')
+      WHEN ar.ref_kind NOT IN ('IMAGE_VERSION', 'SAVE_MANIFEST', 'EXPORT_ARTIFACT', 'EXPORT_ATTEMPT', 'IMPORT_SESSION', 'CAPTURE_SOURCE')
         THEN 'UNKNOWN_REFERENCE_KIND'
       ELSE NULL
     END AS finding_code
@@ -1313,3 +1329,31 @@ recognitionForImageVersion:
 SELECT * FROM Recognition
 WHERE page_id = ? AND image_version_id = ?
 ORDER BY rowid DESC LIMIT 1;
+
+
+cameraSourceByPage:
+WITH RECURSIVE ancestry(image_version_id) AS (
+  SELECT current_image_version_id FROM Page WHERE page_id = ?
+  UNION
+  SELECT iv.parent_version_id FROM ImageVersion iv JOIN ancestry a ON iv.image_version_id = a.image_version_id
+  WHERE iv.parent_version_id IS NOT NULL
+)
+SELECT artifact.* FROM ArtifactRecord artifact
+JOIN ArtifactReference r ON r.artifact_id = artifact.artifact_id
+JOIN ImageVersion iv ON iv.image_version_id = r.ref_owner_id
+JOIN ancestry a ON a.image_version_id = iv.image_version_id
+WHERE r.ref_kind = 'CAPTURE_SOURCE'
+ORDER BY iv.rowid DESC LIMIT 1;
+
+deleteCameraSourceReference:
+DELETE FROM ArtifactReference WHERE ref_kind = 'CAPTURE_SOURCE' AND ref_owner_id IN (
+  SELECT image_version_id FROM ImageVersion WHERE page_id = ?
+);
+
+tombstonedCameraSourcePages:
+SELECT p.page_id, p.workspace_id FROM Page p
+WHERE p.tombstone = 1 AND EXISTS (
+  SELECT 1 FROM ArtifactReference r JOIN ImageVersion iv ON iv.image_version_id = r.ref_owner_id
+  WHERE r.ref_kind = 'CAPTURE_SOURCE' AND iv.page_id = p.page_id
+)
+ORDER BY p.tombstone_at_wall, p.page_id LIMIT ?;

@@ -373,6 +373,7 @@ class StateStore(
                 ref_owner_id = command.imageVersionId.value,
                 protection_class = "AUTHORITATIVE",
             )
+            command.captureSource?.let { commitCameraSource(command.imageVersionId, it, command.artifact.artifactId) }
             queries.advanceOrderRevision(command.workspaceId.value)
             if (command.makeActive) {
                 queries.setActivePage(command.pageId.value, command.workspaceId.value)
@@ -390,6 +391,33 @@ class StateStore(
                 orderIndex = orderIndex,
             )
         }
+    }
+
+    /** Original camera bytes are independent of the current/Undo edit versions. */
+    fun cameraSource(pageId: PageId): DurableImageArtifact? =
+        queries.cameraSourceByPage(pageId.value).executeAsOneOrNull()?.let {
+            if (it.state != "COMMITTED" || it.storage_state != "PRESENT" || it.artifact_kind != "DOCUMENT_PAGE") {
+                throw StoreInvariantViolation("Camera source is not a committed present image")
+            }
+            DurableImageArtifact(ArtifactId.parse(it.artifact_id), it.relative_storage_path, it.size_bytes,
+                it.checksum ?: throw StoreInvariantViolation("Camera source checksum is missing"),
+                it.artifact_format_version, it.producer_epoch ?: throw StoreInvariantViolation("Camera source producer is missing"))
+        }
+
+    private fun commitCameraSource(imageVersionId: ImageVersionId, source: DurableImageArtifact, currentArtifactId: ArtifactId) {
+        val staged = queries.artifactById(source.artifactId.value).executeAsOneOrNull()
+            ?: throw StoreInvariantViolation("Camera source was not durably staged")
+        val sharedWithCurrent = source.artifactId == currentArtifactId
+        if (staged.state != (if (sharedWithCurrent) "COMMITTED" else "STAGED_DURABLE")
+            || staged.storage_state != "PRESENT" || staged.artifact_kind != "DOCUMENT_PAGE"
+            || staged.relative_storage_path != source.relativePath || staged.size_bytes != source.sizeBytes
+            || staged.checksum != source.sha256 || staged.artifact_format_version != source.formatVersion
+            || staged.producer_epoch != source.producerEpoch
+        ) throw StoreInvariantViolation("Camera source differs from its durable artifact")
+        if (!sharedWithCurrent && queries.commitArtifact(source.artifactId.value).value != 1L) {
+            throw StoreConflict("Camera source changed during capture commit")
+        }
+        addArtifactReferenceChecked(source.artifactId.value, "CAPTURE_SOURCE", imageVersionId.value, "AUTHORITATIVE")
     }
 
     fun visiblePageCount(workspaceId: WorkspaceId): Long =
@@ -1920,6 +1948,7 @@ class StateStore(
         append("{\"formatVersion\":").append(formatVersion)
         append(",\"sourceWidthPx\":").append(sourceWidthPx)
         append(",\"sourceHeightPx\":").append(sourceHeightPx)
+        plainText?.let { append(",\"plainText\":\"").append(it.jsonEscape()).append('"') }
         quality?.let { q ->
             append(",\"quality\":{\"meanConfidence\":").append(q.meanConfidence)
             append(",\"lowConfidenceWordCount\":").append(q.lowConfidenceWordCount)
@@ -2118,6 +2147,7 @@ class StateStore(
                 monotonic_epoch_token = time.monotonicEpochToken,
                 workspace_id = command.workspaceId.value,
             )
+            command.captureSource?.let { commitCameraSource(command.newImageVersionId, it, command.artifact.artifactId) }
             page.content_revision + 1L
         }
     }
@@ -2989,7 +3019,8 @@ class StateStore(
                 recognition_id = recognitionId.value,
                 page_id = command.pageId.value,
                 image_version_id = command.imageVersionId.value,
-                payload = command.recognizedText,
+                payload = command.recognizedLayout?.let { RecognitionPayloadCodec.encode(command.recognizedText, it) }
+                    ?: command.recognizedText,
             )
             if (queries.commitCurrentRecognition(
                     current_recognition_id = recognitionId.value,
@@ -3031,10 +3062,28 @@ class StateStore(
         }
     }
 
+    /** Retain originals throughout Delete Undo, including a successful Save's Delete receipt. */
+    private fun releaseExpiredCameraSources(limit: Long) {
+        val time = clock.read()
+        queries.tombstonedCameraSourcePages(limit).executeAsList().forEach { page ->
+            val undo = queries.deleteUndoByPage(page.page_id, page.workspace_id).executeAsOneOrNull()
+            val openSession = queries.openSessionForWorkspace(page.workspace_id).executeAsOneOrNull()
+            val permanentlyUnavailable = undo == null ||
+                openSession?.workspace_session_id != undo.undo_workspace_session_id
+            // A backwards/uncertain clock can become valid again; do not destroy recovery bytes for it.
+            val definitelyExpired = undo != null && time.wallTimeMillis >= undo.deleted_wall &&
+                (if (time.monotonicEpochToken == undo.monotonic_epoch_token) {
+                    time.monotonicTimeNanos > undo.undo_until_monotonic
+                } else time.wallTimeMillis > undo.undo_until_wall)
+            if (permanentlyUnavailable || definitelyExpired) queries.deleteCameraSourceReference(page.page_id)
+        }
+    }
+
     /** Atomically claims only committed, currently unreferenced private artifacts. */
     fun claimUnreferencedArtifacts(limit: Long): List<ArtifactDeletionClaim> {
         require(limit in 1L..100L)
         return database.transactionWithResult {
+            releaseExpiredCameraSources(limit)
             queries.unreferencedArtifacts(limit).executeAsList().mapNotNull { artifact ->
                 val token = java.util.UUID.randomUUID().toString()
                 if (queries.claimArtifactForDeletion(token, artifact.artifact_id).value != 1L) return@mapNotNull null

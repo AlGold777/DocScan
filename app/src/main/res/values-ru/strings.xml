@@ -222,4 +222,7 @@
     <string name="ocr_lang_es_en">Español + English</string>
     <string name="ocr_lang_ru_es_en">Русский + Español + English</string>
     <string name="reocr_with_lang">Распознать заново с языком…</string>
+    <string name="restore_camera_source">Вернуть исходный снимок</string>
+    <string name="ocr_no_text">Текст не найден. Изображение страницы сохранено.</string>
+    <string name="saved_text_layer_warning">У текстового слоя есть ограничения. Проверьте выделение и копирование текста в сохранённом PDF.</string>
 </resources>

@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -74,6 +75,88 @@ class StateStoreTest {
         assertEquals(1L, database.schemaQueries.workspaceById(workspaceId.value).executeAsOne().order_revision)
         assertEquals("COMMITTED", database.schemaQueries.artifactById(artifact.artifactId.value).executeAsOne().state)
         assertEquals(1L, database.schemaQueries.referenceCountForArtifact(artifact.artifactId.value).executeAsOne())
+    }
+
+    @Test
+    fun cameraOriginalSurvivesEditsAndIsReplacedOnlyByRetake() {
+        val image = durableArtifact()
+        val original = durableArtifact()
+        listOf(image, original).forEach(store::recordStagedDurableArtifact)
+        val capture = captureCommand(image).copy(captureSource = original)
+        store.commitCapture(capture)
+        assertEquals(original, store.cameraSource(capture.pageId))
+        assertTrue(store.artifactReferenceOwnerIntegrityFindings(100L).isEmpty())
+        assertTrue(store.claimUnreferencedArtifacts(100L).isEmpty())
+
+        val edited = durableArtifact()
+        store.recordStagedDurableArtifact(edited)
+        val editedVersion = ImageVersionId.new()
+        store.replacePageImage(ReplacePageImageCommand(workspaceId, capture.pageId, capture.imageVersionId,
+            1L, editedVersion, edited, "pixels", "edit", "OCR_LATIN_V1"))
+        assertEquals(original, store.cameraSource(capture.pageId))
+        store.undoPageImage(workspaceId, capture.pageId, editedVersion, 2L)
+        assertEquals(original, store.cameraSource(capture.pageId))
+
+        val retaken = durableArtifact()
+        val newOriginal = durableArtifact()
+        val retakenVersion = ImageVersionId.new()
+        listOf(retaken, newOriginal).forEach(store::recordStagedDurableArtifact)
+        store.replacePageImage(ReplacePageImageCommand(workspaceId, capture.pageId, capture.imageVersionId,
+            3L, retakenVersion, retaken, "pixels", "retake", "OCR_LATIN_V1", newOriginal))
+        assertEquals(newOriginal, store.cameraSource(capture.pageId))
+        assertEquals(1L, database.schemaQueries.referenceCountForArtifact(original.artifactId.value).executeAsOne())
+        assertFalse(store.claimUnreferencedArtifacts(100L).any { it.artifactId == original.artifactId })
+        store.undoPageImage(workspaceId, capture.pageId, retakenVersion, 4L)
+        assertEquals(original, store.cameraSource(capture.pageId))
+        assertEquals(1L, database.schemaQueries.referenceCountForArtifact(original.artifactId.value).executeAsOne())
+        assertTrue(store.artifactReferenceOwnerIntegrityFindings(100L).isEmpty())
+    }
+
+    @Test
+    fun invalidCameraSourceRollsBackWholeCaptureAndDoesNotCreateFakeOriginalForLegacyCapture() {
+        val image = durableArtifact()
+        val original = durableArtifact()
+        listOf(image, original).forEach(store::recordStagedDurableArtifact)
+        val capture = captureCommand(image)
+        assertThrows(StoreInvariantViolation::class.java) {
+            store.commitCapture(capture.copy(captureSource = original.copy(sha256 = "f".repeat(64))))
+        }
+        assertEquals(0L, store.visiblePageCount(workspaceId))
+        assertEquals("STAGED_DURABLE", database.schemaQueries.artifactById(image.artifactId.value).executeAsOne().state)
+        store.commitCapture(capture)
+        assertEquals(null, store.cameraSource(capture.pageId))
+    }
+
+    @Test
+    fun cameraOriginalIsProtectedForDeleteUndoThenReleasedWhenUndoExpires() {
+        val image = durableArtifact()
+        val original = durableArtifact()
+        listOf(image, original).forEach(store::recordStagedDurableArtifact)
+        val capture = captureCommand(image).copy(captureSource = original)
+        store.commitCapture(capture)
+        store.deletePage(workspaceId, capture.pageId, 1L)
+        assertTrue(store.claimUnreferencedArtifacts(100L).none { it.artifactId == original.artifactId })
+        fakeClock.set(TimeReading(500L, 1_000L, "test-epoch"))
+        assertTrue(store.claimUnreferencedArtifacts(100L).none { it.artifactId == original.artifactId })
+        fakeClock.set(TimeReading(1_000L, 2_000L, "test-epoch"))
+        store.undoDelete(workspaceId, capture.pageId)
+        assertEquals(original, store.cameraSource(capture.pageId))
+        store.deletePage(workspaceId, capture.pageId, 3L)
+        fakeClock.set(TimeReading(100_000L, 100_000_000_000L, "test-epoch"))
+        assertTrue(store.claimUnreferencedArtifacts(100L).any { it.artifactId == original.artifactId })
+        assertEquals(null, store.cameraSource(capture.pageId))
+    }
+
+    @Test
+    fun cameraReferenceIntegrityDetectsWrongOwnerAndProtection() {
+        val image = durableArtifact()
+        store.recordStagedDurableArtifact(image)
+        val capture = captureCommand(image).copy(captureSource = image)
+        store.commitCapture(capture)
+        assertEquals(image, store.cameraSource(capture.pageId))
+        database.schemaQueries.addArtifactReference(image.artifactId.value, "CAPTURE_SOURCE", PageId.new().value, "UNDO")
+        val codes = store.artifactReferenceOwnerIntegrityFindings(100L).map { it.code }
+        assertTrue(codes.contains("CAPTURE_SOURCE_OWNER_MISSING"))
     }
 
     @Test
@@ -2572,6 +2655,23 @@ class StateStoreTest {
         assertEquals("OPEN", store.pdfImportSessionState(secondSession))
         assertEquals(2L, store.visiblePageCount(workspaceId))
         assertEquals(1L, database.schemaQueries.referenceCountForArtifact(secondSource.artifactId.value).executeAsOne())
+    }
+
+    @Test
+    fun importedPdfPlainTextLayoutSurvivesPersistenceAndFrozenManifestWithoutInventedCoordinates() {
+        val sessionId = ImportSessionId.new()
+        store.beginPdfImport(BeginPdfImportCommand(sessionId, workspaceId, pdfSource(sessionId), 1L, "plain.pdf", null))
+        val text = "niña\nTotal: 123,45 €"
+        val layout = RecognitionLayout(1200, 1800, emptyList(), plainText = text)
+        val command = pdfPageCommand(sessionId, 0L).copy(recognizedText = text,
+            recognitionId = RecognitionId.new(), recognizedLayout = layout)
+        store.recordStagedDurableArtifact(command.imageArtifact)
+        store.commitPdfImportPage(command)
+        val frozen = store.freezeSelectedPagesForSave(workspaceId)
+        assertEquals(text, frozen.pages.single().recognizedText)
+        assertEquals(text, frozen.pages.single().recognizedLayout?.plainText)
+        assertTrue(frozen.pages.single().recognizedLayout?.blocks?.isEmpty() == true)
+        assertTrue(frozen.frozenPayload.contains("\"plainText\":\"niña\\nTotal: 123,45 €\""))
     }
 
     @Test

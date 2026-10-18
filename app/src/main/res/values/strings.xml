@@ -226,4 +226,7 @@
     <string name="ocr_lang_es_en">Spanish + English</string>
     <string name="ocr_lang_ru_es_en">Russian + Spanish + English</string>
     <string name="reocr_with_lang">Re-recognize with language…</string>
+    <string name="restore_camera_source">Restore camera original</string>
+    <string name="ocr_no_text">No text found. The page image is preserved.</string>
+    <string name="saved_text_layer_warning">The text layer has limitations. Check text selection and copying in the saved PDF.</string>
 </resources>

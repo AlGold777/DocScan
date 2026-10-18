@@ -299,6 +299,7 @@ data class CaptureCommand(
     val processingDesiredState: String,
     val sourceProvenance: String,
     val autoSelectWhenReady: Boolean = false,
+    val captureSource: DurableImageArtifact? = null,
 ) {
     init {
         require(coordinateSpace.isNotBlank())
@@ -507,11 +508,13 @@ data class CommitPdfImportPageCommand(
     val sourceDisplayName: String,
     val recognizedText: String?,
     val recognitionId: app.docscan.core.model.RecognitionId?,
+    val recognizedLayout: RecognitionLayout? = null,
 ) {
     init {
         require(sourcePageIndex >= 0L && desiredOperationKey.isNotBlank() && sourceDisplayName.isNotBlank())
         require((recognizedText == null) == (recognitionId == null))
         require(recognizedText == null || recognizedText.isNotBlank())
+        require(recognizedLayout == null || recognizedText != null)
     }
 }
 
@@ -554,6 +557,7 @@ data class ReplacePageImageCommand(
     val coordinateSpace: String,
     val transformProvenance: String,
     val processingDesiredState: String,
+    val captureSource: DurableImageArtifact? = null,
 ) {
     init {
         require(expectedContentRevision > 0L)

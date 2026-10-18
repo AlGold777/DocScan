@@ -590,16 +590,18 @@ class ProductStorage(
     fun setActivePage(pageId: app.docscan.core.model.PageId) =
         store.setActivePage(workspaceId, pageId)
 
-    fun replacePageImage(page: StoredPage, artifact: DurableImageArtifact) = replacePageImage(
+    fun replacePageImage(page: StoredPage, artifact: DurableImageArtifact, captureSource: DurableImageArtifact? = null) = replacePageImage(
         page,
         artifact,
         "camera-retake",
+        captureSource,
     )
 
     private fun replacePageImage(
         page: StoredPage,
         artifact: DurableImageArtifact,
         transformProvenance: String,
+        captureSource: DurableImageArtifact? = null,
     ) = store.replacePageImage(
         ReplacePageImageCommand(
             workspaceId = workspaceId,
@@ -611,8 +613,21 @@ class ProductStorage(
             coordinateSpace = "JPEG_PIXEL_EDGE_ORIGIN_TOP_LEFT",
             transformProvenance = transformProvenance,
             processingDesiredState = IMPORT_OCR_OPERATION_KEY,
+            captureSource = captureSource,
         ),
     )
+
+    fun cameraSource(pageId: app.docscan.core.model.PageId): DurableImageArtifact? = store.cameraSource(pageId)
+
+    fun restoreCameraSource(page: StoredPage): app.docscan.core.model.PageId {
+        val source = cameraSource(page.pageId) ?: throw IllegalStateException("Camera source is unavailable")
+        check(artifacts.verifyPublished(source.relativePath, source.sizeBytes, source.sha256)) {
+            "Camera source verification failed"
+        }
+        val artifact = artifactPath(source.relativePath).toFile().inputStream().use(::stageCapturedJpeg)
+        replacePageImage(page, artifact, "restore-camera-source")
+        return page.pageId
+    }
 
     fun rotatePageImage(
         page: StoredPage,
@@ -712,11 +727,11 @@ class ProductStorage(
         val temporary = File(appContext.cacheDir, "crop-${UUID.randomUUID()}.jpg")
         try {
             val artifact = scheduler.withAdmission(DOCUMENT_CROP_WORKING_SET_BYTES) {
-                val source = ProductImageDecoder.decode(
+                val source = ProductImageDecoder.decodePrecisely(
                     sourceFile,
-                    DocumentCropProcessor.MAX_SOURCE_PIXELS,
-                    preferredConfig = Bitmap.Config.ARGB_8888,
-                ) ?: throw IllegalArgumentException("Image cannot be decoded for cropping")
+                    minOf(DocumentCropProcessor.MAX_CAPTURE_SOURCE_PIXELS,
+                        (Runtime.getRuntime().maxMemory() / 40L).coerceAtLeast(2L * 1024L * 1024L)),
+                )
                 try {
                     val candidate = DocumentCropProcessor.rectify(source)
                         ?: throw IllegalArgumentException("No reliable page boundary was found")

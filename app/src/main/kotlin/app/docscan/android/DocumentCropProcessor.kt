@@ -13,6 +13,7 @@ import kotlin.math.*
 /** Finds a strong four-edge page candidate and returns a rectified preview; it never edits input. */
 object DocumentCropProcessor {
     const val MAX_SOURCE_PIXELS = 4L * 1024L * 1024L
+    const val MAX_CAPTURE_SOURCE_PIXELS = 12L * 1024L * 1024L
     const val MAX_MANUAL_SOURCE_PIXELS = 12L * 1024L * 1024L
     private const val TAG = "DocScan"
     private const val MIN_SCORE = 0.45 // Lower than this — "document not found"

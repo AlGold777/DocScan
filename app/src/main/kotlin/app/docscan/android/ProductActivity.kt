@@ -2456,46 +2456,54 @@ class ProductActivity : AppCompatActivity() {
                 captureButton.isEnabled = pageBeingRetaken == null && imageCapture != null
                 io.execute {
                     try {
+                        // Publish the untouched camera JPEG before producing any derivative.
+                        val captureSource = FileInputStream(temp).use(activeStorage::stageCapturedJpeg)
                         var wasRectified = false
-                        if (captureDocumentMode) {
-                            try {
-                                val orientedBitmap = ProductImageDecoder.decode(
-                                    temp,
-                                    DocumentCropProcessor.MAX_SOURCE_PIXELS,
-                                    preferredConfig = Bitmap.Config.ARGB_8888,
-                                )
-                                if (orientedBitmap != null) {
-                                    var rectified: Bitmap? = null
-                                    val capturedQuad = captureDetection?.first
-                                    if (capturedQuad != null) {
-                                        try {
-                                            val orientedQuad = DocumentCropProcessor.rotateNormalizedQuad(capturedQuad, captureDetection?.second ?: 0)
-                                            rectified = DocumentCropProcessor.rectifyManual(orientedBitmap, orientedQuad)
-                                        } catch (quadError: Throwable) {
-                                            android.util.Log.w("DocScan", "rectifyManual with quadForCapture failed, fallback to full rectify", quadError)
-                                        }
+                        var prepared: File? = null
+                        try {
+                            if (captureDocumentMode) {
+                                val pixelLimit = minOf(DocumentCropProcessor.MAX_CAPTURE_SOURCE_PIXELS,
+                                    (Runtime.getRuntime().maxMemory() / 40L).coerceAtLeast(2L * 1024L * 1024L))
+                                val oriented = ProductImageDecoder.decodePrecisely(temp, pixelLimit)
+                                try {
+                                    val capturedQuad = captureDetection?.first?.let {
+                                        DocumentCropProcessor.rotateNormalizedQuad(it, captureDetection.second)
                                     }
-                                    if (rectified == null) {
-                                        rectified = DocumentCropProcessor.rectify(orientedBitmap)
-                                    }
+                                    val stillQuad = DocumentCropProcessor.detectCorners(oriented)?.toNormalized()
+                                    val disagreement = if (capturedQuad != null && stillQuad != null) {
+                                        capturedQuad.asList().zip(stillQuad.asList()).map { (a, b) ->
+                                            kotlin.math.hypot(a.x - b.x, a.y - b.y)
+                                        }.average()
+                                    } else 0.0
+                                    // A stale live frame must not cut a moved document. Keep the raw
+                                    // page when two confident detections disagree substantially.
+                                    val finalQuad = if (disagreement > 0.12) null else stillQuad ?: capturedQuad
+                                    val rectified = finalQuad?.let { DocumentCropProcessor.rectifyManual(oriented, it) }
                                     if (rectified != null) {
-                                        java.io.FileOutputStream(temp).use { out ->
-                                            rectified.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                                        }
-                                        rectified.recycle()
-                                        wasRectified = true
+                                        try {
+                                            val output = File(cacheDir, "rectified-${System.nanoTime()}.jpg")
+                                            prepared = output
+                                            java.io.FileOutputStream(output).use { out ->
+                                                check(rectified.compress(Bitmap.CompressFormat.JPEG, 95, out))
+                                                out.fd.sync()
+                                            }
+                                            wasRectified = true
+                                        } finally { rectified.recycle() }
                                     }
-                                    orientedBitmap.recycle()
-                                }
-                            } catch (failure: Throwable) {
-                                android.util.Log.w("DocScan", "Document rectification failed, fallback to original", failure)
+                                } finally { oriented.recycle() }
                             }
+                        } catch (failure: Exception) {
+                            android.util.Log.w("DocScan", "Rectification unavailable; keeping camera source", failure)
+                            prepared?.delete()
+                            prepared = null
+                            wasRectified = false
                         }
-
-                        val artifact = FileInputStream(temp).use(activeStorage::stageCapturedJpeg)
+                        val artifact = try {
+                            prepared?.let { FileInputStream(it).use(activeStorage::stageCapturedJpeg) } ?: captureSource
+                        } finally { prepared?.delete() }
                         val affectedPageId: PageId
                         if (pageBeingRetaken != null) {
-                            activeStorage.replacePageImage(pageBeingRetaken, artifact)
+                            activeStorage.replacePageImage(pageBeingRetaken, artifact, captureSource)
                             affectedPageId = pageBeingRetaken.pageId
                         } else {
                             val pageId = PageId.new()
@@ -2513,6 +2521,7 @@ class ProductActivity : AppCompatActivity() {
                                     processingDesiredState = OCR_OPERATION_KEY,
                                     sourceProvenance = "CAMERA",
                                     autoSelectWhenReady = true,
+                                    captureSource = captureSource,
                                 ),
                             )
                         }
@@ -2777,6 +2786,30 @@ class ProductActivity : AppCompatActivity() {
                 isEnabled = page.artifactState == "COMMITTED"
                 setOnClickListener { if (canInteractWorkspace()) showDocumentCropEditor(page) }
             })
+            if (activeStorage.cameraSource(page.pageId) != null) {
+                addPageAction(Button(this).apply {
+                    text = getString(R.string.restore_camera_source)
+                    contentDescription = text
+                    tag = "docscan-restore-source-${page.pageId.value}"
+                    setOnClickListener {
+                        if (!canInteractWorkspace()) return@setOnClickListener
+                        isEnabled = false
+                        io.execute {
+                            try {
+                                val restored = activeStorage.restoreCameraSource(page)
+                                val projection = activeStorage.workspaceProjection()
+                                projection.pages.firstOrNull { it.pageId == restored }?.let { scheduleOcr(activeStorage, it) }
+                                runOnUiThread { workspaceMenuDialog?.dismiss(); renderPages(projection) }
+                            } catch (failure: Exception) {
+                                runOnUiThread {
+                                    isEnabled = true
+                                    status.text = getString(R.string.capture_error, failure.message ?: "")
+                                }
+                            }
+                        }
+                    }
+                })
+            }
             addPageAction(Button(this).apply {
                 text = getString(R.string.delete_page)
                 minimumWidth = dp(48)
@@ -4276,7 +4309,7 @@ class ProductActivity : AppCompatActivity() {
                     val projection = activeStorage.workspaceProjection()
                     runOnUiThread {
                         if (!isFinishing) {
-                            status.text = getString(R.string.ocr_complete)
+                            status.text = getString(if (result.text.isBlank()) R.string.ocr_no_text else R.string.ocr_complete)
                             renderPages(projection)
                             if (pageViewer?.isShowing == true) {
                                 pageViewerPages = projection.pages.toList()

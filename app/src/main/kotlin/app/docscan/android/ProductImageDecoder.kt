@@ -3,11 +3,29 @@ package app.docscan.android
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.graphics.ImageDecoder
+import kotlin.math.sqrt
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
 
 /** Decodes bounded pixels in the requested format and applies EXIF orientation in memory. Source artifacts stay immutable. */
 object ProductImageDecoder {
+    /** Decode directly to the requested envelope; EXIF is applied by ImageDecoder.
+     * Unlike power-of-two BitmapFactory sampling, a 12MP photo stays 12MP when allowed.
+     */
+    fun decodePrecisely(file: File, maxPixels: Long, maxSide: Int = Int.MAX_VALUE): Bitmap {
+        require(maxPixels > 0 && maxSide > 0)
+        return ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
+            val width = info.size.width
+            val height = info.size.height
+            val ratio = minOf(1.0, sqrt(maxPixels.toDouble() / (width.toLong() * height)),
+                maxSide.toDouble() / maxOf(width, height))
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.isMutableRequired = true
+            decoder.setTargetSize(maxOf(1, (width * ratio).toInt()), maxOf(1, (height * ratio).toInt()))
+        }
+    }
+
     fun estimateWorkingSetBytes(file: File, maxPixels: Long): Long {
         val bounds = bounds(file)
         val sample = sampleSize(bounds.outWidth, bounds.outHeight, maxPixels)
