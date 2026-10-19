@@ -32,10 +32,10 @@ class DocumentCropPlanInstrumentedTest {
     fun previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val calls = mutableListOf<Pair<Int, Int>>()
-        val fixture = newStorage(context) { bitmap ->
+        val fixture = newStorage(context, detector = { bitmap ->
             calls += bitmap.width to bitmap.height
             detection(bitmap.width, bitmap.height)
-        }
+        })
         val storage = fixture.storage
         val scheduler = HeavyWorkScheduler()
         try {
@@ -126,7 +126,76 @@ class DocumentCropPlanInstrumentedTest {
         }
     }
 
-    private fun newStorage(context: Context, detector: (Bitmap) -> DocumentCropProcessor.Detection?): StorageFixture {
+    @Test
+    fun previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val previewInput = arrayOfNulls<Bitmap>(1)
+        val previewFixture = newStorage(
+            context,
+            detector = { bitmap -> detection(bitmap.width, bitmap.height) },
+            rectifier = { bitmap, _ ->
+                previewInput[0] = bitmap
+                throw OutOfMemoryError("injected preview allocation failure")
+            },
+        )
+        try {
+            val storage = previewFixture.storage
+            val scheduler = HeavyWorkScheduler()
+            val page = capture(storage)
+            commitRecognition(storage, page)
+            val before = storage.workspaceProjection().pages.single()
+            assertThrows(OutOfMemoryError::class.java) {
+                storage.createDocumentCropPreview(before, scheduler)
+            }
+            assertTrue("Preview source is always recycled", requireNotNull(previewInput[0]).isRecycled)
+            assertEquals("Preview OOM cannot mutate page state", before, storage.workspaceProjection().pages.single())
+            assertTrue("Scheduler admission is released after preview OOM", scheduler.withAdmission(1L) { true })
+        } finally {
+            closeStorage(context, previewFixture)
+        }
+
+        var rectifierCalls = 0
+        val applyInput = arrayOfNulls<Bitmap>(1)
+        val applyFixture = newStorage(
+            context,
+            detector = { bitmap -> detection(bitmap.width, bitmap.height) },
+            rectifier = { bitmap, quad ->
+                rectifierCalls++
+                if (rectifierCalls == 1) {
+                    DocumentCropProcessor.rectifyManual(bitmap, quad)
+                } else {
+                    applyInput[0] = bitmap
+                    throw OutOfMemoryError("injected apply allocation failure")
+                }
+            },
+        )
+        try {
+            val storage = applyFixture.storage
+            val scheduler = HeavyWorkScheduler()
+            val page = capture(storage)
+            commitRecognition(storage, page)
+            val before = storage.workspaceProjection().pages.single()
+            val preview = requireNotNull(storage.createDocumentCropPreview(before, scheduler))
+            try {
+                assertThrows(OutOfMemoryError::class.java) {
+                    storage.applyDocumentCrop(preview.plan, scheduler)
+                }
+            } finally {
+                preview.previewBitmap.recycle()
+            }
+            assertTrue("Apply source is always recycled", requireNotNull(applyInput[0]).isRecycled)
+            assertEquals("Apply OOM cannot publish or revise the page", before, storage.workspaceProjection().pages.single())
+            assertTrue("Scheduler admission is released after apply OOM", scheduler.withAdmission(1L) { true })
+        } finally {
+            closeStorage(context, applyFixture)
+        }
+    }
+
+    private fun newStorage(
+        context: Context,
+        detector: (Bitmap) -> DocumentCropProcessor.Detection?,
+        rectifier: (Bitmap, app.docscan.core.edit.CropQuadrilateral) -> Bitmap = DocumentCropProcessor::rectifyManual,
+    ): StorageFixture {
         val suffix = UUID.randomUUID().toString()
         return StorageFixture(
             suffix,
@@ -135,6 +204,7 @@ class DocumentCropPlanInstrumentedTest {
                 databaseName = "document-crop-$suffix.db",
                 artifactDirectoryName = "document-crop-artifacts-$suffix",
                 documentCornerDetector = detector,
+                documentRectifier = rectifier,
             ),
         )
     }
@@ -165,6 +235,20 @@ class DocumentCropPlanInstrumentedTest {
             ),
         )
         return storage.workspaceProjection().pages.single { it.pageId == pageId }
+    }
+
+    private fun commitRecognition(storage: ProductStorage, page: app.docscan.core.store.StoredPage) {
+        storage.commitRecognition(
+            RecognitionCandidate(
+                recognitionId = RecognitionId.new(),
+                workspaceId = storage.workspaceId,
+                pageId = page.pageId,
+                imageVersionId = page.imageVersionId,
+                contentRevision = page.contentRevision,
+                desiredOperationKey = "TEST_OCR_V1",
+                recognizedText = "recognized before crop",
+            ),
+        )
     }
 
     private fun detection(width: Int, height: Int) = DocumentCropProcessor.Detection(

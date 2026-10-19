@@ -72,6 +72,7 @@ class ProductStorage(
     private val artifactStagingWriteCheckpoint: ArtifactStagingWriteCheckpoint = ArtifactStagingWriteCheckpoint { _, _ -> },
     private val artifactStagingOutputFlush: ArtifactStagingOutputFlush = ArtifactStagingOutputFlush { output, _, _ -> output.flush() },
     private val documentCornerDetector: (Bitmap) -> DocumentCropProcessor.Detection? = DocumentCropProcessor::detectCorners,
+    private val documentRectifier: (Bitmap, app.docscan.core.edit.CropQuadrilateral) -> Bitmap = DocumentCropProcessor::rectifyManual,
 ) {
     /** Instrumentation-only observer for proving durable PDF page publication boundaries. */
     internal var pdfImportPublicationBoundaryObserverForTest:
@@ -734,7 +735,7 @@ class ProductStorage(
             maxBudgetBytes = scheduler.decodedByteBudget, maxSourcePixelsLimit = previewLimit)
         val previewBitmap = scheduler.withAdmission(work.workingSetBytes) {
             val previewSource = ProductImageDecoder.decodePrecisely(sourceFile, work.sourcePixelLimit)
-            try { DocumentCropProcessor.rectifyManual(previewSource, cropQuad) }
+            try { documentRectifier(previewSource, cropQuad) }
             finally { previewSource.recycle() }
         }
 
@@ -764,7 +765,7 @@ class ProductStorage(
             val artifact = scheduler.withAdmission(work.workingSetBytes) {
                 val source = ProductImageDecoder.decodePrecisely(sourceFile, work.sourcePixelLimit)
                 try {
-                    val candidate = DocumentCropProcessor.rectifyManual(source, plan.cropQuad)
+                    val candidate = documentRectifier(source, plan.cropQuad)
                     try {
                         FileOutputStream(temporary).use { output ->
                             check(candidate.compress(Bitmap.CompressFormat.JPEG, DOCUMENT_CROP_JPEG_QUALITY, output)) {
@@ -778,9 +779,8 @@ class ProductStorage(
                 } finally {
                     source.recycle()
                 }
-                FileInputStream(temporary).use(::stageCapturedJpeg)
+                FileInputStream(temporary).use(::stageCapturedJpeg).also(::validateImageArtifact)
             }
-            validateImageArtifact(artifact)
             val existingSource = store.cameraSource(currentPage.pageId)
             replacePageImage(currentPage, artifact, plan.algorithmVersion, existingSource)
             return workspaceProjection()

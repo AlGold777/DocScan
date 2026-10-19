@@ -175,6 +175,7 @@
     <string name="document_manual_crop_saved">Document crop saved</string>
     <string name="document_save_error_kept_original">Rectification failed, original preserved</string>
     <string name="document_save_oom_kept_original">Not enough memory to rectify, original preserved</string>
+    <string name="document_crop_oom_page_unchanged">Not enough memory to crop. The page is unchanged.</string>
     <string name="document_crop_plan_stale">Crop plan is stale: page was modified</string>
     <string name="saved_pdf_edit_title">Edit saved PDF</string>
     <string name="saved_pdf_edit_page">Page %1$d of %2$d</string>

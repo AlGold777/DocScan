@@ -82,7 +82,8 @@ class DocumentCropProcessorInstrumentedTest {
             Log.i(
                 "DocScanCropNative",
                 "fixture=${measurement.name} detected=${measurement.detected} score=${measurement.score} " +
-                    "iou=${measurement.iou} maxCornerError=${measurement.maxCornerError} " +
+                    "iou=${measurement.iou} areaRatio=${measurement.actualAreaRatio} " +
+                    "maxCornerErrorPx=${measurement.maxCornerErrorPixels} " +
                     "relativeCornerError=${measurement.relativeCornerError} " +
                     "output=${measurement.outputWidth}x${measurement.outputHeight}",
             )
@@ -93,6 +94,11 @@ class DocumentCropProcessorInstrumentedTest {
         measurements.forEach { measurement ->
             assertTrue("${measurement.name}: IoU=${measurement.iou}", measurement.iou >= 0.72)
             assertTrue("${measurement.name}: relative corner error=${measurement.relativeCornerError}", measurement.relativeCornerError <= 0.10)
+            if (measurement.name.matches(Regex("page-(90|95|98)pct"))) {
+                val requested = measurement.name.removePrefix("page-").removeSuffix("pct").toDouble() / 100.0
+                assertTrue("${measurement.name}: generated page area=${measurement.actualAreaRatio}",
+                    kotlin.math.abs(measurement.actualAreaRatio - requested) <= 0.002)
+            }
         }
     }
 
@@ -101,7 +107,8 @@ class DocumentCropProcessorInstrumentedTest {
         val detected: Boolean,
         val score: Double,
         val iou: Double,
-        val maxCornerError: Double,
+        val actualAreaRatio: Double,
+        val maxCornerErrorPixels: Double,
         val relativeCornerError: Double,
         val outputWidth: Int,
         val outputHeight: Int,
@@ -113,16 +120,34 @@ class DocumentCropProcessorInstrumentedTest {
         try {
             val detected = DocumentCropProcessor.detectCorners(source)
             if (detected == null) {
-                return Measurement(fixture.name, false, 0.0, 0.0, Double.POSITIVE_INFINITY,
+                return Measurement(fixture.name, false, 0.0, 0.0, 0.0, Double.POSITIVE_INFINITY,
                     Double.POSITIVE_INFINITY, 0, 0)
             }
             val actual = detected.toNormalized()
             val expected = quad(fixture.corners, fixture.width, fixture.height)
-            val agreement = QuadGeometryUtils.checkAgreement(
-                liveQuad = expected,
-                stillQuad = actual,
-                maxRelativeShiftTolerance = 1.0,
-                minIouTolerance = 0.0,
+            val iou = QuadGeometryUtils.polygonIoU(expected, actual)
+            val areaRatio = QuadGeometryUtils.polygonArea(expected.asList())
+            val expectedCorners = QuadGeometryUtils.canonicalizeCorners(expected.asList())
+            val actualCorners = QuadGeometryUtils.canonicalizeCorners(actual.asList())
+            var maxCornerErrorPixels = Double.POSITIVE_INFINITY
+            var minCornerErrorPixels = Double.POSITIVE_INFINITY
+            for (shift in 0 until 4) {
+                val cornerErrors = (0 until 4).map { index ->
+                    val a = expectedCorners[index]
+                    val b = actualCorners[(index + shift) % 4]
+                    hypot((a.x - b.x) * fixture.width, (a.y - b.y) * fixture.height)
+                }
+                val total = cornerErrors.sum()
+                if (total < minCornerErrorPixels) {
+                    minCornerErrorPixels = total
+                    maxCornerErrorPixels = cornerErrors.maxOrNull() ?: Double.POSITIVE_INFINITY
+                }
+            }
+            val docDiagonal = maxOf(
+                hypot((expectedCorners[2].x - expectedCorners[0].x) * fixture.width,
+                    (expectedCorners[2].y - expectedCorners[0].y) * fixture.height),
+                hypot((expectedCorners[3].x - expectedCorners[1].x) * fixture.width,
+                    (expectedCorners[3].y - expectedCorners[1].y) * fixture.height),
             )
             val rectified = DocumentCropProcessor.rectifyManual(source, actual)
             try {
@@ -130,9 +155,10 @@ class DocumentCropProcessorInstrumentedTest {
                     name = fixture.name,
                     detected = true,
                     score = detected.score,
-                    iou = agreement.iou,
-                    maxCornerError = agreement.maxCornerDistance * hypot(fixture.width.toDouble(), fixture.height.toDouble()),
-                    relativeCornerError = agreement.relativeCornerShift,
+                    iou = iou,
+                    actualAreaRatio = areaRatio,
+                    maxCornerErrorPixels = maxCornerErrorPixels,
+                    relativeCornerError = maxCornerErrorPixels / docDiagonal,
                     outputWidth = rectified.width,
                     outputHeight = rectified.height,
                 )
@@ -146,14 +172,15 @@ class DocumentCropProcessorInstrumentedTest {
 
     private fun pageFixture(name: String, width: Int, height: Int, occupancy: Double): Fixture {
         val scale = sqrt(occupancy)
-        val marginX = width * (1.0 - scale) / 2.0
-        val marginY = height * (1.0 - scale) / 2.0
-        val inset = minOf(width, height) * 0.006
+        val centerX = width / 2.0
+        val centerY = height / 2.0
+        val halfWidth = width * scale / 2.0
+        val halfHeight = height * scale / 2.0
         return Fixture(name, width, height, listOf(
-            (marginX + inset).toFloat() to (marginY + inset * 1.4).toFloat(),
-            (width - marginX - inset * 1.3).toFloat() to (marginY + inset * 0.4).toFloat(),
-            (width - marginX - inset * 0.4).toFloat() to (height - marginY - inset).toFloat(),
-            (marginX + inset * 1.2).toFloat() to (height - marginY - inset * 0.3).toFloat(),
+            (centerX - halfWidth).toFloat() to (centerY - halfHeight).toFloat(),
+            (centerX + halfWidth).toFloat() to (centerY - halfHeight).toFloat(),
+            (centerX + halfWidth).toFloat() to (centerY + halfHeight).toFloat(),
+            (centerX - halfWidth).toFloat() to (centerY + halfHeight).toFloat(),
         ))
     }
 

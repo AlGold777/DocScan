@@ -171,6 +171,7 @@
     <string name="document_manual_crop_saved">Кадрирование документа сохранено</string>
     <string name="document_save_error_kept_original">Обработка не удалась, оригинал сохранён</string>
     <string name="document_save_oom_kept_original">Недостаточно памяти для выравнивания, оригинал сохранён</string>
+    <string name="document_crop_oom_page_unchanged">Недостаточно памяти для обрезки. Страница не изменена.</string>
     <string name="document_crop_plan_stale">План обрезки устарел: страница была изменена</string>
     <string name="saved_pdf_edit_title">Редактировать сохранённый PDF</string>
     <string name="saved_pdf_edit_page">Страница %1$d из %2$d</string>

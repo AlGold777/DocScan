@@ -4500,6 +4500,8 @@ class ProductActivity : AppCompatActivity() {
                         }
                         status.text = errorMsg
                     }
+                } catch (_: OutOfMemoryError) {
+                    runOnUiThread { status.text = getString(R.string.document_crop_oom_page_unchanged) }
                 }
             }
         }
@@ -4527,6 +4529,10 @@ class ProductActivity : AppCompatActivity() {
                             R.string.auto_crop_failed,
                             failure.message ?: failure.javaClass.simpleName,
                         )
+                    }
+                } catch (_: OutOfMemoryError) {
+                    runOnUiThread {
+                        if (dialog.isShowing) message.text = getString(R.string.document_crop_oom_page_unchanged)
                     }
                 }
             }
