@@ -24,6 +24,8 @@ internal class WorkspaceHomeAdapter(
     private val onPageClick: (StoredPage) -> Unit,
     private val onSelectionChanged: (StoredPage, Boolean) -> Unit,
     private val onPageActive: ((StoredPage) -> Unit)? = null,
+    private val onDeletePage: ((StoredPage) -> Unit)? = null,
+    private val onToggleAllSelection: (() -> Unit)? = null,
 ) : RecyclerView.Adapter<WorkspaceHomeAdapter.Holder>() {
     internal data class Item(val page: StoredPage, val index: Int, val active: Boolean)
 
