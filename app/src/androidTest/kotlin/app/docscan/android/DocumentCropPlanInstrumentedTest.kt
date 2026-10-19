@@ -1,0 +1,182 @@
+package app.docscan.android
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import androidx.test.platform.app.InstrumentationRegistry
+import app.docscan.core.model.ImageVersionId
+import app.docscan.core.model.PageId
+import app.docscan.core.model.RecognitionId
+import app.docscan.core.store.CaptureCommand
+import app.docscan.core.store.RecognitionCandidate
+import app.docscan.core.schedule.HeavyWorkScheduler
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.UUID
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import androidx.test.ext.junit.runners.AndroidJUnit4
+
+@RunWith(AndroidJUnit4::class)
+class DocumentCropPlanInstrumentedTest {
+    private data class StorageFixture(val suffix: String, val storage: ProductStorage)
+
+    @Test
+    fun previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val calls = mutableListOf<Pair<Int, Int>>()
+        val fixture = newStorage(context) { bitmap ->
+            calls += bitmap.width to bitmap.height
+            detection(bitmap.width, bitmap.height)
+        }
+        val storage = fixture.storage
+        val scheduler = HeavyWorkScheduler()
+        try {
+            val page = capture(storage)
+            storage.commitRecognition(
+                RecognitionCandidate(
+                    recognitionId = RecognitionId.new(),
+                    workspaceId = storage.workspaceId,
+                    pageId = page.pageId,
+                    imageVersionId = page.imageVersionId,
+                    contentRevision = page.contentRevision,
+                    desiredOperationKey = "TEST_OCR_V1",
+                    recognizedText = "recognized before crop",
+                ),
+            )
+            val recognized = storage.workspaceProjection().pages.single()
+            assertEquals("recognized before crop", recognized.recognizedText)
+            val originalVersion = recognized.imageVersionId
+            val originalRevision = recognized.contentRevision
+
+            val preview = requireNotNull(storage.createDocumentCropPreview(recognized, scheduler))
+            try {
+                assertEquals("Preview must run corner detection once", 1, calls.size)
+                assertTrue(preview.previewBitmap.width > 0 && preview.previewBitmap.height > 0)
+                assertThrows(IllegalStateException::class.java) {
+                    storage.applyDocumentCrop(preview.plan.copy(artifactRelativePath = "other-page.jpg"), scheduler)
+                }
+                assertEquals("A plan cannot be redirected to another artifact", recognized,
+                    storage.workspaceProjection().pages.single())
+                val cropped = storage.applyDocumentCrop(preview.plan, scheduler).pages.single()
+
+                assertEquals("Apply must reuse the preview plan", 1, calls.size)
+                assertEquals(recognized.pageId, cropped.pageId)
+                assertNotEquals(originalVersion, cropped.imageVersionId)
+                assertTrue(cropped.contentRevision > originalRevision)
+                assertNull("New pixels cannot retain text from the prior image version", cropped.recognizedText)
+                assertTrue(cropped.canUndoImage)
+            } finally {
+                preview.previewBitmap.recycle()
+            }
+        } finally {
+            closeStorage(context, fixture)
+        }
+    }
+
+    @Test
+    fun stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val detector = { bitmap: Bitmap -> detection(bitmap.width, bitmap.height) }
+        val fixture = newStorage(context, detector)
+        val storage = fixture.storage
+        val scheduler = HeavyWorkScheduler()
+        try {
+            val editedPage = capture(storage)
+            val editPlan = requireNotNull(storage.createDocumentCropPreview(editedPage, scheduler)).also {
+                it.previewBitmap.recycle()
+            }.plan
+
+            val rotated = storage.rotatePageImage(editedPage, 1, scheduler).pages.single()
+            val beforeRejectedEditPlan = storage.workspaceProjection().pages.single()
+            assertThrows(IllegalStateException::class.java) {
+                storage.applyDocumentCrop(editPlan, scheduler)
+            }
+            assertEquals("A stale plan must not publish or revise the edited page", beforeRejectedEditPlan,
+                storage.workspaceProjection().pages.single())
+
+            val deletedPage = capture(storage)
+            val deletePlanResult = requireNotNull(storage.createDocumentCropPreview(deletedPage, scheduler))
+            val deletePlan = deletePlanResult.plan
+            deletePlanResult.previewBitmap.recycle()
+            val unaffectedBeforeDelete = storage.workspaceProjection().pages.single { it.pageId == rotated.pageId }
+            storage.deletePage(deletedPage)
+            val projectionAfterDelete = storage.workspaceProjection()
+            val unaffectedAfterDelete = projectionAfterDelete.pages.single()
+            assertEquals(unaffectedBeforeDelete, unaffectedAfterDelete)
+
+            assertThrows(IllegalStateException::class.java) {
+                storage.applyDocumentCrop(deletePlan, scheduler)
+            }
+            val projectionAfterRejectedDeletePlan = storage.workspaceProjection()
+            assertNull(projectionAfterRejectedDeletePlan.pages.find { it.pageId == deletedPage.pageId })
+            assertEquals("Rejecting a deleted-page plan must leave other pages untouched", unaffectedAfterDelete,
+                projectionAfterRejectedDeletePlan.pages.single())
+            assertEquals("No page rows remain after both checks except the unchanged page", 1,
+                projectionAfterRejectedDeletePlan.pages.size)
+        } finally {
+            closeStorage(context, fixture)
+        }
+    }
+
+    private fun newStorage(context: Context, detector: (Bitmap) -> DocumentCropProcessor.Detection?): StorageFixture {
+        val suffix = UUID.randomUUID().toString()
+        return StorageFixture(
+            suffix,
+            ProductStorage(
+                context = context,
+                databaseName = "document-crop-$suffix.db",
+                artifactDirectoryName = "document-crop-artifacts-$suffix",
+                documentCornerDetector = detector,
+            ),
+        )
+    }
+
+    private fun capture(storage: ProductStorage): app.docscan.core.store.StoredPage {
+        val bitmap = Bitmap.createBitmap(640, 900, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            drawColor(Color.rgb(48, 52, 56))
+            drawRect(45f, 40f, 595f, 865f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        }
+        val bytes = ByteArrayOutputStream().use { stream ->
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream))
+            stream.toByteArray()
+        }
+        bitmap.recycle()
+        val pageId = PageId.new()
+        storage.commitCapture(
+            CaptureCommand(
+                workspaceId = storage.workspaceId,
+                pageId = pageId,
+                imageVersionId = ImageVersionId.new(),
+                artifact = storage.stageCapturedJpeg(ByteArrayInputStream(bytes)),
+                selected = true,
+                makeActive = true,
+                coordinateSpace = "JPEG_PIXEL_EDGE_ORIGIN_TOP_LEFT",
+                processingDesiredState = "TEST_OCR_V1",
+                sourceProvenance = "DOCUMENT_CROP_PLAN_TEST",
+            ),
+        )
+        return storage.workspaceProjection().pages.single { it.pageId == pageId }
+    }
+
+    private fun detection(width: Int, height: Int) = DocumentCropProcessor.Detection(
+        bufferPoints = floatArrayOf(45f, 40f, 595f, 55f, 610f, 850f, 30f, 865f),
+        imageWidth = width,
+        imageHeight = height,
+        score = 0.90,
+    )
+
+    private fun closeStorage(context: Context, fixture: StorageFixture) {
+        fixture.storage.close()
+        context.deleteDatabase("document-crop-${fixture.suffix}.db")
+        context.noBackupFilesDir.resolve("document-crop-artifacts-${fixture.suffix}").deleteRecursively()
+    }
+}

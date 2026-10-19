@@ -145,8 +145,6 @@ class DocumentLiveDetectionCoordinatorTest {
         assertEquals("A single jump may hold A during its TTL", LiveDetectionStatus.HELD, firstB.status)
 
         currentTime += 100L
-        coordinator.onFrameDetected(gen, currentTime, candidatePointsJump, 0.80, spec)
-        currentTime += 100L
         val confirmedB = coordinator.onFrameDetected(gen, currentTime, candidatePointsJump, 0.80, spec)
 
         assertEquals("Two stable B observations must replace A", LiveDetectionStatus.CONFIRMED, confirmedB.status)
@@ -191,6 +189,23 @@ class DocumentLiveDetectionCoordinatorTest {
         currentTime += 100L
         val secondAfterGap = coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec)
         assertEquals(LiveDetectionStatus.CONFIRMED, secondAfterGap.status)
+    }
+
+    @Test
+    fun `missing frame breaks provisional confirmation streak`() {
+        var currentTime = 1000L
+        val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })
+        val gen = coordinator.currentGeneration()
+
+        val firstCandidate = coordinator.onFrameDetected(gen, currentTime, candidatePoints1, 0.85, spec)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, firstCandidate.status)
+
+        currentTime += 100L
+        coordinator.onFrameMissing(gen, currentTime)
+        currentTime += 100L
+        val afterGap = coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec)
+
+        assertEquals("A missing observation must break the two-frame streak", LiveDetectionStatus.PROVISIONAL, afterGap.status)
     }
 
     @Test

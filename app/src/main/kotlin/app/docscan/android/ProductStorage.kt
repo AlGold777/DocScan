@@ -709,18 +709,13 @@ class ProductStorage(
         val sourceFile = artifactPath(page.artifactRelativePath).toFile()
         if (!sourceFile.exists()) return null
 
-        val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(
-            sourceFile,
-            DocumentCropMemoryCalculator.DETECTION_THUMBNAIL_MAX_SIDE,
-        )
-        val detection = try {
-            documentCornerDetector(thumbnail)
-        } finally {
-            thumbnail.recycle()
+        val detection = scheduler.withAdmission(DocumentCropMemoryCalculator.ESTIMATED_DETECTION_OVERHEAD_BYTES) {
+            val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(sourceFile)
+            try { documentCornerDetector(thumbnail) } finally { thumbnail.recycle() }
         } ?: return null
 
         val cropQuad = detection.toNormalized()
-        val bounds = DocumentCropMemoryCalculator.readImageBounds(sourceFile) ?: (detection.imageWidth to detection.imageHeight)
+        val bounds = DocumentCropMemoryCalculator.readOrientedImageBounds(sourceFile) ?: (detection.imageWidth to detection.imageHeight)
 
         val plan = DocumentCropPlan(
             pageId = page.pageId,
@@ -732,21 +727,15 @@ class ProductStorage(
             cropQuad = cropQuad,
         )
 
-        val previewMaxPixels = 1280L * 960L
-        val workingBytes = DocumentCropMemoryCalculator.estimateWarpWorkingSetBytes(previewMaxPixels)
-            .coerceAtMost(scheduler.decodedByteBudget)
-
-        val previewBitmap = scheduler.withAdmission(workingBytes) {
-            val previewSource = ProductImageDecoder.decodePrecisely(
-                sourceFile,
-                previewMaxPixels,
-                maxSide = 1280,
-            )
-            try {
-                DocumentCropProcessor.rectifyManual(previewSource, cropQuad)
-            } finally {
-                previewSource.recycle()
-            }
+        // Bound both the preview source and its output; the returned thumbnail remains UI-owned.
+        val previewRatio = minOf(1.0, 1280.0 / maxOf(bounds.first, bounds.second))
+        val previewLimit = maxOf(4L, (bounds.first.toLong() * bounds.second * previewRatio * previewRatio).toLong())
+        val work = DocumentCropMemoryCalculator.planWarp(bounds.first, bounds.second, cropQuad,
+            maxBudgetBytes = scheduler.decodedByteBudget, maxSourcePixelsLimit = previewLimit)
+        val previewBitmap = scheduler.withAdmission(work.workingSetBytes) {
+            val previewSource = ProductImageDecoder.decodePrecisely(sourceFile, work.sourcePixelLimit)
+            try { DocumentCropProcessor.rectifyManual(previewSource, cropQuad) }
+            finally { previewSource.recycle() }
         }
 
         return DocumentCropPreviewResult(previewBitmap = previewBitmap, plan = plan)
@@ -759,7 +748,8 @@ class ProductStorage(
         val currentPages = store.workspaceProjection(workspaceId).pages
         val currentPage = currentPages.find { it.pageId == plan.pageId }
             ?: throw IllegalStateException("Страница была удалена из рабочего набора")
-        if (currentPage.imageVersionId != plan.initialImageVersionId || currentPage.contentRevision != plan.initialContentRevision) {
+        if (currentPage.imageVersionId != plan.initialImageVersionId || currentPage.contentRevision != plan.initialContentRevision ||
+            currentPage.artifactRelativePath != plan.artifactRelativePath) {
             throw IllegalStateException("План обрезки устарел: страница была изменена")
         }
 
@@ -768,17 +758,11 @@ class ProductStorage(
 
         val temporary = File(appContext.cacheDir, "crop-${UUID.randomUUID()}.jpg")
         try {
-            val bounds = DocumentCropMemoryCalculator.readImageBounds(sourceFile) ?: (plan.orientedWidth to plan.orientedHeight)
-            val boundedPixels = DocumentCropMemoryCalculator.calculateBoundedPixels(
-                bounds.first,
-                bounds.second,
-                maxBudgetBytes = scheduler.decodedByteBudget,
-            )
-            val workingBytes = DocumentCropMemoryCalculator.estimateWarpWorkingSetBytes(boundedPixels)
-                .coerceAtMost(scheduler.decodedByteBudget)
-
-            val artifact = scheduler.withAdmission(workingBytes) {
-                val source = ProductImageDecoder.decodePrecisely(sourceFile, boundedPixels)
+            val bounds = DocumentCropMemoryCalculator.readOrientedImageBounds(sourceFile) ?: (plan.orientedWidth to plan.orientedHeight)
+            val work = DocumentCropMemoryCalculator.planWarp(bounds.first, bounds.second, plan.cropQuad,
+                maxBudgetBytes = scheduler.decodedByteBudget)
+            val artifact = scheduler.withAdmission(work.workingSetBytes) {
+                val source = ProductImageDecoder.decodePrecisely(sourceFile, work.sourcePixelLimit)
                 try {
                     val candidate = DocumentCropProcessor.rectifyManual(source, plan.cropQuad)
                     try {

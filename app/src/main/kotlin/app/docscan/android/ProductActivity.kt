@@ -2585,8 +2585,11 @@ class ProductActivity : AppCompatActivity() {
                                         coordinateTransform.mapPoints(pointsToMap)
                                         documentOverlayView.setPolygonPixels(pointsToMap, isHeld = isHeld)
                                     } catch (transformError: Throwable) {
+                                        documentOverlayView.clear()
                                         android.util.Log.w("DocScan", "CoordinateTransform mapping failed", transformError)
                                     }
+                                } else {
+                                    documentOverlayView.clear()
                                 }
                             }
                         }
@@ -2594,7 +2597,11 @@ class ProductActivity : AppCompatActivity() {
                         // Forget a failed frame; never leave an apparently usable old contour.
                         if (receivedGeneration == liveDetectionCoordinator.currentGeneration()) {
                             liveDetectionCoordinator.invalidate()
-                            runOnUiThread { if (::documentOverlayView.isInitialized) documentOverlayView.clear() }
+                            val failedGeneration = liveDetectionCoordinator.currentGeneration()
+                            runOnUiThread {
+                                if (failedGeneration == liveDetectionCoordinator.currentGeneration() &&
+                                    ::documentOverlayView.isInitialized && !isDestroyed) documentOverlayView.clear()
+                            }
                         }
                         android.util.Log.e("DocScan", "Document live detection failed", failure)
                     } finally {
@@ -2665,11 +2672,13 @@ class ProductActivity : AppCompatActivity() {
                                 val orientedH = if (rotation == 90 || rotation == 270) jpegBounds.outWidth else jpegBounds.outHeight
                                 val jpegSpec = JpegGeometrySpec(orientedW, orientedH)
 
-                                val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(temp, 720)
-                                val stillQuad = try {
-                                    DocumentCropProcessor.detectCorners(thumbnail)?.toNormalized()
-                                } finally {
-                                    thumbnail.recycle()
+                                val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
+                                val stillQuad = heavyScheduler.withAdmission(
+                                    DocumentCropMemoryCalculator.ESTIMATED_DETECTION_OVERHEAD_BYTES,
+                                ) {
+                                    val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(temp)
+                                    try { DocumentCropProcessor.detectCorners(thumbnail)?.toNormalized() }
+                                    finally { thumbnail.recycle() }
                                 }
 
                                 val decision = DocumentCapturePolicy.decide(stillQuad, liveSnapshot, jpegSpec,
@@ -2680,36 +2689,25 @@ class ProductActivity : AppCompatActivity() {
                                     if (decision == DocumentCaptureDecision.BOUNDARIES_DISAGREE) {
                                         cropStatusRes = R.string.document_boundaries_not_confirmed_full_frame_saved
                                     } else {
-                                        val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
-                                        val boundedPixels = DocumentCropMemoryCalculator.calculateBoundedPixels(
-                                            orientedW,
-                                            orientedH,
-                                            maxBudgetBytes = heavyScheduler.decodedByteBudget,
-                                        )
-                                        val workingSetBytes = DocumentCropMemoryCalculator.estimateWarpWorkingSetBytes(boundedPixels)
-                                            .coerceAtMost(heavyScheduler.decodedByteBudget)
-
-                                        val rectified = heavyScheduler.withAdmission(workingSetBytes) {
-                                            val oriented = ProductImageDecoder.decodePrecisely(temp, boundedPixels)
-                                            try {
-                                                DocumentCropProcessor.rectifyManual(oriented, requireNotNull(stillQuad))
-                                            } finally {
-                                                oriented.recycle()
-                                            }
-                                        }
-
+                                        val cropQuad = requireNotNull(stillQuad)
+                                        val work = DocumentCropMemoryCalculator.planWarp(orientedW, orientedH, cropQuad,
+                                            maxBudgetBytes = heavyScheduler.decodedByteBudget)
                                         val output = File(cacheDir, "rectified-${System.nanoTime()}.jpg")
                                         prepared = output
-                                        try {
-                                            FileOutputStream(output).use { out ->
-                                                check(rectified.compress(Bitmap.CompressFormat.JPEG, 95, out))
-                                                out.fd.sync()
-                                            }
-                                            wasRectified = true
-                                            cropStatusRes = R.string.document_rectified_and_cropped
-                                        } finally {
-                                            rectified.recycle()
+                                        heavyScheduler.withAdmission(work.workingSetBytes) {
+                                            val oriented = ProductImageDecoder.decodePrecisely(temp, work.sourcePixelLimit)
+                                            try {
+                                                val rectified = DocumentCropProcessor.rectifyManual(oriented, cropQuad)
+                                                try {
+                                                    FileOutputStream(output).use { out ->
+                                                        check(rectified.compress(Bitmap.CompressFormat.JPEG, 95, out))
+                                                        out.fd.sync()
+                                                    }
+                                                } finally { rectified.recycle() }
+                                            } finally { oriented.recycle() }
                                         }
+                                        wasRectified = true
+                                        cropStatusRes = R.string.document_rectified_and_cropped
                                     }
                                 }
                             }
