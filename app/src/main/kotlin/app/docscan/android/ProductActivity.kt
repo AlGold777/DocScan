@@ -111,7 +111,7 @@ class ProductActivity : AppCompatActivity() {
     private lateinit var captureButton: Button
     private lateinit var permissionActionButton: Button
     private lateinit var documentModeButton: Button
-    private var isDocumentMode: Boolean = false
+    @Volatile private var isDocumentMode: Boolean = false
     private var imageAnalysis: ImageAnalysis? = null
     private var lastAnalyzedTimestamp: Long = 0L
     private val imageTransformFactory = ImageProxyTransformFactory().apply {
@@ -292,6 +292,12 @@ class ProductActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onStop() {
+        liveDetectionCoordinator.invalidate()
+        if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+        super.onStop()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         currentImportRequestId?.let { outState.putString(STATE_IMPORT_REQUEST_ID, it) }
         outState.putBoolean(STATE_PENDING_MAIN_SAVE, pendingMainSave)
@@ -429,6 +435,12 @@ class ProductActivity : AppCompatActivity() {
         previewView = PreviewView(this).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
+            addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                    liveDetectionCoordinator.invalidate()
+                    if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+                }
+            }
         }
         val actionTextColor = ColorStateList(
             arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf(-android.R.attr.state_enabled)),
@@ -2481,7 +2493,7 @@ class ProductActivity : AppCompatActivity() {
         if (workspaceActionBlocked || isFinishing || cameraStartupPending || imageCapture != null || !hasCameraPermission()) return
         cameraStartupPending = true
         val statusAtStart = status.text?.toString()
-        val currentCameraGeneration = liveDetectionCoordinator.newGeneration()
+        liveDetectionCoordinator.newGeneration()
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
             try {
@@ -2506,12 +2518,12 @@ class ProductActivity : AppCompatActivity() {
                     )
                     .build()
                 analysis.setAnalyzer(cameraAnalysisExecutor) { imageProxy ->
+                    val receivedGeneration = liveDetectionCoordinator.currentGeneration()
                     if (!isDocumentMode) {
-                        liveDetectionCoordinator.onFrameMissing(currentCameraGeneration, SystemClock.elapsedRealtime())
+                        liveDetectionCoordinator.onFrameMissing(receivedGeneration, SystemClock.elapsedRealtime())
                         runOnUiThread {
-                            if (::documentOverlayView.isInitialized) {
-                                documentOverlayView.clear()
-                            }
+                            if (!isDocumentMode && receivedGeneration == liveDetectionCoordinator.currentGeneration() &&
+                                ::documentOverlayView.isInitialized) documentOverlayView.clear()
                         }
                         imageProxy.close()
                         return@setAnalyzer
@@ -2523,16 +2535,16 @@ class ProductActivity : AppCompatActivity() {
                     }
                     lastAnalyzedTimestamp = now
 
-                    val cropRect = imageProxy.cropRect
-                    val bufferRect = BufferRect(cropRect.left, cropRect.top, cropRect.right, cropRect.bottom)
-                    val spec = AnalysisBufferSpec(
-                        bufferWidth = imageProxy.width,
-                        bufferHeight = imageProxy.height,
-                        cropRect = bufferRect,
-                        rotationDegrees = imageProxy.imageInfo.rotationDegrees,
-                    )
-
                     try {
+                        val cropRect = imageProxy.cropRect
+                        val spec = AnalysisBufferSpec(
+                            bufferWidth = imageProxy.width,
+                            bufferHeight = imageProxy.height,
+                            cropRect = BufferRect(cropRect.left, cropRect.top, cropRect.right, cropRect.bottom),
+                            rotationDegrees = imageProxy.imageInfo.rotationDegrees,
+                        )
+                        val frameGeneration = liveDetectionCoordinator.generationForFrame(spec, receivedGeneration)
+                            ?: return@setAnalyzer
                         val plane = imageProxy.planes[0]
                         val detection = DocumentCropProcessor.detectCornersFromRgbaBuffer(
                             plane.buffer,
@@ -2542,10 +2554,10 @@ class ProductActivity : AppCompatActivity() {
                         )
 
                         val liveState = if (detection == null) {
-                            liveDetectionCoordinator.onFrameMissing(currentCameraGeneration, now)
+                            liveDetectionCoordinator.onFrameMissing(frameGeneration, now)
                         } else {
                             liveDetectionCoordinator.onFrameDetected(
-                                generationId = currentCameraGeneration,
+                                generationId = frameGeneration,
                                 frameTimestampMonotonicMs = now,
                                 rawBufferPoints = detection.bufferPoints,
                                 rawScore = detection.score,
@@ -2553,13 +2565,16 @@ class ProductActivity : AppCompatActivity() {
                             )
                         }
 
+                        if (liveState.generationId != frameGeneration) return@setAnalyzer
                         val sourceTransform = imageTransformFactory.getOutputTransform(imageProxy)
                         val pointsToMap = liveState.quadInBufferPixels?.clone()
                         val isHeld = liveState.status == LiveDetectionStatus.HELD
                         val showOverlay = (liveState.status == LiveDetectionStatus.CONFIRMED || liveState.status == LiveDetectionStatus.HELD) && pointsToMap != null
 
                         runOnUiThread {
-                            if (!isDocumentMode || !::documentOverlayView.isInitialized) return@runOnUiThread
+                            if (!isDocumentMode || !::documentOverlayView.isInitialized ||
+                                frameGeneration != liveDetectionCoordinator.currentGeneration() ||
+                                isFinishing || isDestroyed) return@runOnUiThread
                             if (!showOverlay) {
                                 documentOverlayView.clear()
                             } else {
@@ -2575,7 +2590,12 @@ class ProductActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                    } catch (failure: Throwable) {
+                    } catch (failure: Exception) {
+                        // Forget a failed frame; never leave an apparently usable old contour.
+                        if (receivedGeneration == liveDetectionCoordinator.currentGeneration()) {
+                            liveDetectionCoordinator.invalidate()
+                            runOnUiThread { if (::documentOverlayView.isInitialized) documentOverlayView.clear() }
+                        }
                         android.util.Log.e("DocScan", "Document live detection failed", failure)
                     } finally {
                         imageProxy.close()
@@ -2618,6 +2638,8 @@ class ProductActivity : AppCompatActivity() {
         captureButton.isEnabled = false
         val pageBeingRetaken = retakeTarget
         val captureDocumentMode = isDocumentMode
+        val shutterTimestampMs = SystemClock.elapsedRealtime()
+        val generationAtShutter = liveDetectionCoordinator.currentGeneration()
         val liveSnapshot = if (captureDocumentMode) liveDetectionCoordinator.captureSnapshot() else null
         status.text = getString(R.string.capturing)
         val temp = File(cacheDir, "capture-${System.nanoTime()}.jpg")
@@ -2650,24 +2672,12 @@ class ProductActivity : AppCompatActivity() {
                                     thumbnail.recycle()
                                 }
 
-                                if (stillQuad == null) {
+                                val decision = DocumentCapturePolicy.decide(stillQuad, liveSnapshot, jpegSpec,
+                                    generationAtShutter, shutterTimestampMs)
+                                if (decision == DocumentCaptureDecision.NO_STILL_BOUNDARY) {
                                     cropStatusRes = R.string.document_not_detected_full_frame_saved
                                 } else {
-                                    val isAgreed = if (liveSnapshot != null && liveSnapshot.isUsableForAgreement &&
-                                        liveSnapshot.analysisSpec != null &&
-                                        CameraGeometryTransform.isGeometryCompatible(liveSnapshot.analysisSpec, jpegSpec)) {
-                                        val check = QuadGeometryUtils.checkAgreement(
-                                            liveSnapshot.quadInNormalizedViewPort!!,
-                                            stillQuad,
-                                            maxRelativeShiftTolerance = 0.05,
-                                            minIouTolerance = 0.85,
-                                        )
-                                        check.agrees
-                                    } else {
-                                        false
-                                    }
-
-                                    if (!isAgreed) {
+                                    if (decision == DocumentCaptureDecision.BOUNDARIES_DISAGREE) {
                                         cropStatusRes = R.string.document_boundaries_not_confirmed_full_frame_saved
                                     } else {
                                         val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
@@ -2682,7 +2692,7 @@ class ProductActivity : AppCompatActivity() {
                                         val rectified = heavyScheduler.withAdmission(workingSetBytes) {
                                             val oriented = ProductImageDecoder.decodePrecisely(temp, boundedPixels)
                                             try {
-                                                DocumentCropProcessor.rectifyManual(oriented, stillQuad)
+                                                DocumentCropProcessor.rectifyManual(oriented, requireNotNull(stillQuad))
                                             } finally {
                                                 oriented.recycle()
                                             }

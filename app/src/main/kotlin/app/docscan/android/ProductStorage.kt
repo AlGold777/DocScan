@@ -71,6 +71,7 @@ class ProductStorage(
     private val artifactStagingSync: ArtifactStagingSync = ArtifactStagingSync { channel -> channel.force(true) },
     private val artifactStagingWriteCheckpoint: ArtifactStagingWriteCheckpoint = ArtifactStagingWriteCheckpoint { _, _ -> },
     private val artifactStagingOutputFlush: ArtifactStagingOutputFlush = ArtifactStagingOutputFlush { output, _, _ -> output.flush() },
+    private val documentCornerDetector: (Bitmap) -> DocumentCropProcessor.Detection? = DocumentCropProcessor::detectCorners,
 ) {
     /** Instrumentation-only observer for proving durable PDF page publication boundaries. */
     internal var pdfImportPublicationBoundaryObserverForTest:
@@ -713,7 +714,7 @@ class ProductStorage(
             DocumentCropMemoryCalculator.DETECTION_THUMBNAIL_MAX_SIDE,
         )
         val detection = try {
-            DocumentCropProcessor.detectCorners(thumbnail)
+            documentCornerDetector(thumbnail)
         } finally {
             thumbnail.recycle()
         } ?: return null

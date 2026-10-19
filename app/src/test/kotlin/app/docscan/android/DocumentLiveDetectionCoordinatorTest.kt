@@ -111,8 +111,122 @@ class DocumentLiveDetectionCoordinatorTest {
 
         // Late callback from old generation arrives on background thread
         currentTime += 50L
-        coordinator.onFrameDetected(oldGen, currentTime, candidatePointsClose, 0.90, spec)
+        val staleFirst = coordinator.onFrameDetected(oldGen, currentTime, candidatePointsClose, 0.90, spec)
+        currentTime += 100L
+        val staleSecond = coordinator.onFrameDetected(oldGen, currentTime, candidatePointsClose, 0.90, spec)
+        assertEquals(LiveDetectionStatus.EXPIRED, staleFirst.status)
+        assertEquals(LiveDetectionStatus.EXPIRED, staleSecond.status)
         assertEquals("Late callback from old generation must be ignored", LiveDetectionStatus.EXPIRED, coordinator.getPublishedState().status)
+
+        // The caller must use the fresh generation for frames after toggling back on.
+        val firstFresh = coordinator.onFrameDetected(newGen, currentTime, candidatePoints1, 0.85, spec)
+        currentTime += 100L
+        val secondFresh = coordinator.onFrameDetected(newGen, currentTime, candidatePointsClose, 0.87, spec)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, firstFresh.status)
+        assertEquals(LiveDetectionStatus.CONFIRMED, secondFresh.status)
+        assertEquals(newGen, secondFresh.generationId)
+    }
+
+    @Test
+    fun `t05 - jump to a new document is confirmed by two stable frames`() {
+        var currentTime = 1000L
+        val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })
+        val gen = coordinator.currentGeneration()
+
+        coordinator.onFrameDetected(gen, currentTime, candidatePoints1, 0.85, spec)
+        currentTime += 100L
+        assertEquals(
+            LiveDetectionStatus.CONFIRMED,
+            coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec).status,
+        )
+
+        currentTime += 100L
+        val firstB = coordinator.onFrameDetected(gen, currentTime, candidatePointsJump, 0.80, spec)
+        assertEquals("A single jump may hold A during its TTL", LiveDetectionStatus.HELD, firstB.status)
+
+        currentTime += 100L
+        coordinator.onFrameDetected(gen, currentTime, candidatePointsJump, 0.80, spec)
+        currentTime += 100L
+        val confirmedB = coordinator.onFrameDetected(gen, currentTime, candidatePointsJump, 0.80, spec)
+
+        assertEquals("Two stable B observations must replace A", LiveDetectionStatus.CONFIRMED, confirmedB.status)
+        assertTrue(confirmedB.isUsableForAgreement)
+        assertEquals(
+            CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(candidatePointsJump, spec),
+            confirmedB.quadInNormalizedViewPort,
+        )
+    }
+
+    @Test
+    fun `provisional candidate separated by more than ttl is not confirmed`() {
+        var currentTime = 1000L
+        val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })
+        val gen = coordinator.currentGeneration()
+
+        coordinator.onFrameDetected(gen, currentTime, candidatePoints1, 0.85, spec)
+        currentTime += 301L
+        val lateSecond = coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec)
+
+        assertNotEquals(LiveDetectionStatus.CONFIRMED, lateSecond.status)
+    }
+
+    @Test
+    fun `confirmed state expires after a gap and next frame starts a new candidate`() {
+        var currentTime = 1000L
+        val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })
+        val gen = coordinator.currentGeneration()
+
+        coordinator.onFrameDetected(gen, currentTime, candidatePoints1, 0.85, spec)
+        currentTime += 100L
+        coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec)
+
+        currentTime += 301L
+        val expired = coordinator.onFrameMissing(gen, currentTime)
+        assertEquals(LiveDetectionStatus.EXPIRED, expired.status)
+        assertFalse(expired.isUsableForAgreement)
+
+        currentTime += 1L
+        val firstAfterGap = coordinator.onFrameDetected(gen, currentTime, candidatePoints1, 0.85, spec)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, firstAfterGap.status)
+        currentTime += 100L
+        val secondAfterGap = coordinator.onFrameDetected(gen, currentTime, candidatePointsClose, 0.87, spec)
+        assertEquals(LiveDetectionStatus.CONFIRMED, secondAfterGap.status)
+    }
+
+    @Test
+    fun `geometry change starts a fresh generation and rejects old geometry callbacks`() {
+        var currentTime = 1000L
+        val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })
+        val oldGeneration = coordinator.currentGeneration()
+        val initialFrameGeneration = requireNotNull(coordinator.generationForFrame(spec, oldGeneration))
+        assertEquals(oldGeneration, initialFrameGeneration)
+        coordinator.onFrameDetected(initialFrameGeneration, currentTime, candidatePoints1, 0.85, spec)
+
+        val changedSpec = AnalysisBufferSpec(
+            bufferWidth = 1920,
+            bufferHeight = 1080,
+            cropRect = BufferRect(left = 240, top = 0, right = 1680, bottom = 1080),
+            rotationDegrees = 90,
+        )
+        val newGeneration = requireNotNull(coordinator.generationForFrame(changedSpec, oldGeneration))
+        assertNotEquals(oldGeneration, newGeneration)
+        currentTime += 100L
+        val stale = coordinator.onFrameDetected(oldGeneration, currentTime, candidatePointsClose, 0.87, spec)
+        assertEquals(LiveDetectionStatus.IDLE, stale.status)
+        assertEquals(newGeneration, stale.generationId)
+
+        val pointsInChangedGeometry = floatArrayOf(
+            400f, 100f,
+            1500f, 100f,
+            1500f, 900f,
+            400f, 900f,
+        )
+        val firstNewGeometry = coordinator.onFrameDetected(newGeneration, currentTime, pointsInChangedGeometry, 0.85, changedSpec)
+        currentTime += 100L
+        val secondNewGeometry = coordinator.onFrameDetected(newGeneration, currentTime, pointsInChangedGeometry.clone(), 0.87, changedSpec)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, firstNewGeometry.status)
+        assertEquals(LiveDetectionStatus.CONFIRMED, secondNewGeometry.status)
+        assertEquals(changedSpec, secondNewGeometry.analysisSpec)
     }
 
     @Test
@@ -128,6 +242,15 @@ class DocumentLiveDetectionCoordinatorTest {
         val snapshot = coordinator.captureSnapshot()
         assertEquals(LiveDetectionStatus.CONFIRMED, snapshot.status)
         assertTrue(snapshot.isUsableForAgreement)
+
+        val publishedFirstX = coordinator.getPublishedState().quadInBufferPixels!![0]
+        snapshot.quadInBufferPixels!![0] = -100f
+        assertEquals(
+            "Snapshot mutation must not mutate published state",
+            publishedFirstX,
+            coordinator.getPublishedState().quadInBufferPixels!![0],
+            0f,
+        )
 
         // Later frames in background thread do not affect captured snapshot
         currentTime += 80L

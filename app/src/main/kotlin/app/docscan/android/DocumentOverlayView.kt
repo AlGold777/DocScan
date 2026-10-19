@@ -43,13 +43,17 @@ class DocumentOverlayView(context: Context) : View(context) {
         color = 0xFF22C55E.toInt()
     }
 
-    fun setPolygonPixels(newPoints: FloatArray?) {
-        points = newPoints?.takeIf { it.size == 8 }?.clone()
+    private var isHeld: Boolean = false
+
+    fun setPolygonPixels(newPoints: FloatArray?, isHeld: Boolean = false) {
+        this.points = newPoints?.takeIf { it.size == 8 }?.clone()
+        this.isHeld = isHeld
         invalidate()
     }
 
     fun clear() {
         points = null
+        isHeld = false
         invalidate()
     }
 
@@ -62,6 +66,15 @@ class DocumentOverlayView(context: Context) : View(context) {
         path.lineTo(p[4], p[5])
         path.lineTo(p[6], p[7])
         path.close()
+
+        val strokeAlpha = if (isHeld) 110 else 255
+        val fillAlpha = if (isHeld) 15 else 36
+        val cornerAlpha = if (isHeld) 120 else 255
+
+        strokePaint.alpha = strokeAlpha
+        fillPaint.alpha = fillAlpha
+        cornerPaint.alpha = cornerAlpha
+        cornerStrokePaint.alpha = strokeAlpha
 
         canvas.drawPath(path, fillPaint)
         canvas.drawPath(path, strokePaint)

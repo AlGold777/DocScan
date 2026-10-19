@@ -75,64 +75,50 @@ data class LiveDetectionState(
     }
 }
 
+/** Serializes tracking events; published arrays are defensive copies. */
 class DocumentLiveDetectionCoordinator(
     private val maxTtlMs: Long = LiveDetectionState.DEFAULT_MAX_TTL_MS,
     private val clock: () -> Long = { android.os.SystemClock.elapsedRealtime() },
 ) {
+    init { require(maxTtlMs > 0) }
+
     private val generationSequence = AtomicLong(1L)
     @Volatile private var currentGenerationId = generationSequence.get()
-
     private val lock = Any()
-
-    @Volatile private var publishedState: LiveDetectionState = LiveDetectionState.empty(currentGenerationId)
-
-    // Internal state machine guarded by lock
+    private var publishedState = LiveDetectionState.empty(currentGenerationId)
+    private var activeSpec: AnalysisBufferSpec? = null
     private var provisionalPoints: FloatArray? = null
     private var provisionalQuad: CropQuadrilateral? = null
+    private var provisionalTimestampMs: Long? = null
     private var confirmedPoints: FloatArray? = null
     private var confirmedQuad: CropQuadrilateral? = null
-    private var lastConfirmedTimestampMs: Long = 0L
+    private var confirmedTimestampMs: Long? = null
+    private var confirmedScore = 0.0
+    private var lastFrameTimestampMs: Long? = null
 
     fun currentGeneration(): Long = currentGenerationId
 
-    fun newGeneration(): Long {
-        synchronized(lock) {
-            val nextGen = generationSequence.incrementAndGet()
-            currentGenerationId = nextGen
-            resetInternalState()
-            publishedState = LiveDetectionState.empty(nextGen)
-            return nextGen
-        }
+    fun newGeneration(): Long = synchronized(lock) { advanceGeneration() }
+
+    fun invalidate() = synchronized(lock) {
+        advanceGeneration()
+        publishedState = publishedState.copy(status = LiveDetectionStatus.EXPIRED)
     }
 
-    fun invalidate() {
-        synchronized(lock) {
-            val nextGen = generationSequence.incrementAndGet()
-            currentGenerationId = nextGen
-            resetInternalState()
-            publishedState = LiveDetectionState(
-                generationId = nextGen,
-                status = LiveDetectionStatus.EXPIRED,
-                analysisSpec = null,
-                quadInBufferPixels = null,
-                quadInNormalizedViewPort = null,
-                rawScore = 0.0,
-                frameTimestampMonotonicMs = 0L,
-                processedTimestampMonotonicMs = 0L,
-            )
-        }
+    /** Binds a frame to its geometry without allowing an in-flight old session back in. */
+    fun generationForFrame(spec: AnalysisBufferSpec, expectedGeneration: Long): Long? = synchronized(lock) {
+        if (expectedGeneration != currentGenerationId) return@synchronized null
+        if (activeSpec != null && activeSpec != spec) advanceGeneration()
+        activeSpec = spec
+        currentGenerationId
     }
 
-    fun getPublishedState(): LiveDetectionState = publishedState
+    fun getPublishedState(): LiveDetectionState = synchronized(lock) { publishedState.detached() }
 
-    fun captureSnapshot(): LiveDetectionState {
-        val state = publishedState
-        val now = clock()
-        return if (state.isUsableForAgreement && state.isFresh(now, maxTtlMs)) {
-            state
-        } else {
-            state.copy(status = LiveDetectionStatus.EXPIRED)
-        }
+    fun captureSnapshot(): LiveDetectionState = synchronized(lock) {
+        val state = publishedState.detached()
+        if (state.isUsableForAgreement && state.isFresh(clock(), maxTtlMs)) state
+        else state.copy(status = LiveDetectionStatus.EXPIRED)
     }
 
     fun onFrameDetected(
@@ -142,194 +128,134 @@ class DocumentLiveDetectionCoordinator(
         rawScore: Double,
         spec: AnalysisBufferSpec,
         processedTimestampMonotonicMs: Long = clock(),
-    ): LiveDetectionState {
-        synchronized(lock) {
-            if (generationId != currentGenerationId) {
-                return publishedState
-            }
+    ): LiveDetectionState = synchronized(lock) {
+        if (generationId != currentGenerationId) return@synchronized publishedState.detached()
+        // Callers may submit geometry directly (e.g. tests). Never smooth across spaces.
+        if (activeSpec != null && activeSpec != spec) {
+            advanceGeneration()
+            activeSpec = spec
+            return@synchronized publishedState.detached()
+        }
+        activeSpec = spec
+        if (frameTimestampMonotonicMs < 0 || !rawScore.isFinite() ||
+            processedTimestampMonotonicMs - frameTimestampMonotonicMs !in 0..maxTtlMs) {
+            return@synchronized onFrameMissing(currentGenerationId, processedTimestampMonotonicMs)
+        }
+        if (lastFrameTimestampMs?.let { frameTimestampMonotonicMs <= it } == true)
+            return@synchronized publishedState.detached()
+        if (lastFrameTimestampMs?.let { frameTimestampMonotonicMs - it > maxTtlMs } == true)
+            resetTracking()
+        lastFrameTimestampMs = frameTimestampMonotonicMs
 
-            val candidateQuad = try {
-                CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(rawBufferPoints, spec)
-            } catch (e: Throwable) {
-                return onFrameMissing(generationId, frameTimestampMonotonicMs)
-            }
+        val candidate = try {
+            CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(rawBufferPoints, spec)
+        } catch (_: IllegalArgumentException) {
+            return@synchronized onFrameMissing(currentGenerationId, frameTimestampMonotonicMs)
+        }
+        if (!isRecent(confirmedTimestampMs, frameTimestampMonotonicMs)) {
+            confirmedQuad = null
+            confirmedPoints = null
+        }
+        if (!isRecent(provisionalTimestampMs, frameTimestampMonotonicMs)) clearProvisional()
 
-            val curConfirmed = confirmedQuad
-            val curProvisional = provisionalQuad
-
-            if (curConfirmed != null) {
-                // Check agreement with already confirmed quad
-                val agree = QuadGeometryUtils.checkAgreement(curConfirmed, candidateQuad)
-                if (agree.agrees) {
-                    val smoothedPoints = applyEma(confirmedPoints!!, rawBufferPoints, displacement = agree.relativeCornerShift.toFloat())
-                    val smoothedQuad = CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(smoothedPoints, spec)
-                    confirmedPoints = smoothedPoints
-                    confirmedQuad = smoothedQuad
-                    lastConfirmedTimestampMs = frameTimestampMonotonicMs
-                    provisionalPoints = null
-                    provisionalQuad = null
-
-                    val nextState = LiveDetectionState(
-                        generationId = generationId,
-                        status = LiveDetectionStatus.CONFIRMED,
-                        analysisSpec = spec,
-                        quadInBufferPixels = smoothedPoints.clone(),
-                        quadInNormalizedViewPort = smoothedQuad,
-                        rawScore = rawScore,
-                        frameTimestampMonotonicMs = frameTimestampMonotonicMs,
-                        processedTimestampMonotonicMs = processedTimestampMonotonicMs,
-                    )
-                    publishedState = nextState
-                    return nextState
-                } else {
-                    // Sudden jump: do not accept immediately as confirmed.
-                    // Start provisional tracking. Keep previous confirmed as HELD temporarily if fresh.
-                    provisionalPoints = rawBufferPoints.clone()
-                    provisionalQuad = candidateQuad
-
-                    val isStillFresh = (frameTimestampMonotonicMs - lastConfirmedTimestampMs) <= maxTtlMs
-                    val nextStatus = if (isStillFresh) LiveDetectionStatus.HELD else LiveDetectionStatus.PROVISIONAL
-                    val heldQuad = if (isStillFresh) confirmedQuad else candidateQuad
-                    val heldPoints = if (isStillFresh) confirmedPoints else rawBufferPoints
-
-                    val nextState = LiveDetectionState(
-                        generationId = generationId,
-                        status = nextStatus,
-                        analysisSpec = spec,
-                        quadInBufferPixels = heldPoints?.clone(),
-                        quadInNormalizedViewPort = heldQuad,
-                        rawScore = rawScore,
-                        frameTimestampMonotonicMs = frameTimestampMonotonicMs,
-                        processedTimestampMonotonicMs = processedTimestampMonotonicMs,
-                    )
-                    publishedState = nextState
-                    return nextState
-                }
-            } else if (curProvisional != null) {
-                // We have 1 provisional candidate; check if this second frame confirms it
-                val agree = QuadGeometryUtils.checkAgreement(curProvisional, candidateQuad)
-                if (agree.agrees) {
-                    // Confirmed by two consecutive consistent observations!
-                    val smoothedPoints = applyEma(provisionalPoints!!, rawBufferPoints, displacement = agree.relativeCornerShift.toFloat())
-                    val smoothedQuad = CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(smoothedPoints, spec)
-                    confirmedPoints = smoothedPoints
-                    confirmedQuad = smoothedQuad
-                    lastConfirmedTimestampMs = frameTimestampMonotonicMs
-                    provisionalPoints = null
-                    provisionalQuad = null
-
-                    val nextState = LiveDetectionState(
-                        generationId = generationId,
-                        status = LiveDetectionStatus.CONFIRMED,
-                        analysisSpec = spec,
-                        quadInBufferPixels = smoothedPoints.clone(),
-                        quadInNormalizedViewPort = smoothedQuad,
-                        rawScore = rawScore,
-                        frameTimestampMonotonicMs = frameTimestampMonotonicMs,
-                        processedTimestampMonotonicMs = processedTimestampMonotonicMs,
-                    )
-                    publishedState = nextState
-                    return nextState
-                } else {
-                    // Jumped again without confirmation; update provisional to the new candidate
-                    provisionalPoints = rawBufferPoints.clone()
-                    provisionalQuad = candidateQuad
-
-                    val nextState = LiveDetectionState(
-                        generationId = generationId,
-                        status = LiveDetectionStatus.PROVISIONAL,
-                        analysisSpec = spec,
-                        quadInBufferPixels = rawBufferPoints.clone(),
-                        quadInNormalizedViewPort = candidateQuad,
-                        rawScore = rawScore,
-                        frameTimestampMonotonicMs = frameTimestampMonotonicMs,
-                        processedTimestampMonotonicMs = processedTimestampMonotonicMs,
-                    )
-                    publishedState = nextState
-                    return nextState
-                }
+        val confirmedAgreement = confirmedQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
+        val provisionalAgreement = provisionalQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
+        val reference = when {
+            confirmedAgreement?.agrees == true -> confirmedPoints
+            provisionalAgreement?.agrees == true -> provisionalPoints
+            else -> null
+        }
+        if (reference != null) {
+            val agreement = if (confirmedAgreement?.agrees == true) confirmedAgreement else provisionalAgreement!!
+            val smoothed = applyEma(reference, rawBufferPoints, agreement.relativeCornerShift.toFloat())
+            confirmedPoints = smoothed
+            confirmedQuad = CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(smoothed, spec)
+            confirmedTimestampMs = frameTimestampMonotonicMs
+            confirmedScore = rawScore
+            clearProvisional()
+            publishedState = state(LiveDetectionStatus.CONFIRMED, spec, smoothed, confirmedQuad,
+                rawScore, frameTimestampMonotonicMs, processedTimestampMonotonicMs)
+        } else {
+            provisionalPoints = rawBufferPoints.clone()
+            provisionalQuad = candidate
+            provisionalTimestampMs = frameTimestampMonotonicMs
+            publishedState = if (confirmedQuad != null) {
+                state(LiveDetectionStatus.HELD, spec, confirmedPoints, confirmedQuad, confirmedScore,
+                    confirmedTimestampMs!!, processedTimestampMonotonicMs)
             } else {
-                // Initial candidate: 1 frame seen -> PROVISIONAL (never CONFIRMED on first frame)
-                provisionalPoints = rawBufferPoints.clone()
-                provisionalQuad = candidateQuad
-
-                val nextState = LiveDetectionState(
-                    generationId = generationId,
-                    status = LiveDetectionStatus.PROVISIONAL,
-                    analysisSpec = spec,
-                    quadInBufferPixels = rawBufferPoints.clone(),
-                    quadInNormalizedViewPort = candidateQuad,
-                    rawScore = rawScore,
-                    frameTimestampMonotonicMs = frameTimestampMonotonicMs,
-                    processedTimestampMonotonicMs = processedTimestampMonotonicMs,
-                )
-                publishedState = nextState
-                return nextState
+                state(LiveDetectionStatus.PROVISIONAL, spec, provisionalPoints, candidate, rawScore,
+                    frameTimestampMonotonicMs, processedTimestampMonotonicMs)
             }
         }
+        publishedState.detached()
     }
 
-    fun onFrameMissing(generationId: Long, nowMonotonicMs: Long = clock()): LiveDetectionState {
-        synchronized(lock) {
-            if (generationId != currentGenerationId) {
-                return publishedState
-            }
-
-            val lastTime = lastConfirmedTimestampMs
-            val confirmed = confirmedPoints
-            val quad = confirmedQuad
-
-            if (confirmed != null && quad != null && (nowMonotonicMs - lastTime) <= maxTtlMs) {
-                // Held contour within TTL: dimmed/held, but NOT eligible for fresh auto-crop agreement
-                val nextState = LiveDetectionState(
-                    generationId = generationId,
-                    status = LiveDetectionStatus.HELD,
-                    analysisSpec = publishedState.analysisSpec,
-                    quadInBufferPixels = confirmed.clone(),
-                    quadInNormalizedViewPort = quad,
-                    rawScore = publishedState.rawScore,
-                    frameTimestampMonotonicMs = lastTime,
-                    processedTimestampMonotonicMs = nowMonotonicMs,
-                )
-                publishedState = nextState
-                return nextState
-            } else {
-                // TTL expired or no prior confirmed quad
-                resetInternalState()
-                val nextState = LiveDetectionState(
-                    generationId = generationId,
-                    status = LiveDetectionStatus.EXPIRED,
-                    analysisSpec = null,
-                    quadInBufferPixels = null,
-                    quadInNormalizedViewPort = null,
-                    rawScore = 0.0,
-                    frameTimestampMonotonicMs = 0L,
-                    processedTimestampMonotonicMs = nowMonotonicMs,
-                )
-                publishedState = nextState
-                return nextState
-            }
+    fun onFrameMissing(generationId: Long, nowMonotonicMs: Long = clock()): LiveDetectionState = synchronized(lock) {
+        if (generationId != currentGenerationId) return@synchronized publishedState.detached()
+        if (lastFrameTimestampMs?.let { nowMonotonicMs < it } == true)
+            return@synchronized publishedState.detached()
+        clearProvisional() // A missing observation breaks consecutive confirmation.
+        lastFrameTimestampMs = nowMonotonicMs
+        publishedState = if (confirmedQuad != null && isRecent(confirmedTimestampMs, nowMonotonicMs)) {
+            state(LiveDetectionStatus.HELD, activeSpec, confirmedPoints, confirmedQuad, confirmedScore,
+                confirmedTimestampMs!!, nowMonotonicMs)
+        } else {
+            resetTracking()
+            LiveDetectionState.empty(currentGenerationId).copy(status = LiveDetectionStatus.EXPIRED,
+                processedTimestampMonotonicMs = nowMonotonicMs)
         }
+        publishedState.detached()
     }
 
-    private fun resetInternalState() {
+    private fun isRecent(timestamp: Long?, now: Long): Boolean =
+        timestamp != null && now - timestamp in 0..maxTtlMs
+
+    private fun advanceGeneration(): Long {
+        currentGenerationId = generationSequence.incrementAndGet()
+        resetTracking()
+        activeSpec = null
+        publishedState = LiveDetectionState.empty(currentGenerationId)
+        return currentGenerationId
+    }
+
+    private fun clearProvisional() {
         provisionalPoints = null
         provisionalQuad = null
-        confirmedPoints = null
-        confirmedQuad = null
-        lastConfirmedTimestampMs = 0L
+        provisionalTimestampMs = null
     }
 
+    private fun resetTracking() {
+        clearProvisional()
+        confirmedPoints = null
+        confirmedQuad = null
+        confirmedTimestampMs = null
+        confirmedScore = 0.0
+        lastFrameTimestampMs = null
+    }
+
+    private fun state(status: LiveDetectionStatus, spec: AnalysisBufferSpec?, points: FloatArray?,
+                      quad: CropQuadrilateral?, score: Double, timestamp: Long, processed: Long) =
+        LiveDetectionState(currentGenerationId, status, spec, points?.clone(), quad, score, timestamp, processed)
+
+    private fun LiveDetectionState.detached() = copy(quadInBufferPixels = quadInBufferPixels?.clone())
+
     private fun applyEma(previous: FloatArray, incoming: FloatArray, displacement: Float): FloatArray {
+        // Match cyclic corner numbering before interpolating near a 45-degree rotation.
+        val shift = (0 until 4).minByOrNull { offset ->
+            (0 until 4).sumOf { index ->
+                val other = (index + offset) % 4
+                hypot((previous[index * 2] - incoming[other * 2]).toDouble(),
+                    (previous[index * 2 + 1] - incoming[other * 2 + 1]).toDouble())
+            }
+        } ?: 0
         val alpha = when {
             displacement < 0.015f -> 0.18f
             displacement < 0.04f -> 0.30f
             else -> 0.50f
         }
-        val result = FloatArray(8)
-        for (i in 0 until 8) {
-            result[i] = previous[i] + alpha * (incoming[i] - previous[i])
+        return FloatArray(8) { i ->
+            val source = ((i / 2 + shift) % 4) * 2 + i % 2
+            previous[i] + alpha * (incoming[source] - previous[i])
         }
-        return result
     }
 }
