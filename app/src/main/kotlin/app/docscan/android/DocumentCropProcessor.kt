@@ -154,6 +154,7 @@ object DocumentCropProcessor {
         val gray = Mat()
         val blur = Mat()
         val edgeMask = Mat()
+        val boundaryEdges = Mat()
         val paperMask = Mat()
         val tmp = Mat()
         try {
@@ -167,6 +168,9 @@ object DocumentCropProcessor {
             val low = max(20.0, otsuLevel * 0.45)
             val high = max(low + 20.0, otsuLevel * 1.20)
             Imgproc.Canny(blur, canny, low, high, 3, true)
+            // Closing can merge a page's thin outer margin with the image border.
+            // Keep the measured boundary as an independent candidate map and fit reference.
+            canny.copyTo(boundaryEdges)
 
             // Adaptive threshold большим блоком переживает неравномерное освещение
             val adapt = Mat()
@@ -195,8 +199,8 @@ object DocumentCropProcessor {
             val frameArea = work.cols().toDouble() * work.rows()
             var best: Candidate? = null
             var bestMap = ""
-            for ((mask, name) in listOf(edgeMask to "edges", paperMask to "paper")) {
-                for (cand in extractCandidates(mask, gray, edgeMask, frameArea)) {
+            for ((mask, name) in listOf(boundaryEdges to "boundary", edgeMask to "edges", paperMask to "paper")) {
+                for (cand in extractCandidates(mask, gray, boundaryEdges, paperMask, frameArea)) {
                     if (best == null || cand.score > best.score) {
                         best = cand
                         bestMap = name
@@ -206,7 +210,7 @@ object DocumentCropProcessor {
 
             // ---- Фоллбек HoughLinesP при слабом скоре контуров ----
             if (best == null || best.score < MIN_SCORE) {
-                val hough = houghLinesFallback(edgeMask, gray, frameArea)
+                val hough = houghLinesFallback(boundaryEdges, gray, paperMask, frameArea)
                 if (hough != null && (best == null || hough.score > best.score)) {
                     best = hough
                     bestMap = "hough"
@@ -219,7 +223,7 @@ object DocumentCropProcessor {
             if (best == null || best.score < MIN_SCORE) return null
 
             // ---- Субпиксельное уточнение граней через fitLine ----
-            val refined = refineQuadWithFitLine(best.pts, edgeMask)
+            val refined = refineQuadWithFitLine(best.pts, boundaryEdges)
 
             val inv = 1.0f / ds.toFloat()
             val pts = FloatArray(8)
@@ -233,6 +237,7 @@ object DocumentCropProcessor {
             gray.release()
             blur.release()
             edgeMask.release()
+            boundaryEdges.release()
             paperMask.release()
             tmp.release()
         }
@@ -313,6 +318,7 @@ object DocumentCropProcessor {
         mask: Mat,
         gray: Mat,
         edgeMapRef: Mat,
+        paperMask: Mat,
         frameArea: Double,
     ): List<Candidate> {
         val work = mask.clone()
@@ -339,7 +345,7 @@ object DocumentCropProcessor {
                 hull.release()
                 if (quad == null) continue
                 val ordered = orderCorners(quad) ?: continue
-                val score = scoreQuad(ordered, gray, edgeMapRef, frameArea) ?: continue
+                val score = scoreQuad(ordered, gray, edgeMapRef, paperMask, frameArea) ?: continue
                 result += Candidate(ordered, score)
             }
         } finally {
@@ -427,6 +433,7 @@ object DocumentCropProcessor {
         p: List<Point>,
         gray: Mat,
         edgeMap: Mat,
+        paperMask: Mat,
         frameArea: Double,
     ): Double? {
         if (p.distinctBy { it.x.roundToInt() to it.y.roundToInt() }.size < 4) return null
@@ -455,7 +462,9 @@ object DocumentCropProcessor {
         val maxSide = max(width, height)
         val minSide = max(1.0, min(width, height))
         val aspect = maxSide / minSide
-        if (aspect > 12.0) return null
+        // A nominal 1:12 receipt becomes slightly narrower under perspective and
+        // integer contour sampling. This is a tolerance, not an extra user mode.
+        if (aspect > 13.0) return null
 
         val category = if (aspect <= 2.8) DocumentCategory.PAGE else DocumentCategory.RECEIPT
 
@@ -526,7 +535,9 @@ object DocumentCropProcessor {
             0.15 * borderPenalty
         }
 
-        return baseScore
+        // A colored table around a white page has strong geometry/contrast too.
+        // Penalize the non-paper area enclosed by that outer rectangle.
+        return baseScore - 0.30 * (1.0 - paperCoverage(p, paperMask))
     }
 
     // --- Геометрия ---
@@ -647,8 +658,21 @@ object DocumentCropProcessor {
         return (1.0 - sqrt(dx * dx + dy * dy) / 1.414).coerceIn(0.0, 1.0)
     }
 
+    private fun paperCoverage(p: List<Point>, paperMask: Mat): Double {
+        val interior = Mat.zeros(paperMask.size(), CvType.CV_8UC1)
+        val polygon = MatOfPoint(*p.toTypedArray())
+        return try {
+            Imgproc.fillConvexPoly(interior, polygon, Scalar(255.0))
+            (Core.mean(paperMask, interior).`val`[0] / 255.0).coerceIn(0.0, 1.0)
+        } finally {
+            polygon.release()
+            interior.release()
+        }
+    }
+
     private fun borderPenalty(p: List<Point>, w: Int, h: Int): Double {
-        val m = min(w, h) * 0.025
+        // Proximity alone is not evidence of a clipped page: 95–98% occupancy is valid.
+        val m = 1.0
         return p.count { it.x < m || it.y < m || it.x > w - m || it.y > h - m } / 4.0
     }
 
@@ -765,7 +789,7 @@ object DocumentCropProcessor {
         return ordered
     }
 
-    private fun houghLinesFallback(edgeMask: Mat, gray: Mat, frameArea: Double): Candidate? {
+    private fun houghLinesFallback(edgeMask: Mat, gray: Mat, paperMask: Mat, frameArea: Double): Candidate? {
         val linesMat = Mat()
         return try {
             Imgproc.HoughLinesP(edgeMask, linesMat, 1.0, Math.PI / 180.0, 35, 30.0, 10.0)
@@ -826,7 +850,7 @@ object DocumentCropProcessor {
             val ordered = orderCorners(rawPts) ?: return null
             if (!isConvex(ordered)) return null
 
-            val sc = scoreQuad(ordered, gray, edgeMask, frameArea)
+            val sc = scoreQuad(ordered, gray, edgeMask, paperMask, frameArea)
             if (sc != null && sc >= 0.40) Candidate(ordered, sc) else null
         } catch (e: Throwable) {
             null
