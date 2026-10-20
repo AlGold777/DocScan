@@ -25,7 +25,7 @@ data class DocumentCropPlan(
     }
 
     companion object {
-        const val ALGORITHM_VERSION = "auto-perspective-crop-v2"
+        const val ALGORITHM_VERSION = "auto-perspective-crop-v3-pixel-centres"
     }
 }
 

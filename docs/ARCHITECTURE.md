@@ -1,8 +1,14 @@
-# DBQ — программная цепочка 0.4.280
+# DBQ — общая цепочка и кандидаты 0.4.281
 
-Live использует elapsedRealtime и deadline 200 мс от receipt, не от публикации. Sensor-to-present не измерен. Проверка поколения, публикации и deadline выполняется перед UI apply и onDraw; таймер View удаляет рамку без новых кадров и отменяется при detach. Live/JPEG veto по умолчанию недоступен: нужны доказанные FOV и время экспозиции. Оригинальный JPEG и существующий crop plan сохраняются.
+`DocumentBoundaryPipeline` связывает синхронный borrowed RGBA frame, детектор и coordinator. CameraX KEEP_ONLY_LATEST и `LatestDocumentPublication` ограничивают очереди. Native buffers закрываются последовательным analyzer-владельцем; собственный previous gray tracker освобождается при reset/close. Смена generation/layout инвалидирует UI.
 
-Это программные изменения; физическая приёмка ожидается в конце реализации по указанию владельца. Актуальные прогоны: [DBQ](document-boundary-quality/execution-log.md). Ниже сохранена историческая документация с её исходными границами доказательств.
+Координаты detector/tracker — пиксельные центры, resize имеет точную обратную матрицу. Перед CameraX mapping добавляется 0.5 px ровно один раз; чистый `CameraGeometryTransform` продолжает описывать continuous buffer boundary space. JPEG-normalized точки делятся на W−1/H−1 и обратно умножаются на W−1/H−1 при warp. ImageDecoder применяет EXIF; повторного поворота JPEG нет.
+
+Оригинальный детектор остаётся default. A и optical flow включаются только debug extras; LC100/T8/ONNX Runtime используются только AndroidTest. Flow не подтверждает первую детекцию, не меняет semantic timestamp, имеет ceiling 500 мс и визуальный deadline 200 мс. Prediction выключен. `DocumentQuadFilter` содержит варианты для экспериментального сравнения; основной coordinator сохраняет EMA с отдельной measured-геометрией для ассоциации.
+
+Still processing сначала сохраняет оригинал, затем уточняет coarse quad на отдельной копии ≤2 Мп/1600 px с 32 МиБ admission. Refiner контролирует поддержку каждой стороны и откатывает ухудшение; отказ сохраняет полный кадр. Warp продолжает использовать существующий бюджет и version-bound plan v3.
+
+Подробности: [решение](document-boundary-quality/decision-record.md), [команды/диагностика](document-boundary-quality/software-runbook.md), [выполненные прогоны](document-boundary-quality/execution-log.md). Физическое совмещение, sensor-to-present, PSS/thermal/energy, реальный корпус и выбор движка пока не квалифицированы. Ниже сохранена историческая документация с её исходными границами доказательств.
 
 ---
 

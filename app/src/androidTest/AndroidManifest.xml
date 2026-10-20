@@ -4,10 +4,6 @@
         android:name="app.docscan.scanner.test.permission.READ_PDF_SOURCE"
         android:protectionLevel="normal" />
     <application>
-        <activity
-            android:name="app.docscan.android.DocumentOverlayTestActivity"
-            android:process="app.docscan.scanner"
-            android:exported="true" />
         <provider
             android:name="app.docscan.android.PdfSourceFaultTestProvider"
             android:authorities="app.docscan.scanner.test.pdfsource"

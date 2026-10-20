@@ -1,0 +1,23 @@
+Main checkout source state at transfer/final documentation update
+Git HEAD before this uncommitted version-0.4.281 work: 8e27a1a713e46f6b0de8ec3587727fca6846101b
+Application version in app/build.gradle.kts: versionCode 400, versionName 0.4.281
+No Gradle command was run from the main checkout during this transfer.
+
+Test-only source SHA-256:
+15e60acf613f3b01cfd940b425b048c6f4d75e592a8750ea68abb16242747dc4  app/src/androidTest/kotlin/app/docscan/android/DocAlignerAndroidTestAdapter.kt
+7543e967a0edb79d699040bb2d9dd1366bf08c6e9a04b43aae15f40328d8e6ab  app/src/androidTest/kotlin/app/docscan/android/DocAlignerAndroidReferenceInstrumentedTest.kt
+
+Contract used by the main source tree (not copied into androidTest):
+965872adcb3c2d0a3f5de5442c6102fd0377b3f413690e9a874d7acea30fae98  app/src/main/kotlin/app/docscan/android/DocumentBoundaryContracts.kt
+
+Gradle file working-tree SHA-256 (includes version 0.4.281 plus the test-only
+ONNX Runtime dependency; it also contains concurrent versioning edits):
+e2ddc110b40129900bd740017a6dd5d3994e12b40eb5999bdec2e3c3b4e91c5b  app/build.gradle.kts
+
+Explicit asset fetch/generation tool SHA-256:
+4ab5987acd2bbf3bf42f20a2df638ca7702c54edb7d3505f8abfd41da6472d8f  tools/fetch_docaligner_reference_assets.py
+
+The actual ignored local asset hashes are in `androidtest-assets.sha256`.
+The temporary API 36 emulator result in `instrumentation-results.xml` predates
+the source transfer and does not establish parity for these main-tree source
+hashes.

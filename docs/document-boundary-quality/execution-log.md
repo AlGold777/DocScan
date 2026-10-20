@@ -35,3 +35,43 @@ resource budgets and final corpus are not yet qualified.
 * Overlay instrumentation is INCONCLUSIVE: helper Activity setup/runner hung at
   0/3; stopped after bounded investigation. This is not evidence of phone or View
   presentation correctness. Original baseline native fixtures passed 3/3 on emulator.
+
+## Owner direction and experimental provenance
+
+* Owner explicitly moved all real-phone checks to after the full implementation.
+  Emulator-only development runs were used in the meantime; no physical phone
+  was connected or modified during these runs.
+* LC100 and T8 FP32 references were reproduced by GPT-6 Luna high on the host and
+  in an isolated API36 Android emulator harness. The upstream Capybara
+  postprocess matched the independent OpenCV translation; Android reference
+  tests passed 5/5. Exact pinned model hashes, commands, first failed runner
+  attempt and successful repeats are preserved in `runs/models-reference/`.
+* Both heatmap-only graphs produced a non-document graphic-panel lock. The
+  reference adapter therefore stays AMBIGUOUS and does not authorize capture.
+  Production does not contain model weights or ONNX Runtime; test artifacts are
+  optional local inputs provisioned by an explicit hash-verifying script.
+
+## 0.4.281 — implementation and development validation
+
+* Added viewport-aware detector contracts, bounded A proposals, common Huber
+  refinement, optical flow with geometric/inlier/coverage/reprojection gates,
+  experimental time filters and exact resize/EXIF/letterbox transforms.
+* Added a single replaceable UI publication, distinct measured association and
+  semantic/visual timestamps, partial/error states, localized hints and bounded
+  debug recording. Prediction is disabled; original backend remains default.
+* Added bounded JPEG refinement and made still normalization match warp's pixel
+  centres, preserving original publication and existing admission/storage/OCR
+  invariants. The crop plan version is now v3.
+* First software validation: forced core 184/184 and app 75/75 tests passed;
+  AndroidTest compilation passed. Python geometric evaluator: 9/9. All were
+  executed/analyzed by GPT-6 Luna high. Current native run details are recorded
+  under `runs/candidates-0.4.281/`; final results are added after completion.
+* First 19-case native attempt exposed two test-assertion mistakes (matrix
+  coefficient count and an implementation-specific callback counter), retained
+  in evidence. Test corrections preserve observable lease-expiry assertions;
+  a repeated run is required before any native PASS claim.
+
+* Corrected test-only assertions and repeated the same emulator filter: **19/19,
+  zero skips**. Original crop thresholds remain unchanged. Signed debug/release
+  0.4.281/code400 builds passed; signature, ABI, package and alias checks passed.
+  See `runs/candidates-0.4.281/final-results.md` and `apk-artifact-checks.md`.

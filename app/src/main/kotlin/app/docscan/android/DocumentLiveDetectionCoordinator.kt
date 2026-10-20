@@ -10,6 +10,8 @@ enum class LiveDetectionStatus {
     CONFIRMED,
     HELD,
     EXPIRED,
+    PARTIAL,
+    ERROR,
 }
 
 data class LiveDetectionState(
@@ -23,6 +25,9 @@ data class LiveDetectionState(
     val processedTimestampMonotonicMs: Long,
     val publicationId: Long = 0L,
     val visualDeadlineMonotonicMs: Long = frameTimestampMonotonicMs + DEFAULT_MAX_TTL_MS,
+    val lastDetectionTimestampMonotonicMs: Long = frameTimestampMonotonicMs,
+    val trackId: Long? = null,
+    val isTrackedGeometry: Boolean = false,
 ) {
     val isUsableForAgreement: Boolean
         get() = status == LiveDetectionStatus.CONFIRMED && quadInNormalizedViewPort != null
@@ -50,6 +55,8 @@ data class LiveDetectionState(
         if (processedTimestampMonotonicMs != other.processedTimestampMonotonicMs) return false
         if (publicationId != other.publicationId) return false
         if (visualDeadlineMonotonicMs != other.visualDeadlineMonotonicMs) return false
+        if (lastDetectionTimestampMonotonicMs != other.lastDetectionTimestampMonotonicMs) return false
+        if (trackId != other.trackId || isTrackedGeometry != other.isTrackedGeometry) return false
         return true
     }
 
@@ -64,6 +71,9 @@ data class LiveDetectionState(
         result = 31 * result + processedTimestampMonotonicMs.hashCode()
         result = 31 * result + publicationId.hashCode()
         result = 31 * result + visualDeadlineMonotonicMs.hashCode()
+        result = 31 * result + lastDetectionTimestampMonotonicMs.hashCode()
+        result = 31 * result + (trackId?.hashCode() ?: 0)
+        result = 31 * result + isTrackedGeometry.hashCode()
         return result
     }
 
@@ -100,10 +110,14 @@ class DocumentLiveDetectionCoordinator(
     private var provisionalTimestampMs: Long? = null
     private var confirmedPoints: FloatArray? = null
     private var confirmedQuad: CropQuadrilateral? = null
+    private var measuredConfirmedQuad: CropQuadrilateral? = null
     private var confirmedTimestampMs: Long? = null
+    private var confirmedVisualTimestampMs: Long? = null
     private var confirmedScore = 0.0
     private var lastFrameTimestampMs: Long? = null
     private var publicationSequence = 0L
+    private var trackSequence = 0L
+    private var activeTrackId: Long? = null
 
     fun currentGeneration(): Long = currentGenerationId
 
@@ -139,6 +153,42 @@ class DocumentLiveDetectionCoordinator(
         val state = publishedState.detached()
         if (state.isUsableForAgreement && state.isFresh(clock(), maxTtlMs)) state
         else state.copy(status = LiveDetectionStatus.EXPIRED)
+    }
+
+    /** Explicit unavailable evidence never retains a full confirmed contour. */
+    fun onFrameUnavailable(generationId: Long, timestampMs: Long,
+                           status: LiveDetectionStatus): LiveDetectionState = synchronized(lock) {
+        require(status == LiveDetectionStatus.PARTIAL || status == LiveDetectionStatus.ERROR)
+        if (generationId != currentGenerationId || lastFrameTimestampMs?.let { timestampMs <= it } == true)
+            return@synchronized publishedState.detached()
+        resetTracking()
+        lastFrameTimestampMs = timestampMs
+        publishedState = LiveDetectionState.empty(currentGenerationId).copy(status = status,
+            publicationId = ++publicationSequence, processedTimestampMonotonicMs = timestampMs)
+        publishedState.detached()
+    }
+
+    /** Flow renews visual evidence, never detector evidence or initial confirmation. */
+    fun onFrameTracked(generationId: Long, timestampMs: Long, points: FloatArray,
+                       spec: AnalysisBufferSpec): LiveDetectionState = synchronized(lock) {
+        if (generationId != currentGenerationId || spec != activeSpec ||
+            lastFrameTimestampMs?.let { timestampMs <= it } == true) return@synchronized publishedState.detached()
+        val detectionTimestamp = confirmedTimestampMs
+        if (confirmedQuad == null || detectionTimestamp == null || timestampMs - detectionTimestamp !in 0 until 500L)
+            return@synchronized onFrameMissing(generationId, timestampMs)
+        val measured = try { CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(points, spec) }
+            catch (_: IllegalArgumentException) { return@synchronized onFrameMissing(generationId, timestampMs) }
+        clearProvisional()
+        lastFrameTimestampMs = timestampMs
+        confirmedPoints = points.clone()
+        confirmedQuad = measured
+        measuredConfirmedQuad = measured
+        confirmedVisualTimestampMs = timestampMs
+        publishedState = state(LiveDetectionStatus.HELD, spec, points, measured, confirmedScore,
+            timestampMs, clock()).copy(visualDeadlineMonotonicMs = minOf(
+                timestampMs + maxTtlMs, detectionTimestamp + 500L),
+                lastDetectionTimestampMonotonicMs = detectionTimestamp, isTrackedGeometry = true)
+        publishedState.detached()
     }
 
     fun onFrameDetected(
@@ -177,10 +227,12 @@ class DocumentLiveDetectionCoordinator(
         if (!isRecent(confirmedTimestampMs, frameTimestampMonotonicMs)) {
             confirmedQuad = null
             confirmedPoints = null
+            measuredConfirmedQuad = null
+            activeTrackId = null
         }
         if (!isRecent(provisionalTimestampMs, frameTimestampMonotonicMs)) clearProvisional()
 
-        val confirmedAgreement = confirmedQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
+        val confirmedAgreement = measuredConfirmedQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
         val provisionalAgreement = provisionalQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
         val reference = when {
             confirmedAgreement?.agrees == true -> confirmedPoints
@@ -196,8 +248,11 @@ class DocumentLiveDetectionCoordinator(
                 proposed
             } catch (_: IllegalArgumentException) { rawBufferPoints.clone() }
             confirmedPoints = smoothed
+            if (confirmedAgreement?.agrees != true) activeTrackId = ++trackSequence
+            measuredConfirmedQuad = candidate
             confirmedQuad = CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(smoothed, spec)
             confirmedTimestampMs = frameTimestampMonotonicMs
+            confirmedVisualTimestampMs = frameTimestampMonotonicMs
             confirmedScore = rawScore
             clearProvisional()
             publishedState = state(LiveDetectionStatus.CONFIRMED, spec, smoothed, confirmedQuad,
@@ -208,7 +263,9 @@ class DocumentLiveDetectionCoordinator(
             provisionalTimestampMs = frameTimestampMonotonicMs
             publishedState = if (confirmedQuad != null) {
                 state(LiveDetectionStatus.HELD, spec, confirmedPoints, confirmedQuad, confirmedScore,
-                    confirmedTimestampMs!!, processedTimestampMonotonicMs)
+                    confirmedVisualTimestampMs!!, processedTimestampMonotonicMs).copy(
+                        lastDetectionTimestampMonotonicMs = confirmedTimestampMs!!,
+                        visualDeadlineMonotonicMs = minOf(confirmedVisualTimestampMs!! + maxTtlMs, confirmedTimestampMs!! + 500L))
             } else {
                 state(LiveDetectionStatus.PROVISIONAL, spec, provisionalPoints, candidate, rawScore,
                     frameTimestampMonotonicMs, processedTimestampMonotonicMs)
@@ -223,9 +280,12 @@ class DocumentLiveDetectionCoordinator(
             return@synchronized publishedState.detached()
         clearProvisional() // A missing observation breaks consecutive confirmation.
         lastFrameTimestampMs = nowMonotonicMs
-        publishedState = if (confirmedQuad != null && isRecent(confirmedTimestampMs, nowMonotonicMs)) {
+        publishedState = if (confirmedQuad != null && isRecent(confirmedVisualTimestampMs, nowMonotonicMs) &&
+            confirmedTimestampMs?.let { nowMonotonicMs - it in 0 until 500L } == true) {
             state(LiveDetectionStatus.HELD, activeSpec, confirmedPoints, confirmedQuad, confirmedScore,
-                confirmedTimestampMs!!, nowMonotonicMs)
+                confirmedVisualTimestampMs!!, nowMonotonicMs).copy(
+                    lastDetectionTimestampMonotonicMs = confirmedTimestampMs!!,
+                    visualDeadlineMonotonicMs = minOf(confirmedVisualTimestampMs!! + maxTtlMs, confirmedTimestampMs!! + 500L))
         } else {
             resetTracking()
             LiveDetectionState.empty(currentGenerationId).copy(status = LiveDetectionStatus.EXPIRED,
@@ -255,7 +315,10 @@ class DocumentLiveDetectionCoordinator(
         clearProvisional()
         confirmedPoints = null
         confirmedQuad = null
+        measuredConfirmedQuad = null
+        activeTrackId = null
         confirmedTimestampMs = null
+        confirmedVisualTimestampMs = null
         confirmedScore = 0.0
         lastFrameTimestampMs = null
     }
@@ -264,7 +327,8 @@ class DocumentLiveDetectionCoordinator(
                       quad: CropQuadrilateral?, score: Double, timestamp: Long, processed: Long) =
         LiveDetectionState(currentGenerationId, status, spec, points?.clone(), quad, score, timestamp, processed,
             publicationId = ++publicationSequence,
-            visualDeadlineMonotonicMs = if (timestamp > Long.MAX_VALUE - maxTtlMs) Long.MAX_VALUE else timestamp + maxTtlMs)
+            visualDeadlineMonotonicMs = if (timestamp > Long.MAX_VALUE - maxTtlMs) Long.MAX_VALUE else timestamp + maxTtlMs,
+            trackId = activeTrackId)
 
     private fun LiveDetectionState.detached() = copy(quadInBufferPixels = quadInBufferPixels?.clone())
 

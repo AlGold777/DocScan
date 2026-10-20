@@ -15,3 +15,15 @@ __pycache__/
 /app/src/androidTest/assets/tessdata-best/*.traineddata
 
 /app/src/androidTest/assets/funsd/
+
+# Optional DocAligner model/reference fixtures; download locally with the explicit tooling command.
+/app/src/androidTest/assets/models/*.onnx
+/app/src/androidTest/assets/docaligner_run_test_card.jpg
+/app/src/androidTest/assets/docaligner_run_test_card.png
+/app/src/androidTest/assets/negative_white.png
+/app/src/androidTest/assets/negative_black.png
+/app/src/androidTest/assets/negative_uniform_gray.png
+/app/src/androidTest/assets/negative_low_contrast_noise.png
+/app/src/androidTest/assets/negative_checker_clutter.png
+/app/src/androidTest/assets/negative_graphic_panel.png
+/app/src/androidTest/assets/synthetic_document.png

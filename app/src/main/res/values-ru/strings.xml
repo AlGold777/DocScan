@@ -251,4 +251,10 @@
     <string name="ocr_no_text">Текст не найден. Изображение страницы сохранено.</string>
     <string name="saved_text_layer_warning">У текстового слоя есть ограничения. Проверьте выделение и копирование текста в сохранённом PDF.</string>
     <string name="ocr_memory_error">Недостаточно памяти для распознавания страницы. Исходное изображение сохранено.</string>
+
+    <string name="document_boundary_searching">Поиск документа</string>
+    <string name="document_boundary_confirmed">Границы документа подтверждены</string>
+    <string name="document_boundary_uncertain">Граница не уверена — держите камеру ровно</string>
+    <string name="document_boundary_partial">Поместите документ целиком в кадр</string>
+    <string name="document_boundary_error">Определение границ недоступно — можно сделать снимок вручную</string>
 </resources>

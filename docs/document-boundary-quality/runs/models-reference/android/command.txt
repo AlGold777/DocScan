@@ -1,0 +1,11 @@
+Working directory: `/tmp/docscan-dbq-model-android-tests`
+
+Pre-run device selection check: `/Users/restart/Library/Android/sdk/platform-tools/adb devices -l`
+
+Selected device: `emulator-5554` (DocScanArbitration_API_36_1, API 36)
+
+```sh
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home PATH=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home/bin:$PATH ANDROID_HOME=/Users/restart/Library/Android/sdk ANDROID_SDK_ROOT=/Users/restart/Library/Android/sdk ANDROID_SERIAL=emulator-5554 ./gradlew --no-daemon --console=plain :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=app.docscan.android.DocAlignerAndroidReferenceInstrumentedTest
+```
+
+Gradle 8.13; OpenJDK 17.0.18. Result: exit 0; 5 tests passed, 0 failures.

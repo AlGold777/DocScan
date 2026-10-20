@@ -102,6 +102,8 @@ object CameraGeometryTransform {
         spec: AnalysisBufferSpec,
     ): CropQuadrilateral {
         require(bufferPoints.size == 8) { "Buffer points must have exactly 8 elements" }
+        // Sorting corners must not turn a crossed or degenerate input into an accepted polygon.
+        BoundaryQuad.from(bufferPoints)
         val rawList = (0 until 4).map { i ->
             analysisBufferPointToNormalizedViewPort(
                 bufferPoints[i * 2].toDouble(),

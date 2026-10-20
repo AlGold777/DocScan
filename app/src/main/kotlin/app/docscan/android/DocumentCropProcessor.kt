@@ -26,8 +26,8 @@ object DocumentCropProcessor {
     ) {
         fun toNormalized(): CropQuadrilateral {
             fun p(i: Int) = NormalizedCropPoint(
-                (bufferPoints[i] / imageWidth).toDouble().coerceIn(0.0, 1.0),
-                (bufferPoints[i + 1] / imageHeight).toDouble().coerceIn(0.0, 1.0),
+                (bufferPoints[i] / (imageWidth - 1)).toDouble(),
+                (bufferPoints[i + 1] / (imageHeight - 1)).toDouble(),
             )
             return CropQuadrilateral(
                 topLeft = p(0),
@@ -96,12 +96,12 @@ object DocumentCropProcessor {
         }
     }
 
-    fun detectCorners(source: Bitmap): Detection? {
+    fun detectCorners(source: Bitmap, rejectClipped: Boolean = false): Detection? {
         ensureOpenCvLoaded()
         val rgba = Mat()
         return try {
             Utils.bitmapToMat(source, rgba)
-            detectCornersFromRgba(rgba)
+            detectCornersFromRgba(rgba, rejectClipped)
         } finally {
             rgba.release()
         }
@@ -144,7 +144,7 @@ object DocumentCropProcessor {
         )
     }
 
-    fun detectCornersFromRgba(input: Mat): Detection? {
+    fun detectCornersFromRgba(input: Mat, rejectClipped: Boolean = false): Detection? {
         ensureOpenCvLoaded()
         if (input.empty()) return null
         val ow = input.cols()
@@ -225,6 +225,7 @@ object DocumentCropProcessor {
             // ---- Субпиксельное уточнение граней через fitLine ----
             val refined = refineQuadWithFitLine(best.pts, boundaryEdges)
 
+            if (rejectClipped && refined.any { it.x < 0 || it.y < 0 || it.x / ds > ow - 1 || it.y / ds > oh - 1 }) return null
             val inv = 1.0f / ds.toFloat()
             val pts = FloatArray(8)
             refined.forEachIndexed { i, p ->
@@ -248,7 +249,7 @@ object DocumentCropProcessor {
         return runCatching { rectifyManual(source, detection.toNormalized()) }.getOrNull()
     }
 
-    private fun ensureOpenCvLoaded() {
+    internal fun ensureOpenCvLoaded() {
         if (loaded) return
         synchronized(this) {
             if (!loaded) {
@@ -261,7 +262,7 @@ object DocumentCropProcessor {
     }
 
     // ---------------- Карта "бумаги" ----------------
-    private fun buildPaperMask(src: Mat, out: Mat) {
+    internal fun buildPaperMask(src: Mat, out: Mat) {
         val rgb = Mat()
         val hsv = Mat()
         val ch = ArrayList<Mat>()
@@ -357,7 +358,7 @@ object DocumentCropProcessor {
     }
 
     /** Бинарный поиск epsilon: быстрее и стабильнее, чем фиксированный список */
-    private fun approxQuad(hull: MatOfPoint2f, peri: Double): Array<Point>? {
+    internal fun approxQuad(hull: MatOfPoint2f, peri: Double): Array<Point>? {
         var lo = 0.005 * peri
         var hi = 0.08 * peri
         var found: Array<Point>? = null
@@ -392,7 +393,7 @@ object DocumentCropProcessor {
         return pts.filterNotNull().toTypedArray().takeIf { it.size == 4 }
     }
 
-    private fun hullOf(c: MatOfPoint): MatOfPoint2f? {
+    internal fun hullOf(c: MatOfPoint): MatOfPoint2f? {
         val idx = MatOfInt()
         Imgproc.convexHull(c, idx)
         val src = c.toArray()
@@ -403,7 +404,7 @@ object DocumentCropProcessor {
     }
 
     /** TL, TR, BR, BL — геометрический расчет, устойчивый к углам наклона */
-    private fun orderCorners(p: Array<Point>): List<Point>? {
+    internal fun orderCorners(p: Array<Point>): List<Point>? {
         if (p.size != 4) return null
         val tl = p.minByOrNull { it.x + it.y } ?: return null
         val br = p.maxByOrNull { it.x + it.y } ?: return null

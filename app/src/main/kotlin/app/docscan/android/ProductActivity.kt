@@ -126,6 +126,24 @@ class ProductActivity : AppCompatActivity() {
         isUsingCropRect = false
     }
     private val liveDetectionCoordinator = DocumentLiveDetectionCoordinator()
+    private val documentFrameSequence = java.util.concurrent.atomic.AtomicLong()
+    private val documentUiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private data class DocumentUiFrame(val state: LiveDetectionState, val source: OutputTransform?)
+    private val documentPublications = LatestDocumentPublication<DocumentUiFrame>(
+        post = { documentUiHandler.post(it) }, remove = { documentUiHandler.removeCallbacks(it) },
+        apply = { renderDocumentBoundary(it.state, it.source) })
+    private val documentBoundaryPipelineDelegate = lazy {
+        val debug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        DocumentBoundaryPipeline(liveDetectionCoordinator,
+            ClassicalDocumentBoundaryDetector(enhanced = debug && intent.getStringExtra("docscan.dbq.backend") == "A"),
+            trackingEnabled = debug && intent.getBooleanExtra("docscan.dbq.tracker", false),
+            frameArchive = if (debug && intent.getBooleanExtra("docscan.dbq.frames", false))
+                DocumentFrameArchive(File(filesDir, "dbq/frames-${System.currentTimeMillis()}")) else null,
+            diagnostics = if (debug && intent.getBooleanExtra("docscan.dbq.trace", false))
+                DocumentBoundaryDiagnostics(File(filesDir, "dbq/trace-${System.currentTimeMillis()}.jsonl")) else null)
+    }
+    private val documentBoundaryPipeline by documentBoundaryPipelineDelegate
+    private lateinit var documentBoundaryHint: TextView
     private lateinit var ocrButton: Button
     private lateinit var blackAndWhiteButton: Button
     @Volatile private var isBlackAndWhiteMode: Boolean = false
@@ -289,7 +307,9 @@ class ProductActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         liveDetectionCoordinator.invalidate()
-        if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+        documentPublications.clear()
+        if (::documentBoundaryHint.isInitialized) documentBoundaryHint.visibility = View.GONE
+        if (::documentOverlayView.isInitialized) clearDocumentBoundary()
         pageViewer?.dismiss()
         if (::dialogHost.isInitialized) dialogHost.dismissAll()
         cameraProvider?.unbindAll()
@@ -297,7 +317,9 @@ class ProductActivity : AppCompatActivity() {
         destinationCancelledAction = null
         io.shutdown()
         importExecutor.shutdown()
-        cameraAnalysisExecutor.shutdownNow()
+        documentPublications.close()
+        if (documentBoundaryPipelineDelegate.isInitialized()) cameraAnalysisExecutor.execute { documentBoundaryPipeline.close() }
+        cameraAnalysisExecutor.shutdown()
         workspaceThumbnailLoader.close()
         thumbnailExecutor.shutdownNow()
         super.onDestroy()
@@ -305,7 +327,9 @@ class ProductActivity : AppCompatActivity() {
 
     override fun onStop() {
         liveDetectionCoordinator.invalidate()
-        if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+        documentPublications.clear()
+        if (::documentBoundaryHint.isInitialized) documentBoundaryHint.visibility = View.GONE
+        if (::documentOverlayView.isInitialized) clearDocumentBoundary()
         super.onStop()
     }
 
@@ -452,7 +476,7 @@ class ProductActivity : AppCompatActivity() {
         } else {
             documentModeButton.setTextColor(0xFF94A3B8.toInt())
             if (::documentOverlayView.isInitialized) {
-                documentOverlayView.clear()
+                clearDocumentBoundary()
             }
         }
     }
@@ -482,7 +506,7 @@ class ProductActivity : AppCompatActivity() {
             addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
                     liveDetectionCoordinator.invalidate()
-                    if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+                    if (::documentOverlayView.isInitialized) clearDocumentBoundary()
                 }
             }
         }
@@ -696,7 +720,7 @@ class ProductActivity : AppCompatActivity() {
                 uiHapticFeedback(this)
                 liveDetectionCoordinator.invalidate()
                 if (::documentOverlayView.isInitialized) {
-                    documentOverlayView.clear()
+                    clearDocumentBoundary()
                 }
             }
         }
@@ -738,7 +762,23 @@ class ProductActivity : AppCompatActivity() {
             tag = "docscan-camera-area"
             addView(previewView, android.widget.FrameLayout.LayoutParams(-1, -1))
             documentOverlayView = DocumentOverlayView(this@ProductActivity)
+            previewView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                    liveDetectionCoordinator.invalidate()
+                    documentPublications.clear()
+                    clearDocumentBoundary()
+                }
+            }
             addView(documentOverlayView, android.widget.FrameLayout.LayoutParams(-1, -1))
+            documentBoundaryHint = TextView(this@ProductActivity).apply {
+                setTextColor(Color.WHITE); textSize = 13f; gravity = Gravity.CENTER
+                setPadding(dp(12), dp(6), dp(12), dp(6)); visibility = View.GONE
+                setBackgroundColor(0xAA111316.toInt())
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            }
+            addView(documentBoundaryHint, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+                bottomMargin = dp(112)
+            })
             addView(top, android.widget.FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP))
             status.apply {
                 setTextColor(Color.WHITE)
@@ -2570,6 +2610,7 @@ class ProductActivity : AppCompatActivity() {
         liveDetectionCoordinator.newGeneration()
         val providerFuture = ProcessCameraProvider.getInstance(this)
         providerFuture.addListener({
+            if (isFinishing || isDestroyed) { cameraStartupPending = false; return@addListener }
             try {
                 val provider = providerFuture.get()
                 cameraProvider = provider
@@ -2593,17 +2634,13 @@ class ProductActivity : AppCompatActivity() {
                     .build()
                 analysis.setAnalyzer(cameraAnalysisExecutor) { imageProxy ->
                     val receivedGeneration = liveDetectionCoordinator.currentGeneration()
-                    if (!isDocumentMode) {
-                        liveDetectionCoordinator.onFrameMissing(receivedGeneration, SystemClock.elapsedRealtime())
-                        runOnUiThread {
-                            if (!isDocumentMode && receivedGeneration == liveDetectionCoordinator.currentGeneration() &&
-                                ::documentOverlayView.isInitialized) documentOverlayView.clear()
-                        }
+                    if (!isDocumentMode || isDestroyed) {
                         imageProxy.close()
                         return@setAnalyzer
                     }
-                    val now = SystemClock.elapsedRealtime()
-                    if (now - lastAnalyzedTimestamp < 100) {
+                    val receivedNs = SystemClock.elapsedRealtimeNanos()
+                    val now = receivedNs / 1_000_000
+                    if (now - lastAnalyzedTimestamp < 33) {
                         imageProxy.close()
                         return@setAnalyzer
                     }
@@ -2620,68 +2657,24 @@ class ProductActivity : AppCompatActivity() {
                         val frameGeneration = liveDetectionCoordinator.generationForFrame(spec, receivedGeneration)
                             ?: return@setAnalyzer
                         val plane = imageProxy.planes[0]
-                        val detection = DocumentCropProcessor.detectCornersFromRgbaBuffer(
-                            plane.buffer,
-                            imageProxy.width,
-                            imageProxy.height,
-                            plane.rowStride,
-                        )
-
-                        val liveState = if (detection == null) {
-                            liveDetectionCoordinator.onFrameMissing(frameGeneration, now)
-                        } else {
-                            liveDetectionCoordinator.onFrameDetected(
-                                generationId = frameGeneration,
-                                frameTimestampMonotonicMs = now,
-                                rawBufferPoints = detection.bufferPoints,
-                                rawScore = detection.score,
-                                spec = spec,
-                            )
-                        }
-
+                        require(plane.pixelStride == 4) { "Unexpected RGBA pixel stride" }
+                        DocumentCropProcessor.ensureOpenCvLoaded()
+                        val rgba = org.opencv.core.Mat(imageProxy.height, imageProxy.width,
+                            org.opencv.core.CvType.CV_8UC4, plane.buffer, plane.rowStride.toLong())
+                        val liveState = try {
+                            documentBoundaryPipeline.process(DocumentBoundaryInput(
+                                BoundaryFrameId(documentFrameSequence.incrementAndGet(), frameGeneration, frameGeneration),
+                                spec, DocumentFrameTiming(imageProxy.imageInfo.timestamp, receivedNs), rgba))
+                        } finally { rgba.release() }
                         if (liveState.generationId != frameGeneration) return@setAnalyzer
-                        val sourceTransform = imageTransformFactory.getOutputTransform(imageProxy)
-                        val pointsToMap = liveState.quadInBufferPixels?.clone()
-                        val isHeld = liveState.status == LiveDetectionStatus.HELD
-                        val showOverlay = (liveState.status == LiveDetectionStatus.CONFIRMED || liveState.status == LiveDetectionStatus.HELD) && pointsToMap != null
+                        documentPublications.offer(DocumentUiFrame(liveState,
+                            imageTransformFactory.getOutputTransform(imageProxy)))
 
-                        runOnUiThread {
-                            if (!isDocumentMode || !::documentOverlayView.isInitialized ||
-                                frameGeneration != liveDetectionCoordinator.currentGeneration() ||
-                                isFinishing || isDestroyed) return@runOnUiThread
-                            // A callback may spend its entire evidence lifetime waiting for main.
-                            // An older queued callback must not clear a more recent publication.
-                            if (!liveDetectionCoordinator.isCurrent(liveState)) return@runOnUiThread
-                            if (!showOverlay || !liveDetectionCoordinator.canDisplay(liveState)) {
-                                documentOverlayView.clear()
-                            } else {
-                                val targetTransform = previewView.outputTransform
-                                if (targetTransform != null) {
-                                    try {
-                                        val coordinateTransform = CoordinateTransform(sourceTransform, targetTransform)
-                                        coordinateTransform.mapPoints(pointsToMap)
-                                        documentOverlayView.setPolygonPixels(pointsToMap, isHeld = isHeld,
-                                            deadlineMonotonicMs = liveState.visualDeadlineMonotonicMs,
-                                            isCurrent = { isDocumentMode && !isFinishing && !isDestroyed &&
-                                                liveDetectionCoordinator.canDisplay(liveState) })
-                                    } catch (transformError: Throwable) {
-                                        documentOverlayView.clear()
-                                        android.util.Log.w("DocScan", "CoordinateTransform mapping failed", transformError)
-                                    }
-                                } else {
-                                    documentOverlayView.clear()
-                                }
-                            }
-                        }
                     } catch (failure: Exception) {
                         // Forget a failed frame; never leave an apparently usable old contour.
                         if (receivedGeneration == liveDetectionCoordinator.currentGeneration()) {
                             liveDetectionCoordinator.invalidate()
-                            val failedGeneration = liveDetectionCoordinator.currentGeneration()
-                            runOnUiThread {
-                                if (failedGeneration == liveDetectionCoordinator.currentGeneration() &&
-                                    ::documentOverlayView.isInitialized && !isDestroyed) documentOverlayView.clear()
-                            }
+                            documentPublications.offer(DocumentUiFrame(liveDetectionCoordinator.getPublishedState(), null))
                         }
                         android.util.Log.e("DocScan", "Document live detection failed", failure)
                     } finally {
@@ -2717,6 +2710,42 @@ class ProductActivity : AppCompatActivity() {
                 captureButton.isEnabled = false
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun clearDocumentBoundary() {
+        documentPublications.clear()
+        if (::documentBoundaryHint.isInitialized) documentBoundaryHint.visibility = View.GONE
+        if (::documentOverlayView.isInitialized) documentOverlayView.clear()
+    }
+
+    private fun renderDocumentBoundary(state: LiveDetectionState, sourceTransform: OutputTransform?) {
+        if (!isDocumentMode || !::documentOverlayView.isInitialized || isFinishing || isDestroyed ||
+            !liveDetectionCoordinator.isCurrent(state)) return
+        val label = getString(when (state.status) {
+            LiveDetectionStatus.PARTIAL -> R.string.document_boundary_partial
+            LiveDetectionStatus.ERROR -> R.string.document_boundary_error
+            LiveDetectionStatus.CONFIRMED -> R.string.document_boundary_confirmed
+            LiveDetectionStatus.HELD -> R.string.document_boundary_uncertain
+            else -> R.string.document_boundary_searching
+        })
+        if (documentOverlayView.contentDescription != label) documentOverlayView.contentDescription = label
+        documentBoundaryHint.visibility = if (state.status == LiveDetectionStatus.PARTIAL ||
+            state.status == LiveDetectionStatus.ERROR) View.VISIBLE else View.GONE
+        if (documentBoundaryHint.text != label) documentBoundaryHint.text = label
+        if (!liveDetectionCoordinator.canDisplay(state)) { documentOverlayView.clear(); return }
+        val target = previewView.outputTransform
+        if (sourceTransform == null || target == null || previewView.viewPort == null) { documentOverlayView.clear(); return }
+        try {
+            val points = state.quadInBufferPixels?.clone() ?: return
+            CoordinateTransform(sourceTransform, target).mapPoints(points)
+            documentOverlayView.setPolygonPixels(points, isHeld = state.status == LiveDetectionStatus.HELD,
+                deadlineMonotonicMs = state.visualDeadlineMonotonicMs,
+                isCurrent = { isDocumentMode && !isFinishing && !isDestroyed &&
+                    liveDetectionCoordinator.canDisplay(state) })
+        } catch (failure: Exception) {
+            documentOverlayView.clear()
+            android.util.Log.w("DocScan", "Document projection unavailable", failure)
+        }
     }
 
     private fun takePicture() {
@@ -2756,11 +2785,12 @@ class ProductActivity : AppCompatActivity() {
 
                                 val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
                                 val stillQuad = heavyScheduler.withAdmission(
-                                    DocumentCropMemoryCalculator.ESTIMATED_DETECTION_OVERHEAD_BYTES,
+                                    StillBoundaryProcessor.WORKING_SET_BYTES,
                                 ) {
                                     val thumbnail = ProductImageDecoder.decodeThumbnailForDetection(temp)
-                                    try { DocumentCropProcessor.detectCorners(thumbnail)?.toNormalized() }
-                                    finally { thumbnail.recycle() }
+                                    val coarse = try { DocumentCropProcessor.detectCorners(thumbnail, rejectClipped = true)?.toNormalized() }
+                                        finally { thumbnail.recycle() }
+                                    coarse?.let { StillBoundaryProcessor.refine(temp, it) }
                                 }
 
                                 val decision = DocumentCapturePolicy.decide(stillQuad, liveSnapshot, jpegSpec,
@@ -3741,12 +3771,12 @@ class ProductActivity : AppCompatActivity() {
                     }
                     if (detectionThumb != null) {
                         try {
-                            DocumentCropProcessor.detectCorners(detectionThumb)?.toNormalized()
+                            DocumentCropProcessor.detectCorners(detectionThumb, rejectClipped = true)?.toNormalized()
                         } finally {
                             detectionThumb.recycle()
                         }
                     } else {
-                        DocumentCropProcessor.detectCorners(decoded)?.toNormalized()
+                        DocumentCropProcessor.detectCorners(decoded, rejectClipped = true)?.toNormalized()
                     }
                 } catch (_: Throwable) {
                     null

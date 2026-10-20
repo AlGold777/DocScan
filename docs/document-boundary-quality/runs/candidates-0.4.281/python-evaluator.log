@@ -1,0 +1,14 @@
+test_cyclic_start_and_reversed_winding_are_equivalent (tools.test_dbq_evaluate.DbqEvaluateTest.test_cyclic_start_and_reversed_winding_are_equivalent) ... ok
+test_empty_eligible_denominator_and_acceptance_remain_inconclusive (tools.test_dbq_evaluate.DbqEvaluateTest.test_empty_eligible_denominator_and_acceptance_remain_inconclusive) ... ok
+test_excluded_frames_do_not_enter_success_rate_denominator (tools.test_dbq_evaluate.DbqEvaluateTest.test_excluded_frames_do_not_enter_success_rate_denominator) ... ok
+test_identity_has_perfect_iou_corner_and_side_error (tools.test_dbq_evaluate.DbqEvaluateTest.test_identity_has_perfect_iou_corner_and_side_error) ... ok
+test_invalid_ground_truth_fails_closed_instead_of_becoming_a_success (tools.test_dbq_evaluate.DbqEvaluateTest.test_invalid_ground_truth_fails_closed_instead_of_becoming_a_success) ... ok
+test_loader_rejects_duplicate_clip_frame_keys (tools.test_dbq_evaluate.DbqEvaluateTest.test_loader_rejects_duplicate_clip_frame_keys) ... ok
+test_missing_and_invalid_predictions_are_counted_as_failures (tools.test_dbq_evaluate.DbqEvaluateTest.test_missing_and_invalid_predictions_are_counted_as_failures) ... ok
+test_polygon_intersection_uses_area_not_bounding_boxes (tools.test_dbq_evaluate.DbqEvaluateTest.test_polygon_intersection_uses_area_not_bounding_boxes) ... ok
+test_prediction_for_nonexistent_frame_is_reported_as_extra (tools.test_dbq_evaluate.DbqEvaluateTest.test_prediction_for_nonexistent_frame_is_reported_as_extra) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.001s
+
+OK

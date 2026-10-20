@@ -255,4 +255,10 @@
     <string name="ocr_no_text">No text found. The page image is preserved.</string>
     <string name="saved_text_layer_warning">The text layer has limitations. Check text selection and copying in the saved PDF.</string>
     <string name="ocr_memory_error">Not enough memory to recognize this page. The source image is preserved.</string>
+
+    <string name="document_boundary_searching">Looking for document</string>
+    <string name="document_boundary_confirmed">Document boundary confirmed</string>
+    <string name="document_boundary_uncertain">Boundary uncertain — hold steady</string>
+    <string name="document_boundary_partial">Bring the entire document into view</string>
+    <string name="document_boundary_error">Boundary detection unavailable — you can still take a photo</string>
 </resources>
