@@ -42,6 +42,7 @@ The lifecycle regression also passed 1/1: destruction during pipeline lazy
 initialization terminated both diagnostics/archive workers and emitted their final
 records. Earlier harness failures remain recorded, without a successful pre-fix
 runtime claim.
+All 30 Python evaluator/comparator/converter tests passed.
 The common replay, strict converter and paired session-bootstrap tooling now form
 a runnable synthetic development chain; this does not supply real-camera evidence.
 
@@ -102,7 +103,7 @@ G4 has no qualified selection. G5 includes common UI/still integration; switchin
 the production engine is gated on G4. G6 requires the final physical suite and
 statistical evidence. These are explicit remaining requirements, not software PASS.
 
-## APK artifacts
+## Historical APK artifacts — 0.4.281
 
 Package `app.docscan.scanner`, version 0.4.281, versionCode 400, signatures verified.
 Release ABI arm64-v8a; debug includes all four supported ABIs. Aliases are byte-identical.
@@ -113,3 +114,16 @@ Release ABI arm64-v8a; debug includes all four supported ABIs. Aliases are byte-
 The previous source and common-safety states remain committed. Final source-tag
 restore/build evidence is recorded separately. No push or physical-device operation
 was performed.
+
+## Current APK artifacts — 0.4.282
+
+Source commit `c7852be`, versionCode 401. Debug and signed release builds passed;
+package `app.docscan.scanner`, both aliases byte-identical, all four configured
+ABIs present. Production packages contain no ONNX model or ORT runtime.
+
+* `dist/DocScan-release-0.4.282.apk` — SHA-256 `222d861376a2d4ba1b10cf7cb868aacb5d51fa77e93af088e66c9684d8c16517`
+* `dist/DocScan-debug-0.4.282.apk` — SHA-256 `c86d1d2f12fee0ac7a0efe1ac5b5aa7a373f63ae4e8cb9d036015b2b98cfc67d`
+
+Details: [artifact verification](runs/validation-0.4.282/apk-artifacts.md).
+The source tag `stage-dbq-source-0.4.282` preserves the exact build source.
+This is a software delivery, not full specification acceptance.

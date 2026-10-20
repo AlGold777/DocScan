@@ -111,3 +111,12 @@ resource budgets and final corpus are not yet qualified.
   The first regression harness attempts exposed harness compile/latch ordering
   issues and a separate existing startup/destroy callback rejection; those attempts
   are retained and do not count as a pre-fix demonstration.
+
+* Final software results: 263 JVM tests, 30 Python tests, 30 executed native
+  cases plus one real-corpus NOT_RUN skip, and the post-fix lifecycle regression
+  1/1. No physical device used. Two legacy UI workflow failures remain explicit.
+  Source 0.4.282/code401 committed as c7852be, tagged stage-dbq-source-0.4.282.
+
+* Final debug/release 0.4.282 built from c7852be. APK signatures, package,
+  code401, aliases, ABI set and absence of production ONNX/ORT verified.
+  Artifact hashes and reproducible commands are in runs/validation-0.4.282/apk-artifacts.md.
