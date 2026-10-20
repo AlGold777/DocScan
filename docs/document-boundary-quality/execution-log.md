@@ -75,3 +75,39 @@ resource budgets and final corpus are not yet qualified.
   zero skips**. Original crop thresholds remain unchanged. Signed debug/release
   0.4.281/code400 builds passed; signature, ABI, package and alias checks passed.
   See `runs/candidates-0.4.281/final-results.md` and `apk-artifact-checks.md`.
+
+## 0.4.282 — replay and integration maintenance
+
+* A restored `stage-dbq-software-0.4.281` checkout matched production fingerprints
+  and rebuilt debug/release. Evidence is under `runs/restore-0.4.281/`.
+* Broader existing integration tests exposed a legacy injected test contour that
+  used fixed 610×865 coordinates even for a smaller thumbnail. Production detector
+  output remains within W−1/H−1; no clamp was added. The dimension-relative test
+  fixture and a real endpoint/warp regression passed 4/4 on emulator.
+* Two older ProductActivity test paths assumed controls in the main decor although
+  the current starting UI has a separate page dialog/unattached legacy clear view.
+  They are retained as independently reported test/UI compatibility failures until
+  verified through an actual visible path; no unrelated UI redesign is introduced.
+* Added the common local-corpus replay harness missing from the first software
+  stage. It cannot replace the still-absent real corpus or phone qualification.
+
+* The 0.4.281 restored debug APK is byte-identical. Release differs only in AGP's
+  `META-INF/version-control-info.textproto`; all DEX/resources/native entries and
+  signing certificate match. No release bit-reproducibility claim is made.
+* 0.4.282 adds explicit UI_APPLY and DRAW debug markers with copied screen quads;
+  DRAW is not PRESENT. Common replay and paired session-bootstrap evaluation
+  tooling fill preparation gaps before real data collection. The statistics
+  harness passed 11 unit tests and a separately labelled metadata-only synthetic
+  CLI run; it cannot auto-qualify a winner with missing gates.
+
+* Corrected a concrete geometry defect found during C/R contract review: normalized
+  X/Y distances were treated as a square even for a rectangular ViewPort/JPEG.
+  Agreement now accepts the actual image aspect ratio, restores isotropic pixel
+  distances, and keeps existing IoU/shift thresholds. Final regression runs follow
+  this source change; earlier 0.4.282 logs are not relabelled as post-fix evidence.
+
+* Lifecycle cleanup now queues the lazy-initialized ownership check behind in-flight
+  analysis before executor shutdown, avoiding orphaned diagnostics/archive writers.
+  The first regression harness attempts exposed harness compile/latch ordering
+  issues and a separate existing startup/destroy callback rejection; those attempts
+  are retained and do not count as a pre-fix demonstration.

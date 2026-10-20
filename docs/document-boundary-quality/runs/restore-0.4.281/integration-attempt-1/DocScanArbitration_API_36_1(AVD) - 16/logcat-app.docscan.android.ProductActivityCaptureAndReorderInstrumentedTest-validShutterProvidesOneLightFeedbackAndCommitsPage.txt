@@ -1,0 +1,332 @@
+10-20 21:59:35.912 13674 13688 I TestRunner: started: validShutterProvidesOneLightFeedbackAndCommitsPage(app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest)
+10-20 21:59:35.916 13674 13688 I UiAutomationPermGranter: Permission: android.permission.CAMERA is already granted!
+10-20 21:59:35.917   565 13715 I CameraService: Stop camera streaming for app.docscan.scanner (PID 13674, UID 10242)
+10-20 21:59:35.918   565   659 I CameraLatencyHistogram: ProcessCaptureRequest latency histogram (10) samples:
+10-20 21:59:35.918   565   659 I CameraLatencyHistogram:        40     80    120    160    200    240    280    320    360    inf (max ms)
+10-20 21:59:35.918   565   659 I CameraLatencyHistogram:      100.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00 (%)
+10-20 21:59:35.938   565   659 I CameraLatencyHistogram: Stream 0 dequeueBuffer latency histogram (10) samples:
+10-20 21:59:35.938   565   659 I CameraLatencyHistogram:         5     10     15     20     25     30     35     40     45    inf (max ms)
+10-20 21:59:35.938   565   659 I CameraLatencyHistogram:      60.00   10.00   20.00   0.00   0.00   0.00   0.00   0.00   0.00   10.00 (%)
+10-20 21:59:35.978   662  2723 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10243 pid=0
+10-20 21:59:35.980   662  2723 D libbinder.PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10243 => denied (1611 us)
+10-20 21:59:35.980   662  2723 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10243 pid=0
+10-20 21:59:35.980   662  2723 D libbinder.PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10243 => denied (20 us)
+10-20 21:59:35.980   662  2723 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10243 pid=0
+10-20 21:59:35.980   662  2723 D libbinder.PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10243 => denied (5 us)
+10-20 21:59:35.982   662   701 I ActivityTaskManager: Displayed app.docscan.scanner.test/androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity for user 0: +2s272ms
+10-20 21:59:35.987   565   659 I CameraLatencyHistogram: Stream 2 dequeueBuffer latency histogram (10) samples:
+10-20 21:59:35.988  1183  1183 D VRI[RequestIgnoreBatteryOptimizations]: visibilityChanged oldVisibility=false newVisibility=true
+10-20 21:59:35.988   565   659 I CameraLatencyHistogram:         5     10     15     20     25     30     35     40     45    inf (max ms)
+10-20 21:59:35.988   565   659 I CameraLatencyHistogram:      60.00   10.00   0.00   0.00   0.00   10.00   0.00   0.00   0.00   20.00 (%)
+10-20 21:59:35.994   565   659 I CameraService: disconnect: Disconnected client for camera 10 for PID 13674
+10-20 21:59:36.007 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:36.018  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:36.019  1183 12933 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv1_CM_emulation.so
+10-20 21:59:36.020  1183 12933 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv2_emulation.so
+10-20 21:59:36.090   532   782 I libbinder.BpBinder: onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+10-20 21:59:36.090  1183 12933 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+10-20 21:59:36.090  1183 12933 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@c9089af
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface no longer in use[total_surfaces=3, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@c9089af}
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface terminated[total_surfaces=2, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@c9089af}
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@8e380c1
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface no longer in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@8e380c1}
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface terminated[total_surfaces=1, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@8e380c1}
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@c1ffa7
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface no longer in use[total_surfaces=1, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@c1ffa7}
+10-20 21:59:36.094 13674 13698 D DeferrableSurface: Surface terminated[total_surfaces=0, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@c1ffa7}
+10-20 21:59:36.094 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} CameraDevice.onClosed()
+10-20 21:59:36.094 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: Camera                                       State
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: Camera@487cd00[id=10]                        CLOSED
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:36.094 13674 13698 D CameraStateRegistry: Open count: 0 (Max allowed: 1)
+10-20 21:59:36.094 13674 13698 D CameraStateMachine: New public camera state CameraState{type=CLOSED, error=null} from CLOSED and null
+10-20 21:59:36.094 13674 13698 D CameraStateMachine: Publishing new public camera state CameraState{type=CLOSED, error=null}
+10-20 21:59:36.097 13674 13674 D TextureViewImpl: Safe to release surface.
+10-20 21:59:36.097 13674 13674 D TextureViewImpl: SurfaceTexture about to manually be destroyed
+10-20 21:59:36.098 13674 13688 E SQLiteLog: (1) no such table: Workspace in "SELECT CASE
+10-20 21:59:36.098 13674 13688 E SQLiteLog:   WHEN EXISTS (SELECT 1 FROM Workspace) THEN 'EXISTING'
+10-20 21:59:36.098 13674 13688 E SQLiteLog:   WHEN EXISTS (SELECT 1 FROM WorkspaceSession)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ArtifactRecord)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ArtifactReference)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ImageVersion)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM Page)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM DeleteUndo)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM Recognition)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ProcessingResult)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveManifest)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveOutputPublicationIntent)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveDependencyResult)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ExportArtifact)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SavedPdfEditComposition)
+10-20 21:59:36.098 13674 13688 E SQLiteLog:
+10-20 21:59:36.125  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:36.125   662   835 I WifiService: acquireMulticastLock uid=1000 lockTag=NsdService
+10-20 21:59:36.151  1027  1162 D IpClient.wlan0: set max DTIM multiplier to 1
+10-20 21:59:36.152   662   826 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+10-20 21:59:36.178   662   693 W System  : A resource failed to call close.
+10-20 21:59:36.225 13674 13688 W Settings: Setting always_finish_activities has moved from android.provider.Settings.System to android.provider.Settings.Global, returning read-only value.
+10-20 21:59:36.245 13723 13729 I an.scanner.test: Compiler allocated 5145KB to compile void android.view.ViewRootImpl.performTraversals()
+10-20 21:59:36.346   662  1205 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@177240a7 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+10-20 21:59:36.353  1183  1183 D ViewRootImpl: Skipping stats log for color mode
+10-20 21:59:36.492  1070  1070 D RecentsView: onTaskDisplayChanged: 307, new displayId = 0
+10-20 21:59:36.553   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@a3dcd55
+10-20 21:59:36.617 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: PRE_ON_CREATE
+10-20 21:59:36.617 13674 13674 V ActivityScenario: Activity lifecycle changed event received but ignored because the reported transition was not ON_CREATE while the last known transition was PRE_ON_CREATE
+10-20 21:59:36.694   662   835 I WifiService: releaseMulticastLock uid=1000 lockTag=NsdService
+10-20 21:59:36.768  1027  1162 D IpClient.wlan0: set max DTIM multiplier to 2
+10-20 21:59:36.770   662   826 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+10-20 21:59:36.771  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:36.796  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:36.796  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:36.799 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: CREATED
+10-20 21:59:36.799 13674 13674 V ActivityScenario: Update currentActivityStage to CREATED, currentActivity=app.docscan.android.ProductActivity@bab236c
+10-20 21:59:36.800 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: STARTED
+10-20 21:59:36.800 13674 13674 V ActivityScenario: Update currentActivityStage to STARTED, currentActivity=app.docscan.android.ProductActivity@bab236c
+10-20 21:59:36.801 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: RESUMED
+10-20 21:59:36.801 13674 13674 V ActivityScenario: Update currentActivityStage to RESUMED, currentActivity=app.docscan.android.ProductActivity@bab236c
+10-20 21:59:36.893 13674 13674 D VRI[ProductActivity]: WindowInsets changed: 1080x2400 statusBars:[0,63,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,63,0,84]
+10-20 21:59:37.020 13674 13674 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@6b1bd95
+10-20 21:59:37.116  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:37.285   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:37.326 13723 13723 D VRI[InstrumentationActivityInvoker$EmptyActivity]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:37.424 13674 13684 I HWUI    : Davey! duration=789ms; Flags=1, FrameTimelineVsyncId=48602, IntendedVsync=9420029414269, Vsync=9420296080909, InputEventId=0, HandleInputStart=9420297101443, AnimationStart=9420297102318, PerformTraversalsStart=9420297106943, DrawStart=9420564209360, FrameDeadline=9420046080935, FrameStartTime=9420297060068, FrameInterval=16666665, WorkloadTarget=16666666, SyncQueued=9420565014735, SyncStart=9420577679194, IssueDrawCommandsStart=9420577855527, SwapBuffers=9420785407944, FrameCompleted=9420831113360, DequeueBufferDuration=4458, QueueBufferDuration=44302125, GpuCompleted=9420812816444, SwapBuffersCompleted=9420831113360, DisplayPresentTime=2446886067823507696, CommandSubmissionCompleted=9420785407944,
+10-20 21:59:37.493 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.493 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.497 13674 13674 D DynamicRangeResolver: Resolved dynamic range for use case androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201 to no compatible HDR dynamic ranges.
+10-20 21:59:37.497 13674 13674 D DynamicRangeResolver: DynamicRange@7b2fab7{encoding=UNSPECIFIED, bitDepth=0}
+10-20 21:59:37.497 13674 13674 D DynamicRangeResolver: ->
+10-20 21:59:37.497 13674 13674 D DynamicRangeResolver: DynamicRange@2798db6{encoding=SDR, bitDepth=8}
+10-20 21:59:37.498 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.498 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.498 13674 13674 D DeferrableSurface: Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@4a98755}
+10-20 21:59:37.498 13674 13674 D DeferrableSurface: Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@1c843d1}
+10-20 21:59:37.498 13674 13674 D DeferrableSurface: New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@1c843d1}
+10-20 21:59:37.498 13674 13674 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@1c843d1
+10-20 21:59:37.498 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.499 13674 13674 D ImageCapture: createPipeline(cameraId: 10, streamSpec: StreamSpec{resolution=1280x960, dynamicRange=DynamicRange@2798db6{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@ee687c2})
+10-20 21:59:37.499 13674 13674 D DeferrableSurface: Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@79119d3}
+10-20 21:59:37.503 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528 ACTIVE
+10-20 21:59:37.503 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:37.508 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.508 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.509 13674 13674 D DeferrableSurface: Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@b995e0e}
+10-20 21:59:37.529  5244  5282 I Finsky  : [66] WM::SCH: Logging work initialize for 37-143
+10-20 21:59:37.563 13674 13674 I Choreographer: Skipped 39 frames!  The application may be doing too much work on its main thread.
+10-20 21:59:37.565  5244  5300 I Finsky  : [76] SCH: Scheduling phonesky job Id: 37-143, CT: 1792526367229, Constraints: [{ L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }, { L: 0, D: 0, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+10-20 21:59:37.599  5244  5288 I Finsky  : [72] SCH: Scheduling 1 system job(s)
+10-20 21:59:37.599  5244  5288 I Finsky  : [72] SCH: Scheduling expedited system job 9408
+10-20 21:59:37.600 13674 13674 D PreviewView: Surface requested by Preview.
+10-20 21:59:37.637   662   701 I ActivityTaskManager: Displayed app.docscan.scanner/app.docscan.android.ProductActivity for user 0: +1s323ms
+10-20 21:59:37.640 13674 13683 I HWUI    : Davey! duration=726ms; Flags=0, FrameTimelineVsyncId=48739, IntendedVsync=9420312746419, Vsync=9420962746393, InputEventId=0, HandleInputStart=9420976286485, AnimationStart=9420976287819, PerformTraversalsStart=9420976421527, DrawStart=9420977234485, FrameDeadline=9420846080855, FrameStartTime=9420970432860, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=9420977726110, SyncStart=9420981942444, IssueDrawCommandsStart=9421002471152, SwapBuffers=9421009287569, FrameCompleted=9421043755319, DequeueBufferDuration=3459, QueueBufferDuration=27592750, GpuCompleted=9421043719360, SwapBuffersCompleted=9421043755319, DisplayPresentTime=3812043057787372792, CommandSubmissionCompleted=9421009287569,
+10-20 21:59:37.657 13674 13674 D TextureViewImpl: SurfaceTexture available. Size: 1280x960
+10-20 21:59:37.657 13674 13674 D TextureViewImpl: Surface set on Preview.
+10-20 21:59:37.665 13674 13674 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 121 - 1280, 839), getRotationDegrees=90, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, getMirroring=false}
+10-20 21:59:37.665 13674 13674 D PreviewTransform: Transformation info set: TransformationInfo{getCropRect=Rect(0, 121 - 1280, 839), getRotationDegrees=90, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, getMirroring=false} 1280x960 false
+10-20 21:59:37.665 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:37.727 12899 12910 W oid.filemanager: Suspending all threads took: 217.618ms
+10-20 21:59:37.729 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683 ACTIVE
+10-20 21:59:37.729 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:37.729 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528 ACTIVE
+10-20 21:59:37.729 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:37.729 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577 ACTIVE
+10-20 21:59:37.729 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:37.729 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use cases [androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] now ATTACHED
+10-20 21:59:37.730 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:37.730 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state INITIALIZED
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Attempting to force open the camera.
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: tryOpenCamera(Camera@487cd00[id=10]) [Available Cameras: 1, Already Open: false (Previous state: CLOSED)] --> SUCCESS
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: Camera                                       State
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: Camera@487cd00[id=10]                        OPENING
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:37.730 13674 13709 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Opening camera.
+10-20 21:59:37.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-20 21:59:37.804 13674 13709 D CameraStateMachine: New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+10-20 21:59:37.804 13674 13709 D CameraStateMachine: Publishing new public camera state CameraState{type=OPENING, error=null}
+10-20 21:59:37.836 13723 13723 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:37.860 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:37.883 13723 13723 D ViewRootImpl: Skipping stats log for color mode
+10-20 21:59:38.017   565   659 I CameraService: CameraService::connect call (PID 13674 "app.docscan.scanner", camera ID 10) and Camera API version 2
+10-20 21:59:38.058  5244  5244 I Finsky  : [2] SCH: job service start with id 9408.
+10-20 21:59:38.059 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683 ACTIVE
+10-20 21:59:38.059 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:38.060 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528 ACTIVE
+10-20 21:59:38.060 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:38.061 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577 ACTIVE
+10-20 21:59:38.061 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:38.061 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} CameraDevice.onOpened()
+10-20 21:59:38.061 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: OPENING --> OPENED
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: Camera                                       State
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: Camera@487cd00[id=10]                        OPEN
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:38.061 13674 13709 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:38.064 13674 13709 D CameraStateMachine: New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+10-20 21:59:38.064 13674 13709 D CameraStateMachine: Publishing new public camera state CameraState{type=OPEN, error=null}
+10-20 21:59:38.065 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:38.065 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] for camera: 10
+10-20 21:59:38.068 13674 13709 D SyncCaptureSessionBase: [androidx.camera.camera2.internal.SynchronizedCaptureSessionBaseImpl@a0fe4a0] getSurface...done
+10-20 21:59:38.068 13674 13709 D CaptureSession: Opening capture session.
+10-20 21:59:38.070 13674 13709 D DeferrableSurface: use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@1c843d1
+10-20 21:59:38.070 13674 13709 D DeferrableSurface: New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@79119d3}
+10-20 21:59:38.070 13674 13709 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@79119d3
+10-20 21:59:38.070 13674 13709 D DeferrableSurface: New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@b995e0e}
+10-20 21:59:38.070 13674 13709 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@b995e0e
+10-20 21:59:38.072   565   659 W cameraserver: createConfiguredSurface: Camera 10: Overriding format 0x1 to IMPLEMENTATION_DEFINED
+10-20 21:59:38.075   537 13759 D camera.provider.ranchu: CameraDeviceSession:configureStreams:176 cfg={ .streams.size=3, .operationMode=0, .cfg.sessionParams.size()=64,  .streamConfigCounter=1, .multiResolutionInputImage=false }
+10-20 21:59:38.075   537 13759 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=0, .streamType=0, .width=1280, .height=960, .format=IMPLEMENTATION_DEFINED, .usage=0x100, .dataSpace={ .low=0x0, .s=0, .t=0, .r=0 }, .rotation=0, .physicalCameraId='', .bufferSize=0, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:38.075   537 13759 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=1, .streamType=0, .width=1280, .height=960, .format=BLOB, .usage=0x3, .dataSpace={ .low=0x0, .s=2, .t=3, .r=1 }, .rotation=0, .physicalCameraId='', .bufferSize=1228808, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:38.075   537 13759 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=2, .streamType=0, .width=1280, .height=960, .format=YCBCR_420_888, .usage=0x3, .dataSpace={ .low=0x0, .s=2, .t=3, .r=1 }, .rotation=0, .physicalCameraId='', .bufferSize=0, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:38.258  1183  1183 D VRI[RequestIgnoreBatteryOptimizations]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:38.332   662   832 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+10-20 21:59:38.333   662   832 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+10-20 21:59:38.333   662   832 D InetDiagMessage: Destroyed live tcp sockets for uids={10113} in 0ms
+10-20 21:59:38.335   924  1025 I Choreographer: Skipped 31 frames!  The application may be doing too much work on its main thread.
+10-20 21:59:38.387  1070  1070 D RecentsView: onTaskRemoved: 306, not handling task stack changes
+10-20 21:59:38.387  1070  1070 D RecentsView: onTaskRemoved: 306, not handling task stack changes
+10-20 21:59:38.421   662   826 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+10-20 21:59:38.426  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:38.513   924  1281 I Choreographer: Skipped 55 frames!  The application may be doing too much work on its main thread.
+10-20 21:59:38.516   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:38.551  5244 13571 I Finsky  : [317] SCH: Satisfied jobs for 9408 are: 37-143
+10-20 21:59:38.556   924  1067 I HWUI    : Davey! duration=889ms; Flags=1, FrameTimelineVsyncId=49069, IntendedVsync=9420979404979, Vsync=9420979404979, InputEventId=0, HandleInputStart=9420982071069, AnimationStart=9420982071819, PerformTraversalsStart=9420982476610, DrawStart=9421841054069, FrameDeadline=9420996071645, FrameStartTime=9420982067444, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=9421841146111, SyncStart=9421919078277, IssueDrawCommandsStart=9421919138986, SwapBuffers=9421919618277, FrameCompleted=9421947073486, DequeueBufferDuration=2583, QueueBufferDuration=1022708, GpuCompleted=9421947073486, SwapBuffersCompleted=9421920882486, DisplayPresentTime=0, CommandSubmissionCompleted=9421919618277,
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 49062, 160969298, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 49062, 160969298, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 49098, 245840638, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 49098, 245840638, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 49128, 700339433, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 49128, 700339433, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 49196, 650554396, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.584   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 49196, 650554396, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:38.593   924  1067 I HWUI    : Davey! duration=1000ms; Flags=0, FrameTimelineVsyncId=49084, IntendedVsync=9420996077201, Vsync=9421912743776, InputEventId=0, HandleInputStart=9421921302486, AnimationStart=9421921302611, PerformTraversalsStart=9421921354236, DrawStart=9421921392986, FrameDeadline=9421979404939, FrameStartTime=9421921246819, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=9421921397861, SyncStart=9421922340569, IssueDrawCommandsStart=9421922367777, SwapBuffers=9421923079569, FrameCompleted=9421997625986, DequeueBufferDuration=3500, QueueBufferDuration=464833, GpuCompleted=9421997625986, SwapBuffersCompleted=9421923747777, DisplayPresentTime=0, CommandSubmissionCompleted=9421923079569,
+10-20 21:59:38.623  5244 13760 I Finsky  : [327] SCH: Job 37-143 starting
+10-20 21:59:38.650 13674 13709 D CaptureSession: Attempting to send capture request onConfigured
+10-20 21:59:38.650 13674 13709 D CaptureSession: Issuing request for session.
+10-20 21:59:38.650 13674 13709 D Camera2CaptureRequestBuilder: createCaptureRequest
+10-20 21:59:38.650   565 13761 I CameraService: Start camera streaming for app.docscan.scanner (PID 13674, UID 10242)
+10-20 21:59:38.650 13674 13709 D CaptureSession: CameraCaptureSession.onConfigured() mState=OPENED
+10-20 21:59:38.650 13674 13709 D CaptureSession: CameraCaptureSession.onReady() OPENED
+10-20 21:59:38.771  5244  5244 I Finsky  : [2] WM::SCH: Logging work start for 37-143
+10-20 21:59:38.807  5244  5244 I Finsky  : [2] Received an install/uninstall event for package app.docscan.scanner
+10-20 21:59:38.816  5244  5244 I Finsky  : [2] SCH: jobFinished: 37-143. TimeElapsed: 45ms.
+10-20 21:59:38.816  5244  5244 I Finsky  : [2] WM::SCH: Logging work end for 37-143
+10-20 21:59:38.839  5244  5300 I Finsky  : [76] Not an active Cubes user. Ignoring package install/uninstall event.
+10-20 21:59:38.845  5244  5289 I Finsky  : [73] SCH: Scheduling phonesky job Id: 26-1414141414, CT: 1792510812772, Constraints: [{ L: 43109512, D: 44009512, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+10-20 21:59:38.848  5244  5300 I Finsky  : [76] SCH: Scheduling 1 system job(s)
+10-20 21:59:38.849  5244  5300 W JobInfo : Job 'com.android.vending/com.google.android.finsky.scheduler.process.mainimpl.PhoneskyJobServiceMain#9411' has a deadline with no functional constraints. The deadline won't improve job execution latency. Consider removing the deadline.
+10-20 21:59:38.849  5244  5300 I Finsky  : [76] SCH: Scheduling system job Id: 9411, L: 27543435, D: 28443435, C: false, I: false, N: 0
+10-20 21:59:38.850   662  2731 W JobInfo : Job 'com.android.vending/com.google.android.finsky.scheduler.process.mainimpl.PhoneskyJobServiceMain#9411' has a deadline with no functional constraints. The deadline won't improve job execution latency. Consider removing the deadline.
+10-20 21:59:38.854  5244 13760 I Finsky  : [327] SCH: job service finished with id 9408.
+10-20 21:59:38.856   532   532 I SurfaceFlinger: Display 4619827259835644672 policy changed
+10-20 21:59:38.856   532   532 I SurfaceFlinger: Previous: {defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, inf Hz]} idleScreenConfig=nullptr}
+10-20 21:59:38.856   532   532 I SurfaceFlinger: Current:  DisplayManagerPolicy{defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]} idleScreenConfig=nullptr}
+10-20 21:59:38.856   532   532 I SurfaceFlinger: 0 mode changes were performed under the previous policy
+10-20 21:59:38.856   532   532 D SurfaceFlinger: setDesiredMode 4619827259835644672 {mode={fps=60.00 Hz, modePtr={id=0, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=true, force=false}
+10-20 21:59:38.866   662  2723 W libbinder.Binder: Binder transaction to android.view.IWindowManager code 111 took 1140ms. Data bytes: 76 Reply bytes: 4 Flags: 18
+10-20 21:59:38.915  5244  5244 I Finsky  : [2] Memory trim requested to level 40
+10-20 21:59:38.915  5244  5244 I Finsky  : [2] Flushing in-memory image cache
+10-20 21:59:38.917  5292  5292 I Finsky:background: [2] Memory trim requested to level 40
+10-20 21:59:38.919 13674 13674 D ImageCapture: takePictureInternal
+10-20 21:59:38.920 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:38.920 13674 13674 D TakePictureManager: Issue the next TakePictureRequest.
+10-20 21:59:39.027   662   907 W ImageReader_JNI: Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+10-20 21:59:39.091 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Issue capture request
+10-20 21:59:39.092 13674 13709 D CaptureSession: Issuing capture request.
+10-20 21:59:39.092 13674 13709 D Camera2CaptureRequestBuilder: createCaptureRequest
+10-20 21:59:39.105 13674 13674 D StreamStateObserver: Update Preview stream state to STREAMING
+10-20 21:59:39.437 13674 13679 W docscan.scanner: userfaultfd: MOVE ioctl seems unsupported: Connection timed out
+10-20 21:59:39.455 13674 13679 I docscan.scanner: Background concurrent mark compact GC freed 9733KB AllocSpace bytes, 21(856KB) LOS objects, 49% free, 5499KB/10MB, paused 73us,12.876ms total 134.720ms
+10-20 21:59:39.469   524   612 W AudioFlinger: createTrack_l(): mismatch between requested flags (00000004) and output flags (00000002)
+10-20 21:59:39.470   524   612 I AF::PthrPatchRecord: creating track with enforcement level 0
+10-20 21:59:39.475   662  1203 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:39.485   662  1236 W AS.PlaybackActivityMon: No piid assigned for invalid/internal port id 15
+10-20 21:59:39.493  1066  1196 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
+10-20 21:59:39.496   472 13772 W libprocessgroup: A JoinCgroup action in the SystemMemoryProcess profile is used for controller memory in the cgroup v2 hierarchy and will be ignored
+10-20 21:59:39.595  1066  1196 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+10-20 21:59:40.264 13674 13674 D TakePictureManager: Issue the next TakePictureRequest.
+10-20 21:59:40.264 13674 13674 D TakePictureManager: No new request.
+10-20 21:59:40.797   662  1225 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@19271946 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+10-20 21:59:40.810   532   781 I libbinder.BpBinder: onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+10-20 21:59:40.837 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: PAUSED
+10-20 21:59:40.838 13674 13674 V ActivityScenario: Update currentActivityStage to PAUSED, currentActivity=app.docscan.android.ProductActivity@bab236c
+10-20 21:59:40.844   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@4c44e7c
+10-20 21:59:40.849 13723 13741 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv1_CM_emulation.so
+10-20 21:59:40.849 13723 13741 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv2_emulation.so
+10-20 21:59:40.864   532   532 I SurfaceFlinger: Display 4619827259835644672 policy changed
+10-20 21:59:40.864   532   532 I SurfaceFlinger: Previous: {defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]} idleScreenConfig=nullptr}
+10-20 21:59:40.864   532   532 I SurfaceFlinger: Current:  DisplayManagerPolicy{defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, inf Hz]} idleScreenConfig=nullptr}
+10-20 21:59:40.864   532   532 I SurfaceFlinger: 0 mode changes were performed under the previous policy
+10-20 21:59:40.864   532   532 D SurfaceFlinger: setDesiredMode 4619827259835644672 {mode={fps=60.00 Hz, modePtr={id=0, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=true, force=false}
+10-20 21:59:40.886  1070  1070 D RecentsView: onTaskDisplayChanged: 308, new displayId = 0
+10-20 21:59:40.893 13723 13741 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+10-20 21:59:40.897 13723 13741 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-20 21:59:40.915  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:40.915  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:41.114  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:41.114  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:41.206 13723 13723 D VRI[InstrumentationActivityInvoker$EmptyActivity]: WindowInsets changed: 1080x2400 statusBars:[0,63,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,63,0,84]
+10-20 21:59:41.206 13723 13723 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@e2fef57
+10-20 21:59:41.425   662   826 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+10-20 21:59:41.427 13674 13704 I Tesseract(native): Initialized Tesseract API with language=rus+eng
+10-20 21:59:41.449   532   781 I libbinder.BpBinder: onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+10-20 21:59:41.450  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:41.451   662   701 I ActivityTaskManager: Displayed app.docscan.scanner.test/androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity for user 0: +654ms
+10-20 21:59:41.455  1183  1183 D VRI[RequestIgnoreBatteryOptimizations]: visibilityChanged oldVisibility=false newVisibility=true
+10-20 21:59:41.470   662   835 I WifiService: acquireMulticastLock uid=1000 lockTag=NsdService
+10-20 21:59:41.484  1183 12933 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv1_CM_emulation.so
+10-20 21:59:41.485  1183 12933 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv2_emulation.so
+10-20 21:59:41.517  1183 12933 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+10-20 21:59:41.518  1183 12933 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-20 21:59:41.738  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:41.764 13674 13674 D VRI[ProductActivity]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:42.020 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use cases [androidx.camera.core.Preview-2b477afc-0895-4a20-b891-0cd203840201231731683, androidx.camera.core.ImageCapture-b9f1f7af-32d1-4e58-a4ce-3c0f9e22616797474528, androidx.camera.core.ImageAnalysis-3a77580c-ebaa-4d19-ae3f-d26729e7b86a223271577] now DETACHED for camera
+10-20 21:59:42.021 13674 13698 D UseCaseAttachState: All use case: [] for camera: 10
+10-20 21:59:42.021 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:42.030 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state OPENED
+10-20 21:59:42.257  1027  1162 D IpClient.wlan0: set max DTIM multiplier to 1
+10-20 21:59:42.258 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:42.258 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:42.258 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Closing camera.
+10-20 21:59:42.258 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: OPENED --> CLOSING
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: Camera                                       State
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: Camera@487cd00[id=10]                        CLOSING
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:42.258 13674 13698 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:42.258 13674 13698 D CameraStateMachine: New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
+10-20 21:59:42.258 13674 13698 D CameraStateMachine: Publishing new public camera state CameraState{type=CLOSING, error=null}
+10-20 21:59:42.258 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:42.258 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state CLOSING
+10-20 21:59:42.258 13674 13698 D CaptureSession: onSessionFinished()
+10-20 21:59:42.258   565   659 D Camera2ClientBase: Camera 10: Shutting down
+10-20 21:59:42.263 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: STOPPED
+10-20 21:59:42.263 13674 13674 V ActivityScenario: Update currentActivityStage to STOPPED, currentActivity=app.docscan.android.ProductActivity@bab236c
+10-20 21:59:42.263 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@1c843d1
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@4a98755
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@4a98755}
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@1c843d1
+10-20 21:59:42.263 13674 13674 D ImageCapture: clearPipeline
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@79119d3
+10-20 21:59:42.263 13674 13674 D DeferrableSurface: surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@b995e0e
+10-20 21:59:42.265 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@bab236c in: DESTROYED
+10-20 21:59:42.265 13674 13674 V ActivityScenario: Update currentActivityStage to DESTROYED, currentActivity=null
+10-20 21:59:42.265 13674 13674 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:42.271   662   826 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+10-20 21:59:42.276  1183  1193 I HWUI    : Davey! duration=757ms; Flags=1, FrameTimelineVsyncId=50083, IntendedVsync=9424879399276, Vsync=9425262732594, InputEventId=0, HandleInputStart=9425274819987, AnimationStart=9425274820904, PerformTraversalsStart=9425274828529, DrawStart=9425425629112, FrameDeadline=9425296065926, FrameStartTime=9425274611821, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=9425425656196, SyncStart=9425453326779, IssueDrawCommandsStart=9425454251363, SwapBuffers=9425624592904, FrameCompleted=9425664419529, DequeueBufferDuration=3542, QueueBufferDuration=5090084, GpuCompleted=9425664419529, SwapBuffersCompleted=9425630120113, DisplayPresentTime=0, CommandSubmissionCompleted=9425624592904,
+10-20 21:59:42.288 13674 13688 I TestRunner: finished: validShutterProvidesOneLightFeedbackAndCommitsPage(app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest)

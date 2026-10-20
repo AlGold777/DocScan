@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "scope": "paired eligible-frame geometry comparison; original-pixel replay only",
+  "selection": {
+    "status": "INCONCLUSIVE",
+    "winner": null,
+    "reasons": [
+      "independent corpus freeze is not attested",
+      "predeclared CI plan is absent",
+      "hardware gates are absent",
+      "resource gates are absent",
+      "this paired geometry harness does not evaluate all absolute AC, hardware, or resource gates",
+      "winner selection requires a separate evidence-backed decision record"
+    ]
+  },
+  "protocol": {
+    "independentUnit": "sessionId cluster; every clip and eligible frame in a sampled session is resampled jointly",
+    "bootstrap": "ordinary percentile cluster bootstrap with replacement",
+    "seed": 282402,
+    "repetitions": 10000,
+    "intervals": {
+      "effect": "two-sided 95% percentile CI (2.5%, 97.5%)",
+      "ordinaryGroupNonInferiority": "one-sided 95% lower percentile bound (5%)"
+    },
+    "pointWeighting": "frame-weighted within each group; groups reported separately",
+    "nonInferiorityMargin": -0.02,
+    "minimumIndependentSessionsPerGroup": 10,
+    "zeroAFailureRelativeReduction": "unavailable; never treated as infinite or zero"
+  },
+  "inputs": {
+    "reportASha256": "08200475c033d7948534d3c250d9f0baf806f1cbec97615db3bd4b9f8b2b6bbf",
+    "reportBSha256": "7516e628082ab23144b260eb4b4b36f37aa3763da16d75f35bd71cd98e42eeda",
+    "manifestSha256": "fd9e8422b30803f177dd80a000fba4bd9610dfdde7b9c99cb32326893d78374a",
+    "sourceGtSha256": "daecbc4b3ca971ca4a5a9a9efc634b4ee2f6e5fd5c01a8d9dcad881b6a660fd4",
+    "clusterManifestSha256": "fd9e8422b30803f177dd80a000fba4bd9610dfdde7b9c99cb32326893d78374a",
+    "clusterAssignmentsSha256": "1577b067d386eecb2c336e3367043a02bcfffc23ce173f1b576258fe8edbb2bc"
+  },
+  "counts": {
+    "pairedEligibleFrames": 12,
+    "groups": 1,
+    "independentSessions": 12,
+    "bootstrapDegenerateGroups": []
+  },
+  "groups": {
+    "ordinary": {
+      "eligibleFrames": 12,
+      "failureA": 11,
+      "failureB": 5,
+      "failureRateA": 0.9166666666666666,
+      "failureRateB": 0.4166666666666667,
+      "successRateA": 0.08333333333333333,
+      "successRateB": 0.5833333333333334,
+      "pairedRelativeFailureReduction": 0.5454545454545454,
+      "absoluteSuccessDifferenceBMinusA": 0.5,
+      "independentSessions": 12,
+      "independentClips": 12,
+      "pairedRelativeFailureReductionCI95TwoSided": [
+        0.25,
+        0.8333333333333334
+      ],
+      "absoluteSuccessDifferenceCI95TwoSided": [
+        0.25,
+        0.75
+      ],
+      "nonInferiorityLowerBound95OneSided": 0.25,
+      "nonInferiorityMargin": -0.02,
+      "nonInferiorityStatus": "PASS",
+      "absoluteIntervalStatus": "ESTIMATED",
+      "relativeIntervalStatus": "ESTIMATED",
+      "intervalStatus": "ESTIMATED",
+      "intervalReasons": []
+    }
+  }
+}

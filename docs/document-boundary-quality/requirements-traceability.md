@@ -97,3 +97,14 @@ This working registry is intentionally incomplete until executed run IDs and har
 | DBQ-T05 | DocumentFrameTiming / coordinator / overlay lease | common-0.4.280 + candidates-0.4.281: unit 259/259, native 19/19; requirement-level qualification INCONCLUSIVE | Software coverage is partial; physical qualification pending |
 | DBQ-T06 | DocumentFrameTiming / coordinator / overlay lease | common-0.4.280 + candidates-0.4.281: unit 259/259, native 19/19; requirement-level qualification INCONCLUSIVE | Software coverage is partial; physical qualification pending |
 | DBQ-U01 | Coordinator states / localized hints / overlay | common-0.4.280 + candidates-0.4.281: unit 259/259, native 19/19; requirement-level qualification INCONCLUSIVE | Software coverage is partial; physical qualification pending |
+
+## 0.4.282 evidence update
+
+Post-isotropy checks: core 184/184, app 79/79, AndroidTest compile; emulator
+30 executed native PASS, one real-corpus replay NOT_RUN/skip. See
+[runs/validation-0.4.282/isotropy-final-results.md](runs/validation-0.4.282/isotropy-final-results.md).
+Replay, strict replay conversion and paired evaluator tooling supplement the
+previous row evidence without promoting any requirement to physical qualification.
+The 0.4.281 tag restore/build was executed; debug bytes match, release payloads
+match except AGP Git metadata. See [restore evidence](runs/restore-0.4.281/).
+Two legacy clear/delete/OCR UI scenarios remain failing as described in the final report.

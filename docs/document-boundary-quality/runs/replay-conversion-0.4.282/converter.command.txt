@@ -1,0 +1,1 @@
+python3 tools/dbq_replay_to_evaluator.py --input-dir docs/document-boundary-quality/runs/replay-conversion-0.4.282/replay-run --manifest docs/document-boundary-quality/runs/replay-conversion-0.4.282/manifest.json --output-dir docs/document-boundary-quality/runs/replay-conversion-0.4.282/evaluator-inputs

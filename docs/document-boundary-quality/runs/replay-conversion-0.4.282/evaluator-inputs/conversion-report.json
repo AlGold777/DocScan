@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "status": "CONVERTED",
+  "sourceManifestSha256": "d69c9e8892705e7a29602361b62a38ceb3fcf568352a90aaaf9f987e2e8ebe25",
+  "runMetadataSha256": "25c24134185f7e2682f74534ff8daa00f6653dd36ebf29eef78ca5aa3f10f11d",
+  "sourceManifestPath": "/Users/restart/Documents/GitHub/DocScan/docs/document-boundary-quality/runs/replay-conversion-0.4.282/manifest.json",
+  "replayRunDirectory": "/Users/restart/Documents/GitHub/DocScan/docs/document-boundary-quality/runs/replay-conversion-0.4.282/replay-run",
+  "replayJsonlSha256": {
+    "A--clip-0.jsonl": "e50ad51489db8a7264023776e6076aa2dc05e5527cf254e166fd8fea58063561",
+    "A--clip-1.jsonl": "5332a87369506a549cf86a5ba593b2e81033fb4f659123b034c4ad494f33ebcd",
+    "A--clip-10.jsonl": "774c87c846057bf6f56aa15d81dc386e77e16d52a4927c0b2ca66005313c0aed",
+    "A--clip-11.jsonl": "41a43a3c046cc92f39eeca6373832555b3f094b053617c87a06944d3bfec3f03",
+    "A--clip-2.jsonl": "7d1386648ec1ed111f9753dde90c278493e2c4b7bd4108145457d8677f8e25d5",
+    "A--clip-3.jsonl": "fae4c23803a1c3cca19745987f473f8e1bd0817e3691752e4ab45d0325903d0c",
+    "A--clip-4.jsonl": "1d86bfa78c57960339c0ff851b9018ded2e3e895e1446a5de33e578063ce328c",
+    "A--clip-5.jsonl": "a4f694c33775f1440ea36d6ea3ac0cb6445dbeedc07fbbabc7be062def4d13e3",
+    "A--clip-6.jsonl": "8ecb964231f01fabf1487791ac1d58a178a593201d0682e93b144859a895f9bd",
+    "A--clip-7.jsonl": "7dbfe2ce473016d367bca475d60105efcb35b4f4a7016e20804b884d547e357b",
+    "A--clip-8.jsonl": "e1fa2b5f80f9e0f785cbd919d803ba2547c127b811f67e0b0d2a032a42e5a5d7",
+    "A--clip-9.jsonl": "e8c2001e22e02a0c9ba1fb5c1d2c9a7ab6162d02f7df1218ab0e4406b0cc357e",
+    "B--clip-0.jsonl": "6bc59fcaf6d18966c3f78481f207e0329605cd727517a708c2e10acd3eee1d24",
+    "B--clip-1.jsonl": "af348094569364a74675d4e7a3e602f74409fc353d8c57d4bb781c19ec2c1f6c",
+    "B--clip-10.jsonl": "e0fcea2907a97e953bd5d49648ec3a242618396ce4af475b96f94142ac6e1ce8",
+    "B--clip-11.jsonl": "09f008c998d46d167242baad1c871b5b252d48531fe8faf478b409ff012b37f6",
+    "B--clip-2.jsonl": "7bf5101dab8422402c6275b19e38c7b247aa1615a07be3b41d4fd45575a2066a",
+    "B--clip-3.jsonl": "8444c6db7b1529cd8521cbd373d0fb406f0ee9ad73a1901d1e6ed96b3d24cfc7",
+    "B--clip-4.jsonl": "05f05d84938ba48b7a52156adc2bc52388639fc789b011f506417e6e8edb6eb6",
+    "B--clip-5.jsonl": "e5c85a6e297486916d82d9b86022f23291fd60f4dcd955bc2f4175f46f606817",
+    "B--clip-6.jsonl": "f92f7d3f11c1e1c202d5ade892ad64fda434674c8beabc7a3c1c7f512ade9df2",
+    "B--clip-7.jsonl": "76cf978f65a36b688ea3c5943a3c29881914f3a3aae4aa13d31616a26548e11c",
+    "B--clip-8.jsonl": "c66af9de282afe93f4916b7756230ced1feea9a8f7d87818236f33e69d616ba1",
+    "B--clip-9.jsonl": "abb828ebb5baef85168c47ed96940f7f4f96f18d611ad476f80f0501928339e9"
+  },
+  "inputSha256ByFrame": {
+    "clip-0/1": "ebed4d4b61a2c219a9c09e29d11108cdf589987cd3be6f8ec2e0f9d6d615f3c7",
+    "clip-1/1": "be019be23e3d1b0407238dccaef5498325d50f60b3ca26a1a34b055c7d8d3073",
+    "clip-10/1": "a8ad2a7a6011f4873dc6f9b617d77bdfad2ae339eb378afad5aebe9cee7aea13",
+    "clip-11/1": "74f914385f926d23b6a20ed7aa05abd6ff3989989914b43887d47b1485d770c0",
+    "clip-2/1": "7b09850a81e1c2d08f3c95148fd0b87b57a21531ae8ffd844f819a99c0099ecb",
+    "clip-3/1": "8c19286242433f40d7dbce202b23d89c311a2c542907c88a9cb099ded6f44018",
+    "clip-4/1": "56f977deef126e92587966ff5130748192d8c66b5211a5475652f52806809fc0",
+    "clip-5/1": "6c847ffb221628df7922a41c954c9e7dee884d25572abe114a66586db4512d15",
+    "clip-6/1": "89998904dabf009c5db63d3c0bc560e5d55bc067297f928b6c587c9e1a2b9e76",
+    "clip-7/1": "78b0583b5ed8094fffad932c2cce7fea8222354bf1e7ad3f36378b4ae882fee0",
+    "clip-8/1": "ced18a221bf04d502c4a8135de8baf91e596f8db640fe5b0195c9f3f2b3f91ec",
+    "clip-9/1": "939b385e092212a164584e27fc19a11f65c0ef391a180aaad15b89cfb492a995"
+  },
+  "outputSha256": {
+    "gt.jsonl": "daecbc4b3ca971ca4a5a9a9efc634b4ee2f6e5fd5c01a8d9dcad881b6a660fd4",
+    "predictions-A.jsonl": "7c2804fececd01da123afe592121b0c43e56d4b1101d859ae326749023fa9e58",
+    "predictions-B.jsonl": "f2eca6ed2006a28ff7bc7d204cd532e4a50bcb93c8b3cdc6daaf49a6e67079e0"
+  },
+  "variants": [
+    "A",
+    "B"
+  ],
+  "clipIds": [
+    "clip-0",
+    "clip-1",
+    "clip-2",
+    "clip-3",
+    "clip-4",
+    "clip-5",
+    "clip-6",
+    "clip-7",
+    "clip-8",
+    "clip-9",
+    "clip-10",
+    "clip-11"
+  ],
+  "frameCount": 12,
+  "rowCount": 24,
+  "claims": {
+    "geometryReplayOnly": true,
+    "latencyOrUiQualityClaim": false,
+    "hardwareAcceptance": "NOT_RUN",
+    "winnerSelection": "NOT_RUN"
+  },
+  "clusterManifest": "required separately; no sessionId or corpus independence inferred"
+}

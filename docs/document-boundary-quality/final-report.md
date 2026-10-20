@@ -32,7 +32,27 @@ Debug trace and optional bounded image recording are local, explicit opt-in,
 disabled in production. The geometric evaluator counts missing/invalid predictions
 as failures and refuses to assign acceptance from absent physical/statistical data.
 
-## Executed evidence
+## Latest software validation — 0.4.282
+
+The isotropy correction passed forced core 184/184 and app 79/79 unit tests,
+AndroidTest compilation, and 30/30 executed native tests on the explicitly selected
+API36 emulator. One real-corpus replay test was skipped with NOT_RUN because its
+input corpus is absent. See [results](runs/validation-0.4.282/isotropy-final-results.md).
+The lifecycle regression also passed 1/1: destruction during pipeline lazy
+initialization terminated both diagnostics/archive workers and emitted their final
+records. Earlier harness failures remain recorded, without a successful pre-fix
+runtime claim.
+The common replay, strict converter and paired session-bootstrap tooling now form
+a runnable synthetic development chain; this does not supply real-camera evidence.
+
+Two broader legacy UI scenarios remain failing: batch clear/delete undo, and
+OCR cancellation/restart through page deletion. The initial UI already had an
+unattached clear control and a separate page dialog. They remain explicit failures;
+the passing targeted suite does not cover them. An intermittent emulator capture
+timeout occurred in an earlier run; an isolated retry and the final filtered run
+passed. These observations remain in raw evidence.
+
+## Historical executed evidence
 
 All test execution and analysis were performed by **GPT-6 Luna, high**.
 

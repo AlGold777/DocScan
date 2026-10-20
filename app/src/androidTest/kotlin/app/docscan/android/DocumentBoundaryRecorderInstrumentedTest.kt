@@ -2,6 +2,8 @@ package app.docscan.android
 
 import android.Manifest
 import android.content.Intent
+import android.os.Looper
+import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -97,7 +99,11 @@ class DocumentBoundaryRecorderInstrumentedTest {
         try {
             val input = DocumentBoundaryInput(
                 BoundaryFrameId(41L, 8L, 3L), spec,
-                DocumentFrameTiming(sensorTimestampNs = null, receivedTimestampNs = 41_000_000L), inputMat,
+                DocumentFrameTiming(
+                    sensorTimestampNs = null,
+                    receivedTimestampNs = 41_000_000L,
+                    preparedTimestampNs = 41_000_010L,
+                ), inputMat,
             )
             val result = DocumentBoundaryResult(
                 identity = input.identity,
@@ -105,8 +111,8 @@ class DocumentBoundaryRecorderInstrumentedTest {
                 configVersion = "v1",
                 outcome = BoundaryOutcome.FOUND,
                 candidates = emptyList(),
-                detectorStartedNs = 41_000_001L,
-                detectorFinishedNs = 41_000_002L,
+                detectorStartedNs = 41_000_011L,
+                detectorFinishedNs = 41_000_012L,
             )
             val state = LiveDetectionState(
                 generationId = 8L,
@@ -144,6 +150,7 @@ class DocumentBoundaryRecorderInstrumentedTest {
         assertEquals("start", start.getString("event"))
         assertEquals(41L, event.getLong("frameId"))
         assertEquals(8L, event.getLong("generationId"))
+        assertEquals(41_000_010L, event.getLong("preparedNs"))
         assertEquals(2.0, event.getJSONArray("displayBufferQuad").getDouble(0), 0.0)
         assertTrue("Unknown presentation timing remains explicit", start.isNull("presentTimestampNs"))
         assertFalse("Trace never includes image pixels", event.has("pixels"))
@@ -151,6 +158,125 @@ class DocumentBoundaryRecorderInstrumentedTest {
         assertFalse(end.getBoolean("writeFailed"))
         assertFalse("Diagnostics creates only its structured trace", directory.listFiles().orEmpty()
             .any { it.extension == "jpg" || it.name.startsWith("frame-") })
+    }
+
+    @Test
+    fun uiApplyAndDrawMarkersKeepMainEventTimesOrderAndOwnedScreenGeometry() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val directory = File(context.cacheDir, "dbq-ui-markers-${System.nanoTime()}")
+        val output = File(directory, "trace.jsonl")
+        val diagnostics = DocumentBoundaryDiagnostics(output)
+        val applyPoints = floatArrayOf(10f, 11f, 91f, 12f, 89f, 90f, 9f, 88f)
+        val drawPoints = floatArrayOf(12f, 13f, 92f, 14f, 90f, 91f, 11f, 89f)
+        var applyTimestampNs = 0L
+        var drawTimestampNs = 0L
+        try {
+            instrumentation.runOnMainSync {
+                assertEquals(Looper.getMainLooper(), Looper.myLooper())
+                applyTimestampNs = SystemClock.elapsedRealtimeNanos()
+                diagnostics.recordMarker("UI_APPLY", 55L, 12L, applyTimestampNs, applyPoints)
+            }
+            applyPoints[0] = 999f
+
+            instrumentation.runOnMainSync {
+                assertEquals(Looper.getMainLooper(), Looper.myLooper())
+                drawTimestampNs = SystemClock.elapsedRealtimeNanos()
+                diagnostics.recordMarker("DRAW", 55L, 12L, drawTimestampNs, drawPoints)
+            }
+            drawPoints[0] = 999f
+        } finally {
+            diagnostics.close()
+        }
+
+        val lines = awaitTraceEnd(output)
+        val events = lines.map(::JSONObject)
+        val markers = events.filter { it.optString("event") in setOf("UI_APPLY", "DRAW") }
+        assertEquals(listOf("UI_APPLY", "DRAW"), markers.map { it.getString("event") })
+        assertEquals(listOf(55L, 55L), markers.map { it.getLong("publicationId") })
+        assertEquals(listOf(12L, 12L), markers.map { it.getLong("generationId") })
+        assertEquals(applyTimestampNs, markers[0].getLong("timestampNs"))
+        assertEquals(drawTimestampNs, markers[1].getLong("timestampNs"))
+        assertTrue("The queued draw marker follows the UI apply event", drawTimestampNs >= applyTimestampNs)
+        assertEquals(10.0, markers[0].getJSONArray("screenQuad").getDouble(0), 0.0)
+        assertEquals(12.0, markers[1].getJSONArray("screenQuad").getDouble(0), 0.0)
+        assertTrue(markers.all { it.isNull("presentTimestampNs") })
+        assertFalse("A UI draw marker is not a display presentation event",
+            events.any { it.optString("event") == "PRESENT" })
+    }
+
+    @Test
+    fun traceSerializesMissingTimesAsNullAndPreservesValidZeroTimestamps() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = File(context.cacheDir, "dbq-null-vs-zero-${System.nanoTime()}")
+        val output = File(directory, "trace.jsonl")
+        val diagnostics = DocumentBoundaryDiagnostics(output)
+        val spec = AnalysisBufferSpec(32, 24, BufferRect(0, 0, 32, 24), 0)
+        val rgba = Mat()
+        try {
+            val idleInput = DocumentBoundaryInput(
+                BoundaryFrameId(1L, 2L, 1L), spec,
+                DocumentFrameTiming(sensorTimestampNs = null, receivedTimestampNs = 0L), rgba,
+            )
+            val idleResult = DocumentBoundaryResult(
+                idleInput.identity, "trace-test", "v1", BoundaryOutcome.NO_DOCUMENT,
+                emptyList(), detectorStartedNs = 0L, detectorFinishedNs = 0L,
+            )
+            val idle = LiveDetectionState(
+                generationId = 2L,
+                status = LiveDetectionStatus.IDLE,
+                analysisSpec = null,
+                quadInBufferPixels = null,
+                quadInNormalizedViewPort = null,
+                rawScore = 0.0,
+                frameTimestampMonotonicMs = 0L,
+                processedTimestampMonotonicMs = 0L,
+                publicationId = 0L,
+                lastDetectionTimestampMonotonicMs = 0L,
+            )
+            diagnostics.record(idleInput, idleResult, idle)
+
+            val foundInput = DocumentBoundaryInput(
+                BoundaryFrameId(2L, 3L, 1L), spec,
+                DocumentFrameTiming(sensorTimestampNs = null, receivedTimestampNs = 0L), rgba,
+            )
+            val foundResult = DocumentBoundaryResult(
+                foundInput.identity, "trace-test", "v1", BoundaryOutcome.FOUND,
+                emptyList(), detectorStartedNs = 0L, detectorFinishedNs = 0L,
+            )
+            val validAtZero = LiveDetectionState(
+                generationId = 3L,
+                status = LiveDetectionStatus.CONFIRMED,
+                analysisSpec = spec,
+                quadInBufferPixels = floatArrayOf(1f, 1f, 30f, 1f, 30f, 22f, 1f, 22f),
+                quadInNormalizedViewPort = null,
+                rawScore = 1.0,
+                frameTimestampMonotonicMs = 0L,
+                processedTimestampMonotonicMs = 0L,
+                publicationId = 1L,
+                lastDetectionTimestampMonotonicMs = 0L,
+            )
+            diagnostics.record(foundInput, foundResult, validAtZero)
+        } finally {
+            rgba.release()
+            diagnostics.close()
+        }
+
+        val rows = awaitTraceEnd(output).map(::JSONObject).filter { it.optString("event") == "result" }
+        assertEquals(2, rows.size)
+        val idle = rows[0]
+        assertEquals(0L, idle.getLong("publicationId"))
+        assertTrue(idle.isNull("processedMs"))
+        assertTrue(idle.isNull("lastDetectionMs"))
+        assertTrue(idle.isNull("geometryMs"))
+        assertTrue(idle.isNull("displayBufferQuad"))
+
+        val valid = rows[1]
+        assertEquals(1L, valid.getLong("publicationId"))
+        assertEquals(0L, valid.getLong("processedMs"))
+        assertEquals(0L, valid.getLong("lastDetectionMs"))
+        assertEquals(0L, valid.getLong("geometryMs"))
+        assertFalse(valid.isNull("displayBufferQuad"))
     }
 
     @Test
@@ -201,6 +327,18 @@ class DocumentBoundaryRecorderInstrumentedTest {
             android.os.SystemClock.sleep(25L)
         }
         throw AssertionError("Timed out waiting for recorder output ${file.name}")
+    }
+
+    private fun awaitTraceEnd(file: File): List<String> {
+        val deadline = android.os.SystemClock.uptimeMillis() + 15_000L
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            if (file.isFile) {
+                val lines = file.readLines()
+                if (lines.any { it.contains("\"event\":\"end\"") }) return lines
+            }
+            android.os.SystemClock.sleep(25L)
+        }
+        throw AssertionError("Timed out waiting for diagnostics writer to close ${file.name}")
     }
 
     private fun forcePipeline(activity: ProductActivity): DocumentBoundaryPipeline {

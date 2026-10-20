@@ -1,0 +1,415 @@
+10-20 21:59:30.011 13674 13688 I TestRunner: started: deletingAndClearingCancelNativeOcrAndUndoCanRestartIt(app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest)
+10-20 21:59:30.016 13674 13688 I UiAutomation: Initialized for user 0 on display 0
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.024   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.026   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:30.029  1453  7037 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+10-20 21:59:30.032 13674 13688 I UiAutomationPermGranter: Attempting to grant android.permission.CAMERA to app.docscan.scanner
+10-20 21:59:30.040   662   662 D PermissionMonitor: setLocalNetworkPermissions in onPermissionsChanged took 4613 microseconds.
+10-20 21:59:30.109  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:30.114 13674 13688 E SQLiteLog: (1) no such table: Workspace in "SELECT CASE
+10-20 21:59:30.114 13674 13688 E SQLiteLog:   WHEN EXISTS (SELECT 1 FROM Workspace) THEN 'EXISTING'
+10-20 21:59:30.114 13674 13688 E SQLiteLog:   WHEN EXISTS (SELECT 1 FROM WorkspaceSession)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ArtifactRecord)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ArtifactReference)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ImageVersion)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM Page)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM DeleteUndo)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM Recognition)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ProcessingResult)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveManifest)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveOutputPublicationIntent)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SaveDependencyResult)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM ExportArtifact)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:     OR EXISTS (SELECT 1 FROM SavedPdfEditComposition)
+10-20 21:59:30.114 13674 13688 E SQLiteLog:
+10-20 21:59:30.115  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:30.115  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:30.115  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:30.124  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:30.133  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:30.142  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:30.142  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:30.142  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:30.145  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:30.153  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:30.154 13674 13688 D nativeloader: Load /data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk!/lib/arm64-v8a/libjpeg.so using class loader ns clns-9 (caller=/data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk): ok
+10-20 21:59:30.156 13674 13688 D nativeloader: Load /data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk!/lib/arm64-v8a/libpngx.so using class loader ns clns-9 (caller=/data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk): ok
+10-20 21:59:30.157 13674 13688 D nativeloader: Load /data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk!/lib/arm64-v8a/libleptonica.so using class loader ns clns-9 (caller=/data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk): ok
+10-20 21:59:30.158  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:30.158  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:30.158  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:30.158  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:30.167 13674 13688 D nativeloader: Load /data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk!/lib/arm64-v8a/libtesseract.so using class loader ns clns-9 (caller=/data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk): ok
+10-20 21:59:30.168  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0 (types=[])
+10-20 21:59:30.174 13674 13688 I HWUI    : Using FreeType backend (prop=Auto)
+10-20 21:59:30.176  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface ambientcue with targets# 0 (types=[])
+10-20 21:59:30.185  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0 (types=[])
+10-20 21:59:30.194   924  1044 I AmbientCueRepository: Receiving SmartSpace targets # 0
+10-20 21:59:30.220   924   924 W SsPagerDots: Total number of pages invalid: 0. Assuming 1 page.
+10-20 21:59:30.274 13674 13688 W Settings: Setting always_finish_activities has moved from android.provider.Settings.System to android.provider.Settings.Global, returning read-only value.
+10-20 21:59:30.282   662  1205 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@177240a7 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+10-20 21:59:30.331  1070  1070 D RecentsView: onTaskDisplayChanged: 305, new displayId = 0
+10-20 21:59:30.338   532  1138 I libbinder.BpBinder: onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+10-20 21:59:30.365  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:30.410   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@a73913c
+10-20 21:59:30.469  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:30.482 13674 13674 D DesktopExperienceFlags: Toggle override initialized to: false
+10-20 21:59:30.532 13674 13674 D AppCompatDelegate: Checking for metadata for AppLocalesMetadataHolderService : Service not found
+10-20 21:59:30.650 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: PRE_ON_CREATE
+10-20 21:59:30.651 13674 13674 V ActivityScenario: Activity lifecycle changed event received but ignored because the reported transition was not ON_CREATE while the last known transition was PRE_ON_CREATE
+10-20 21:59:30.655 13674 13692 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv1_CM_emulation.so
+10-20 21:59:30.656 13674 13692 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv2_emulation.so
+10-20 21:59:30.659 13674 13692 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+10-20 21:59:30.672 13674 13692 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-20 21:59:30.714 13674 13674 D CompatChangeReporter: Compat change id reported: 270674727; UID 10242; state: ENABLED
+10-20 21:59:30.716  1070  1081 W s.nexuslauncher: Reducing the number of considered missed Gc histogram windows from 519 to 100
+10-20 21:59:30.739  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:30.852  6293  6297 W .apps.wellbeing: Suspending all threads took: 6.238ms
+10-20 21:59:30.883 13674 13674 D CompatChangeReporter: Compat change id reported: 309578419; UID 10242; state: ENABLED
+10-20 21:59:30.887 13674 13674 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+10-20 21:59:30.908   662  2731 D WifiNl80211Manager: Scan result ready event
+10-20 21:59:30.913   662  2731 D WifiNative: Scan result ready event
+10-20 21:59:30.920 13674 13674 I docscan.scanner: hiddenapi: Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/appcompat/widget/ViewUtils; (domain=app, TargetSdkVersion=35) using reflection: allowed
+10-20 21:59:30.936  5718  5727 I WifiScanner: onFullResults
+10-20 21:59:30.936  5718  5727 I WifiScanner: onFullResults
+10-20 21:59:30.943 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: CREATED
+10-20 21:59:30.943 13674 13674 V ActivityScenario: Update currentActivityStage to CREATED, currentActivity=app.docscan.android.ProductActivity@428de46
+10-20 21:59:30.950 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: STARTED
+10-20 21:59:30.950 13674 13674 V ActivityScenario: Update currentActivityStage to STARTED, currentActivity=app.docscan.android.ProductActivity@428de46
+10-20 21:59:30.954   662   826 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+10-20 21:59:30.964  6293  6379 W libbinder.Binder: Binder transaction to android.content.IContentProvider code 21 took 1562ms. Data bytes: 492 Reply bytes: 444 Flags: 18
+10-20 21:59:30.964  1070  1815 D WellbeingModel: ....actionId: pause, packages: app.docscan.scanner.test
+10-20 21:59:30.964  1070  1815 I WellbeingModel: retrieveActions(): finished
+10-20 21:59:30.981 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: RESUMED
+10-20 21:59:30.984 13674 13674 V ActivityScenario: Update currentActivityStage to RESUMED, currentActivity=app.docscan.android.ProductActivity@428de46
+10-20 21:59:31.013 13674 13698 I CameraManagerGlobal: Connecting to camera service
+10-20 21:59:31.018 13674 13674 D CompatChangeReporter: Compat change id reported: 349153669; UID 10242; state: ENABLED
+10-20 21:59:31.020 13674 13674 W HWUI    : Unknown dataspace 0
+10-20 21:59:31.086 13674 13674 D VRI[ProductActivity]: WindowInsets changed: 1080x2400 statusBars:[0,63,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,63,0,84]
+10-20 21:59:31.098 13674 13674 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@f76932f
+10-20 21:59:31.283 13674 13704 D CompatChangeReporter: Compat change id reported: 312399441; UID 10242; state: ENABLED
+10-20 21:59:31.288 12899 12899 D VRI[MainActivity]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:31.296  1183  1183 D VRI[RequestIgnoreBatteryOptimizations]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:31.298  1183  1183 D VRI[RequestIgnoreBatteryOptimizations]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:31.312   532   589 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10242 pid=13674
+10-20 21:59:31.312   532   589 D libbinder.PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10242 => denied (3507 us)
+10-20 21:59:31.312   532   589 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10242 pid=13674
+10-20 21:59:31.312   532   589 D libbinder.PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10242 => denied (22 us)
+10-20 21:59:31.312   532   589 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10242 pid=13674
+10-20 21:59:31.312   532   589 D libbinder.PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10242 => denied (20 us)
+10-20 21:59:31.316   532  1138 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10242 pid=0
+10-20 21:59:31.316   532  1138 D libbinder.PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10242 => denied (7859 us)
+10-20 21:59:31.361   662   907 W ImageReader_JNI: Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+10-20 21:59:31.438   662  1226 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10242 pid=0
+10-20 21:59:31.440   662  1226 D libbinder.PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10242 => denied (2782 us)
+10-20 21:59:31.441   662  1226 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10242 pid=0
+10-20 21:59:31.441   662  1226 D libbinder.PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10242 => denied (84 us)
+10-20 21:59:31.441   662  1226 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10242 pid=0
+10-20 21:59:31.443   662  1226 D libbinder.PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10242 => denied (2519 us)
+10-20 21:59:31.537 13674 13698 D CameraRepository: Added camera: 1
+10-20 21:59:31.545   662   701 I ActivityTaskManager: Displayed app.docscan.scanner/app.docscan.android.ProductActivity for user 0: +1s210ms
+10-20 21:59:31.713   662   826 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+10-20 21:59:31.861 13674 13698 W docscan.scanner: Verification of androidx.camera.core.impl.CameraCaptureMetaData$AfState[] androidx.camera.core.impl.CameraCaptureMetaData$AfState.$values() took 124.962ms (152.05 bytecodes/s) (0B arena alloc)
+10-20 21:59:31.862 13674 13698 I Camera2CameraInfo: Device Level: INFO_SUPPORTED_HARDWARE_LEVEL_FULL
+10-20 21:59:31.863 13674 13698 D CameraRepository: Added camera: 10
+10-20 21:59:31.863 13674 13698 I Camera2CameraInfo: Device Level: INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED
+10-20 21:59:31.863 13674 13698 D CameraValidator: Verifying camera lens facing on emu64a, lensFacingInteger: null
+10-20 21:59:32.053   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:32.059 13674 13683 I HWUI    : Davey! duration=857ms; Flags=0, FrameTimelineVsyncId=47299, IntendedVsync=9414496066358, Vsync=9414846066344, InputEventId=0, HandleInputStart=9414860179732, AnimationStart=9414860182399, PerformTraversalsStart=9414860964941, DrawStart=9415134935649, FrameDeadline=9414896066342, FrameStartTime=9414859800191, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=9415165439566, SyncStart=9415165920899, IssueDrawCommandsStart=9415170689483, SwapBuffers=9415317914983, FrameCompleted=9415353878899, DequeueBufferDuration=2667, QueueBufferDuration=14528166, GpuCompleted=9415353853066, SwapBuffersCompleted=9415353878899, DisplayPresentTime=0, CommandSubmissionCompleted=9415317914983,
+10-20 21:59:32.114 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47477, 85159141, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47477, 85159141, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47501, 70042561, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47501, 70042561, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47509, 100081186, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47509, 100081186, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47517, 120088562, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47517, 120088562, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47534, 89847172, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47534, 89847172, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47542, 109392774, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47542, 109392774, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47550, 133439270, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47550, 133439270, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47581, 125526195, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47581, 125526195, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed App frame:UNKNOWN: 3, 47589, 150101399, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.114   924  1025 W FrameTracker: Missed SF frame:UNKNOWN: 3, 47589, 150101399, CUJ=J<SPLASHSCREEN_EXIT_ANIM>
+10-20 21:59:32.118 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.129 13674 13674 D DynamicRangeResolver: Resolved dynamic range for use case androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d to no compatible HDR dynamic ranges.
+10-20 21:59:32.129 13674 13674 D DynamicRangeResolver: DynamicRange@7b2fab7{encoding=UNSPECIFIED, bitDepth=0}
+10-20 21:59:32.129 13674 13674 D DynamicRangeResolver: ->
+10-20 21:59:32.129 13674 13674 D DynamicRangeResolver: DynamicRange@2798db6{encoding=SDR, bitDepth=8}
+10-20 21:59:32.130 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.131 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.132 13674 13674 D DeferrableSurface: Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@408cf42}
+10-20 21:59:32.138 13674 13708 W docscan.scanner: Verification of void androidx.exifinterface.media.ExifInterface.getRw2Attributes(androidx.exifinterface.media.ExifInterface$SeekableByteOrderedDataInputStream) took 129.509ms (748.98 bytecodes/s) (0B arena alloc)
+10-20 21:59:32.139  5718  5753 I FontLog : (REDACTED) Received query %s, URI %s
+10-20 21:59:32.141 13674 13674 D DeferrableSurface: Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@c9089af}
+10-20 21:59:32.141  5718  5753 I FontLog : (REDACTED) Query [%s] resolved to %s
+10-20 21:59:32.143 13674 13674 D DeferrableSurface: New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@c9089af}
+10-20 21:59:32.143 13674 13674 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@c9089af
+10-20 21:59:32.143 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.148 13674 13674 D ImageCapture: createPipeline(cameraId: 10, streamSpec: StreamSpec{resolution=1280x960, dynamicRange=DynamicRange@2798db6{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@ee39da8})
+10-20 21:59:32.150 13674 13674 D DeferrableSurface: Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@8e380c1}
+10-20 21:59:32.151  5718  5753 I FontLog : (REDACTED) Fetch %s end status %s
+10-20 21:59:32.182 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.184 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.185 13674 13674 D DeferrableSurface: Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@c1ffa7}
+10-20 21:59:32.189  5718  5753 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+10-20 21:59:32.191 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276 ACTIVE
+10-20 21:59:32.201 13674 13674 D PreviewView: Surface requested by Preview.
+10-20 21:59:32.207 13674 13674 D TextureViewImpl: SurfaceTexture available. Size: 1280x960
+10-20 21:59:32.207 13674 13674 D TextureViewImpl: Surface set on Preview.
+10-20 21:59:32.213 13674 13674 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 121 - 1280, 839), getRotationDegrees=90, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, getMirroring=false}
+10-20 21:59:32.213 13674 13674 D PreviewTransform: Transformation info set: TransformationInfo{getCropRect=Rect(0, 121 - 1280, 839), getRotationDegrees=90, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, getMirroring=false} 1280x960 false
+10-20 21:59:32.213 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:32.221  5718  5753 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+10-20 21:59:32.249   662   835 I WifiService: releaseMulticastLock uid=1000 lockTag=NsdService
+10-20 21:59:32.275 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:32.295  1027  1162 D IpClient.wlan0: set max DTIM multiplier to 2
+10-20 21:59:32.320 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703 ACTIVE
+10-20 21:59:32.321 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:32.346   662   826 E WifiStaIfaceAidlImpl: setDtimMultiplier failed with service-specific exception: android.os.ServiceSpecificException:  (code 4)
+10-20 21:59:32.497 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276 ACTIVE
+10-20 21:59:32.498 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:32.505 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741 ACTIVE
+10-20 21:59:32.505 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:32.506 13674 13709 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:32.506 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use cases [androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] now ATTACHED
+10-20 21:59:32.507 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.507 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.508 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:32.508 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state INITIALIZED
+10-20 21:59:32.565 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Attempting to force open the camera.
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: tryOpenCamera(Camera@487cd00[id=10]) [Available Cameras: 1, Already Open: false (Previous state: null)] --> SUCCESS
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: Camera                                       State
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: Camera@487cd00[id=10]                        OPENING
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:32.565 13674 13709 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:32.565 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Opening camera.
+10-20 21:59:32.565 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-20 21:59:32.597 13674 13709 D CameraStateMachine: New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+10-20 21:59:32.597 13674 13709 D CameraStateMachine: Publishing new public camera state CameraState{type=OPENING, error=null}
+10-20 21:59:32.599 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.604  5718  5718 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.common.telemetry.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+10-20 21:59:32.666   565  5822 I CameraService: CameraService::connect call (PID 13674 "app.docscan.scanner", camera ID 10) and Camera API version 2
+10-20 21:59:32.705 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703 ACTIVE
+10-20 21:59:32.729 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.730 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276 ACTIVE
+10-20 21:59:32.730 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.731 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use case androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741 ACTIVE
+10-20 21:59:32.731 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.824 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} CameraDevice.onOpened()
+10-20 21:59:32.825 13674 13709 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: OPENING --> OPENED
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: Camera                                       State
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: Camera@487cd00[id=10]                        OPEN
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:32.826 13674 13709 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:32.837 13674 13709 D CameraStateMachine: New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+10-20 21:59:32.838 13674 13709 D CameraStateMachine: Publishing new public camera state CameraState{type=OPEN, error=null}
+10-20 21:59:32.839 13674 13709 D UseCaseAttachState: All use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.870 13674 13709 D UseCaseAttachState: Active and attached use case: [androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] for camera: 10
+10-20 21:59:32.888 13674 13709 D SyncCaptureSessionBase: [androidx.camera.camera2.internal.SynchronizedCaptureSessionBaseImpl@1bd834d] getSurface...done
+10-20 21:59:32.896 13674 13709 D CaptureSession: Opening capture session.
+10-20 21:59:32.901 13674 13709 D DeferrableSurface: use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@c9089af
+10-20 21:59:32.902 13674 13709 D DeferrableSurface: New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@8e380c1}
+10-20 21:59:32.902 13674 13709 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@8e380c1
+10-20 21:59:32.902 13674 13709 D DeferrableSurface: New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@c1ffa7}
+10-20 21:59:32.903 13674 13709 D DeferrableSurface: use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@c1ffa7
+10-20 21:59:32.909   565  5822 W cameraserver: createConfiguredSurface: Camera 10: Overriding format 0x1 to IMPLEMENTATION_DEFINED
+10-20 21:59:32.918   537 11575 D camera.provider.ranchu: CameraDeviceSession:configureStreams:176 cfg={ .streams.size=3, .operationMode=0, .cfg.sessionParams.size()=64,  .streamConfigCounter=1, .multiResolutionInputImage=false }
+10-20 21:59:32.918   537 11575 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=0, .streamType=0, .width=1280, .height=960, .format=IMPLEMENTATION_DEFINED, .usage=0x100, .dataSpace={ .low=0x0, .s=0, .t=0, .r=0 }, .rotation=0, .physicalCameraId='', .bufferSize=0, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:32.918   537 11575 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=1, .streamType=0, .width=1280, .height=960, .format=BLOB, .usage=0x3, .dataSpace={ .low=0x0, .s=2, .t=3, .r=1 }, .rotation=0, .physicalCameraId='', .bufferSize=1228808, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:32.918   537 11575 D camera.provider.ranchu: CameraDeviceSession:configureStreams:199 stream={ .id=2, .streamType=0, .width=1280, .height=960, .format=YCBCR_420_888, .usage=0x3, .dataSpace={ .low=0x0, .s=2, .t=3, .r=1 }, .rotation=0, .physicalCameraId='', .bufferSize=0, .groupId=-1, .dynamicRangeProfile=0x1 }
+10-20 21:59:33.109   532   781 E libbinder.IPCThreadState: binder thread pool (4 threads) starved for 190 ms
+10-20 21:59:33.405 13674 13709 D CaptureSession: Attempting to send capture request onConfigured
+10-20 21:59:33.408 13674 13709 D CaptureSession: Issuing request for session.
+10-20 21:59:33.409 13674 13709 D Camera2CaptureRequestBuilder: createCaptureRequest
+10-20 21:59:33.419   565 13715 I CameraService: Start camera streaming for app.docscan.scanner (PID 13674, UID 10242)
+10-20 21:59:33.424 13674 13709 D CaptureSession: CameraCaptureSession.onConfigured() mState=OPENED
+10-20 21:59:33.424 13674 13709 D CaptureSession: CameraCaptureSession.onReady() OPENED
+10-20 21:59:33.613 13674 13704 I Tesseract(native): Initialized Tesseract API with language=rus+eng
+10-20 21:59:33.667 13674 13688 I UiDevice: Creating a new instance, old instance exists: false
+10-20 21:59:33.668 13674 13688 D UiDevice: Setting accessibility service flags: 65618
+10-20 21:59:33.675   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.675   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.676   662   662 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:33.694  1453  7037 I AiAiEcho: Settings changed for uri: content://settings/secure/accessibility_enabled
+10-20 21:59:33.699   532   532 I SurfaceFlinger: Display 4619827259835644672 policy changed
+10-20 21:59:33.699   532   532 I SurfaceFlinger: Previous: {defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, inf Hz]} idleScreenConfig=nullptr}
+10-20 21:59:33.699   532   532 I SurfaceFlinger: Current:  DisplayManagerPolicy{defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]} idleScreenConfig=nullptr}
+10-20 21:59:33.699   532   532 I SurfaceFlinger: 0 mode changes were performed under the previous policy
+10-20 21:59:33.699   532   532 D SurfaceFlinger: setDesiredMode 4619827259835644672 {mode={fps=60.00 Hz, modePtr={id=0, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=true, force=false}
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Predicting[0]:  [CONTEXT sampling_count=5 ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: EchoTargets:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: Filtered by AiAi flag check:
+10-20 21:59:33.704  1453  1677 I AiAiEcho: [CONTEXT ratelimit_period="10 SECONDS" ]
+10-20 21:59:33.704  1453  1677 I AiAiEcho: #remoteViewsTwiddler: feature disabled.
+10-20 21:59:33.705  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0 (types=[])
+10-20 21:59:33.713   662  1567 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@19271946 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+10-20 21:59:33.865  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface ambientcue with targets# 0 (types=[])
+10-20 21:59:33.866  1453  1677 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0 (types=[])
+10-20 21:59:33.866   662   704 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@19271946 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+10-20 21:59:33.871  1070  1070 D RecentsView: onTaskDisplayChanged: 306, new displayId = 0
+10-20 21:59:33.873  1113  1198 D AccessibilitySourceService: enabled a11y services count 0
+10-20 21:59:33.873  1113  1198 D AccessibilitySourceService: a11y source sending 0 issue to sc
+10-20 21:59:33.884   662  1567 D SafetySourceDataValidat: No cert check requested for package com.google.android.permissioncontroller
+10-20 21:59:33.908   924   924 W SsPagerDots: Total number of pages invalid: 0. Assuming 1 page.
+10-20 21:59:33.911  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:33.916   532   782 I libbinder.BpBinder: onLastStrongRef automatically unlinking death recipients for descriptor: '(not cached)'
+10-20 21:59:33.920 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: PAUSED
+10-20 21:59:33.920 13674 13674 V ActivityScenario: Update currentActivityStage to PAUSED, currentActivity=app.docscan.android.ProductActivity@428de46
+10-20 21:59:33.920   464   464 D Zygote  : Forked child process 13723
+10-20 21:59:33.932   924  1044 I AmbientCueRepository: Receiving SmartSpace targets # 0
+10-20 21:59:33.940   532   532 I SurfaceFlinger: Display 4619827259835644672 policy changed
+10-20 21:59:33.940   532   532 I SurfaceFlinger: Previous: {defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[60.00 Hz, inf Hz], render=[60.00 Hz, 60.00 Hz]} idleScreenConfig=nullptr}
+10-20 21:59:33.940   532   532 I SurfaceFlinger: Current:  DisplayManagerPolicy{defaultModeId=0, allowGroupSwitching=false, primaryRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, 60.00 Hz]}, appRequestRanges={physical=[0.00 Hz, inf Hz], render=[0.00 Hz, inf Hz]} idleScreenConfig=nullptr}
+10-20 21:59:33.940   532   532 I SurfaceFlinger: 0 mode changes were performed under the previous policy
+10-20 21:59:33.940   532   532 D SurfaceFlinger: setDesiredMode 4619827259835644672 {mode={fps=60.00 Hz, modePtr={id=0, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=true, force=false}
+10-20 21:59:33.942   924  1025 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@ebcd5f2
+10-20 21:59:34.036  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:34.036  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:34.052 13723 13723 I Zygote  : Process 13723 created for app.docscan.scanner.test
+10-20 21:59:34.052 13723 13723 I an.scanner.test: Late-enabling -Xcheck:jni
+10-20 21:59:34.171 13723 13723 I an.scanner.test: Using CollectorTypeCMC GC.
+10-20 21:59:34.197   534   560 I adbd    : jdwp connection from 13723
+10-20 21:59:34.201 13723 13723 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+10-20 21:59:34.223 13674 13725 D nativeloader: Load /data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk!/lib/arm64-v8a/libimage_processing_util_jni.so using class loader ns clns-9 (caller=/data/app/~~dUDwV4vce_Q7IKYPXlDLvw==/app.docscan.scanner-K9V5x1fxZ69Ye21RscuJCA==/base.apk): ok
+10-20 21:59:34.455 13723 13723 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+10-20 21:59:34.537 13723 13723 D nativeloader: Configuring clns-9 for other apk /system/framework/android.test.mock.jar. target_sdk_version=35, uses_libraries=ALL, library_path=/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/lib/arm64:/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/app.docscan.scanner.test
+10-20 21:59:34.538 13723 13723 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+10-20 21:59:34.538 13674 13674 D StreamStateObserver: Update Preview stream state to STREAMING
+10-20 21:59:34.576 13723 13723 D nativeloader: Configuring clns-10 for other apk /system/framework/android.test.runner.jar. target_sdk_version=35, uses_libraries=ALL, library_path=/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/lib/arm64:/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/app.docscan.scanner.test
+10-20 21:59:34.586 13723 13723 D nativeloader: Configuring clns-11 for other apk /data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/lib/arm64:/data/app/~~-WbmGBJVhnUI3RspsAPXUw==/app.docscan.scanner.test-4WlHtg-0i-4DPXuPG-Gogw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/app.docscan.scanner.test
+10-20 21:59:34.587 13723 13723 D CompatChangeReporter: Compat change id reported: 202956589; UID 10243; state: ENABLED
+10-20 21:59:34.665 13674 13674 D VRI[ProductActivity]: visibilityChanged oldVisibility=true newVisibility=false
+10-20 21:59:34.668   662   907 W ImageReader_JNI: Unable to acquire a buffer item, very likely client tried to acquire more than maxImages buffers
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment: Currently set values for:
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment: app.docscan.scanner.test is not listed in per-application setting
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment: No special selections for ANGLE, returning default driver choice
+10-20 21:59:34.859 13723 13723 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-20 21:59:34.866   662   826 I HalDevMgr: bestIfaceCreationProposal is null, requestIface=STA, existingIface=[name=wlan0 type=STA]
+10-20 21:59:34.879 13674 13739 D ProfileInstaller: Installing profile for app.docscan.scanner
+10-20 21:59:34.999 13674 13678 I docscan.scanner: Compiler allocated 5145KB to compile void android.view.ViewRootImpl.performTraversals()
+10-20 21:59:35.204   662   691 W system_server: Suspending all threads took: 153.842ms
+10-20 21:59:35.208   662   710 W libbinder.IPCThreadState: Sending oneway calls to frozen process.
+10-20 21:59:35.226 13723 13723 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+10-20 21:59:35.333 13723 13741 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv1_CM_emulation.so
+10-20 21:59:35.333 13723 13741 I GFXSTREAM: [eglDisplay.cpp(297)] Opening libGLESv2_emulation.so
+10-20 21:59:35.336 13723 13741 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+10-20 21:59:35.336 13723 13741 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-20 21:59:35.639 13723 13723 D CompatChangeReporter: Compat change id reported: 309578419; UID 10243; state: ENABLED
+10-20 21:59:35.639 13723 13723 D DesktopExperienceFlags: Toggle override initialized to: false
+10-20 21:59:35.639 13723 13723 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+10-20 21:59:35.678 13723 13723 D CompatChangeReporter: Compat change id reported: 349153669; UID 10243; state: ENABLED
+10-20 21:59:35.681 13723 13723 W HWUI    : Unknown dataspace 0
+10-20 21:59:35.773 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Use cases [androidx.camera.core.Preview-ce0ba8e5-ea47-47b5-ac82-f0f14b56801d198144703, androidx.camera.core.ImageCapture-c566070b-051a-4fa2-9190-3f59d9d0d754184827276, androidx.camera.core.ImageAnalysis-652ad0b6-c0fb-47a5-9ad7-c2ece45267f030870741] now DETACHED for camera
+10-20 21:59:35.773 13674 13698 D UseCaseAttachState: All use case: [] for camera: 10
+10-20 21:59:35.773 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:35.774 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: STOPPED
+10-20 21:59:35.774 13674 13674 V ActivityScenario: Update currentActivityStage to STOPPED, currentActivity=app.docscan.android.ProductActivity@428de46
+10-20 21:59:35.774 13674 13674 D CameraOrientationUtil: getRelativeImageRotation: destRotationDegrees=0, sourceRotationDegrees=90, isOppositeFacing=true, result=90
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@c9089af
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@408cf42
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@408cf42}
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@c9089af
+10-20 21:59:35.775 13674 13674 D ImageCapture: clearPipeline
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@8e380c1
+10-20 21:59:35.775 13674 13674 D DeferrableSurface: surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@c1ffa7
+10-20 21:59:35.776 13674 13674 D LifecycleMonitor: Lifecycle status change: app.docscan.android.ProductActivity@428de46 in: DESTROYED
+10-20 21:59:35.776 13674 13674 V ActivityScenario: Update currentActivityStage to DESTROYED, currentActivity=null
+10-20 21:59:35.776 13674 13674 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): null
+10-20 21:59:35.804 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state OPENED
+10-20 21:59:35.804 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:35.804 13674 13698 D UseCaseAttachState: Active and attached use case: [] for camera: 10
+10-20 21:59:35.804 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Closing camera.
+10-20 21:59:35.804 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Transitioning camera internal state: OPENED --> CLOSING
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: Recalculating open cameras:
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: Camera                                       State
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: Camera@b338b94[id=1]                         UNKNOWN
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: Camera@487cd00[id=10]                        CLOSING
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: -------------------------------------------------------------------
+10-20 21:59:35.804 13674 13698 D CameraStateRegistry: Open count: 1 (Max allowed: 1)
+10-20 21:59:35.804 13674 13698 D CameraStateMachine: New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
+10-20 21:59:35.804 13674 13698 D CameraStateMachine: Publishing new public camera state CameraState{type=CLOSING, error=null}
+10-20 21:59:35.804 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Resetting Capture Session
+10-20 21:59:35.804 13674 13698 D Camera2CameraImpl: {Camera@487cd00[id=10]} Releasing session in state CLOSING
+10-20 21:59:35.804 13674 13698 D CaptureSession: onSessionFinished()
+10-20 21:59:35.805   565   659 D Camera2ClientBase: Camera 10: Shutting down
+10-20 21:59:35.835 13674 13674 D ViewRootImpl: Skipping stats log for color mode
+10-20 21:59:35.842 13674 13674 D StreamStateObserver: Update Preview stream state to IDLE
+10-20 21:59:35.862  1070  1070 D RecentsView: onTaskRemoved: 305, not handling task stack changes
+10-20 21:59:35.862  1070  1070 D b/417220811: invalidateLoadedTasks - previous requestLoadId: -1
+10-20 21:59:35.862  1070  1070 D RecentsView: onTaskRemoved: 305, not handling task stack changes
+10-20 21:59:35.890   662   691 I system_server: Background young concurrent mark compact GC freed 21MB AllocSpace bytes, 28(988KB) LOS objects, 37% free, 39MB/63MB, paused 156.400ms,5.444ms total 1.453s
+10-20 21:59:35.890 13723 13723 D VRI[InstrumentationActivityInvoker$EmptyActivity]: WindowInsets changed: 1080x2400 statusBars:[0,63,0,0] navigationBars:[0,0,0,63] mandatorySystemGestures:[0,63,0,84]
+10-20 21:59:35.891 13723 13723 D WindowOnBackDispatcher: setTopOnBackInvokedCallback (unwrapped): android.view.ViewRootImpl$$ExternalSyntheticLambda12@cb43050
+10-20 21:59:35.896   532   782 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10243 pid=0
+10-20 21:59:35.896   532   782 D libbinder.PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10243 => denied (107 us)
+10-20 21:59:35.896   532   782 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10243 pid=0
+10-20 21:59:35.896   532   782 D libbinder.PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10243 => denied (582 us)
+10-20 21:59:35.896   532   782 W libbinder.ServiceManagerCppClient: Permission failure: android.permission.INTERNAL_SYSTEM_WINDOW from uid=10243 pid=0
+10-20 21:59:35.896   532   782 D libbinder.PermissionCache: checking android.permission.INTERNAL_SYSTEM_WINDOW for uid=10243 => denied (82 us)
+10-20 21:59:35.899 13674 13688 E TestRunner: failed: deletingAndClearingCancelNativeOcrAndUndoCanRestartIt(app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest)
+10-20 21:59:35.901 13674 13688 E TestRunner: ----- begin exception -----
+10-20 21:59:35.901 13674 13688 E TestRunner: java.lang.AssertionError: Direct Delete action for the OCR Page is missing
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.deletingAndClearingCancelNativeOcrAndUndoCanRestartIt$lambda$1(ProductActivityCaptureAndReorderInstrumentedTest.kt:844)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$Dm_mZoL0Q_9qU5Wi6BaeLU3yY9U(Unknown Source:0)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda42.perform(D8$$SyntheticClass:0)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.os.Handler.handleCallback(Handler.java:1070)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.os.Handler.dispatchMessage(Handler.java:125)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.os.Looper.dispatchMessage(Looper.java:333)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.os.Looper.loopOnce(Looper.java:263)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.os.Looper.loop(Looper.java:367)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at android.app.ActivityThread.main(ActivityThread.java:9287)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at java.lang.reflect.Method.invoke(Native Method)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)
+10-20 21:59:35.901 13674 13688 E TestRunner: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)
+10-20 21:59:35.902 13674 13688 E TestRunner: ----- end exception -----
+10-20 21:59:35.903 13674 13688 I TestRunner: finished: deletingAndClearingCancelNativeOcrAndUndoCanRestartIt(app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest)

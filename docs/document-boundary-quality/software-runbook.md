@@ -39,7 +39,10 @@ Force-stop/relaunch between configurations; do not mix their traces as one run.
 
 Each trace includes generation/frame/geometry, candidates and raw/refined buffer
 coordinates, status/deadline and received/detector times. Unknown sensor mapping,
-UI presentation time and metrics without observations are unavailable. Full
+UI presentation time and metrics without observations are unavailable. Version
+0.4.282 adds UI_APPLY/DRAW events with publication/generation IDs and screen-pixel
+quads, plus prepared time. DRAW means onDraw executed, never physical display
+presentation. Marker arrays are copied and serialization stays on the writer. Full
 sensor-to-present profiling and diagnostic overhead require the final physical
 suite; no latency claims should be derived from detector time alone.
 
@@ -53,6 +56,14 @@ malformed GT stop evaluation. It reports original-pixel IoU, maximum cyclic corn
 error, and endpoint normal side distances divided by GT short side. Acceptance
 stays INCONCLUSIVE without the frozen independent corpus/CI/physical evidence.
 Displayed jitter, confirmed precision and capture-to-present are not inferred.
+
+## Paired comparison and common replay
+
+See [statistics harness](statistics-harness.md) for matching GT/keys, session-cluster
+bootstrap and intervals. Missing freeze/hardware/resource gates keep selection
+INCONCLUSIVE. The common Android replay harness uses the same image bytes for
+original/A/reference B with isolated clip state; its synthetic self-check is
+separate from the optional real corpus.
 
 ## Final phone stage (after software implementation)
 

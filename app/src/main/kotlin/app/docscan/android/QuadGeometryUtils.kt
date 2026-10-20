@@ -156,6 +156,8 @@ object QuadGeometryUtils {
      * - Accounts for cyclic shifts to avoid false mismatches
      * - Measures maximum individual corner displacement relative to document diagonal
      * - Measures Polygon IoU
+     * Distances use image-height units; imageAspectRatio restores isotropic pixels
+     * when input x/y have been independently normalized. IoU is affine invariant.
      * - Thresholds: maxCornerShift <= 6% of diagonal, IoU >= 0.80
      */
     fun checkAgreement(
@@ -163,7 +165,9 @@ object QuadGeometryUtils {
         stillQuad: CropQuadrilateral,
         maxRelativeShiftTolerance: Double = 0.06,
         minIouTolerance: Double = 0.80,
+        imageAspectRatio: Double = 1.0,
     ): QuadAgreementResult {
+        require(imageAspectRatio.isFinite() && imageAspectRatio > 0)
         val live = canonicalizeCorners(liveQuad.asList())
         val still = canonicalizeCorners(stillQuad.asList())
 
@@ -175,7 +179,8 @@ object QuadGeometryUtils {
             var totalDist = 0.0
             var maxDist = 0.0
             for (i in 0 until 4) {
-                val d = hypot(live[i].x - still[(i + shift) % 4].x, live[i].y - still[(i + shift) % 4].y)
+                val d = hypot((live[i].x - still[(i + shift) % 4].x) * imageAspectRatio,
+                    live[i].y - still[(i + shift) % 4].y)
                 totalDist += d
                 if (d > maxDist) maxDist = d
             }
@@ -186,8 +191,8 @@ object QuadGeometryUtils {
             }
         }
 
-        val d1 = hypot(still[2].x - still[0].x, still[2].y - still[0].y)
-        val d2 = hypot(still[3].x - still[1].x, still[3].y - still[1].y)
+        val d1 = hypot((still[2].x - still[0].x) * imageAspectRatio, still[2].y - still[0].y)
+        val d2 = hypot((still[3].x - still[1].x) * imageAspectRatio, still[3].y - still[1].y)
         val docDiagonal = max(1e-4, max(d1, d2))
 
         val relativeCornerShift = bestMaxCornerDist / docDiagonal

@@ -132,15 +132,18 @@ class ProductActivity : AppCompatActivity() {
     private val documentPublications = LatestDocumentPublication<DocumentUiFrame>(
         post = { documentUiHandler.post(it) }, remove = { documentUiHandler.removeCallbacks(it) },
         apply = { renderDocumentBoundary(it.state, it.source) })
+    @Volatile private var documentBoundaryDiagnostics: DocumentBoundaryDiagnostics? = null
     private val documentBoundaryPipelineDelegate = lazy {
         val debug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val diagnostics = if (debug && intent.getBooleanExtra("docscan.dbq.trace", false))
+            DocumentBoundaryDiagnostics(File(filesDir, "dbq/trace-${System.currentTimeMillis()}.jsonl")) else null
+        documentBoundaryDiagnostics = diagnostics
         DocumentBoundaryPipeline(liveDetectionCoordinator,
             ClassicalDocumentBoundaryDetector(enhanced = debug && intent.getStringExtra("docscan.dbq.backend") == "A"),
             trackingEnabled = debug && intent.getBooleanExtra("docscan.dbq.tracker", false),
             frameArchive = if (debug && intent.getBooleanExtra("docscan.dbq.frames", false))
                 DocumentFrameArchive(File(filesDir, "dbq/frames-${System.currentTimeMillis()}")) else null,
-            diagnostics = if (debug && intent.getBooleanExtra("docscan.dbq.trace", false))
-                DocumentBoundaryDiagnostics(File(filesDir, "dbq/trace-${System.currentTimeMillis()}.jsonl")) else null)
+            diagnostics = diagnostics)
     }
     private val documentBoundaryPipeline by documentBoundaryPipelineDelegate
     private lateinit var documentBoundaryHint: TextView
@@ -318,7 +321,10 @@ class ProductActivity : AppCompatActivity() {
         io.shutdown()
         importExecutor.shutdown()
         documentPublications.close()
-        if (documentBoundaryPipelineDelegate.isInitialized()) cameraAnalysisExecutor.execute { documentBoundaryPipeline.close() }
+        // Check after any in-flight initializer on this same executor has finished.
+        cameraAnalysisExecutor.execute {
+            if (documentBoundaryPipelineDelegate.isInitialized()) documentBoundaryPipelineDelegate.value.close()
+        }
         cameraAnalysisExecutor.shutdown()
         workspaceThumbnailLoader.close()
         thumbnailExecutor.shutdownNow()
@@ -761,7 +767,14 @@ class ProductActivity : AppCompatActivity() {
         val camera = android.widget.FrameLayout(this).apply {
             tag = "docscan-camera-area"
             addView(previewView, android.widget.FrameLayout.LayoutParams(-1, -1))
-            documentOverlayView = DocumentOverlayView(this@ProductActivity)
+            documentOverlayView = DocumentOverlayView(this@ProductActivity).apply {
+                val traceEnabled = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+                    intent.getBooleanExtra("docscan.dbq.trace", false)
+                if (traceEnabled) onBoundaryDraw = { publication, generation, points ->
+                    documentBoundaryDiagnostics?.recordMarker("DRAW", publication, generation,
+                        SystemClock.elapsedRealtimeNanos(), points)
+                }
+            }
             previewView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
                     liveDetectionCoordinator.invalidate()
@@ -2664,7 +2677,8 @@ class ProductActivity : AppCompatActivity() {
                         val liveState = try {
                             documentBoundaryPipeline.process(DocumentBoundaryInput(
                                 BoundaryFrameId(documentFrameSequence.incrementAndGet(), frameGeneration, frameGeneration),
-                                spec, DocumentFrameTiming(imageProxy.imageInfo.timestamp, receivedNs), rgba))
+                                spec, DocumentFrameTiming(imageProxy.imageInfo.timestamp, receivedNs,
+                                    preparedTimestampNs = SystemClock.elapsedRealtimeNanos()), rgba))
                         } finally { rgba.release() }
                         if (liveState.generationId != frameGeneration) return@setAnalyzer
                         documentPublications.offer(DocumentUiFrame(liveState,
@@ -2732,16 +2746,29 @@ class ProductActivity : AppCompatActivity() {
         documentBoundaryHint.visibility = if (state.status == LiveDetectionStatus.PARTIAL ||
             state.status == LiveDetectionStatus.ERROR) View.VISIBLE else View.GONE
         if (documentBoundaryHint.text != label) documentBoundaryHint.text = label
-        if (!liveDetectionCoordinator.canDisplay(state)) { documentOverlayView.clear(); return }
+        if (!liveDetectionCoordinator.canDisplay(state)) {
+            documentOverlayView.clear()
+            documentBoundaryDiagnostics?.recordMarker("UI_APPLY", state.publicationId, state.generationId,
+                SystemClock.elapsedRealtimeNanos())
+            return
+        }
         val target = previewView.outputTransform
-        if (sourceTransform == null || target == null || previewView.viewPort == null) { documentOverlayView.clear(); return }
+        if (sourceTransform == null || target == null || previewView.viewPort == null) {
+            documentOverlayView.clear()
+            documentBoundaryDiagnostics?.recordMarker("UI_APPLY", state.publicationId, state.generationId,
+                SystemClock.elapsedRealtimeNanos())
+            return
+        }
         try {
             val points = state.quadInBufferPixels?.clone() ?: return
             CoordinateTransform(sourceTransform, target).mapPoints(points)
             documentOverlayView.setPolygonPixels(points, isHeld = state.status == LiveDetectionStatus.HELD,
                 deadlineMonotonicMs = state.visualDeadlineMonotonicMs,
                 isCurrent = { isDocumentMode && !isFinishing && !isDestroyed &&
-                    liveDetectionCoordinator.canDisplay(state) })
+                    liveDetectionCoordinator.canDisplay(state) },
+                publicationId = state.publicationId, generationId = state.generationId)
+            documentBoundaryDiagnostics?.recordMarker("UI_APPLY", state.publicationId, state.generationId,
+                SystemClock.elapsedRealtimeNanos(), points.takeIf { liveDetectionCoordinator.canDisplay(state) })
         } catch (failure: Exception) {
             documentOverlayView.clear()
             android.util.Log.w("DocScan", "Document projection unavailable", failure)

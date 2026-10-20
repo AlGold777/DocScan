@@ -69,6 +69,45 @@ class DocumentLiveDetectionCoordinatorTest {
     }
 
     @Test
+    fun `portrait viewport coordinator gives equal five pixel shifts equal filter response`() {
+        val portrait = AnalysisBufferSpec(
+            bufferWidth = 100,
+            bufferHeight = 200,
+            cropRect = BufferRect(0, 0, 100, 200),
+            rotationDegrees = 0,
+        )
+        assertEquals(0.5, portrait.orientedAspectRatio, 0.0)
+        val base = floatArrayOf(20f, 40f, 80f, 40f, 80f, 160f, 20f, 160f)
+
+        fun smoothedAfterFivePixelShift(dx: Float, dy: Float): FloatArray {
+            var now = 1_000L
+            val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { now })
+            val generation = coordinator.currentGeneration()
+            assertEquals(LiveDetectionStatus.PROVISIONAL,
+                coordinator.onFrameDetected(generation, now, base, 0.9, portrait).status)
+            now += 10
+            val confirmed = coordinator.onFrameDetected(generation, now, base, 0.9, portrait)
+            assertEquals(LiveDetectionStatus.CONFIRMED, confirmed.status)
+            val shifted = FloatArray(base.size) { index ->
+                base[index] + if (index % 2 == 0) dx else dy
+            }
+            now += 10
+            val updated = coordinator.onFrameDetected(generation, now, shifted, 0.9, portrait)
+            assertEquals(LiveDetectionStatus.CONFIRMED, updated.status)
+            return updated.quadInBufferPixels!!
+        }
+
+        val movedX = smoothedAfterFivePixelShift(dx = 5f, dy = 0f)
+        val movedY = smoothedAfterFivePixelShift(dx = 0f, dy = 5f)
+        val horizontalResponsePx = movedX[0] - base[0]
+        val verticalResponsePx = movedY[1] - base[1]
+
+        assertEquals("Same pixel displacement must select the same EMA response",
+            horizontalResponsePx, verticalResponsePx, 0.02f)
+        assertEquals(1.5f, horizontalResponsePx, 0.02f)
+    }
+
+    @Test
     fun `t06 - misses within ttl become held, and after ttl become expired`() {
         var currentTime = 1000L
         val coordinator = DocumentLiveDetectionCoordinator(maxTtlMs = 300L, clock = { currentTime })

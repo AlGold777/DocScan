@@ -1,0 +1,25 @@
+test_cyclic_start_and_reversed_winding_are_equivalent (tools.test_dbq_evaluate.DbqEvaluateTest.test_cyclic_start_and_reversed_winding_are_equivalent) ... ok
+test_empty_eligible_denominator_and_acceptance_remain_inconclusive (tools.test_dbq_evaluate.DbqEvaluateTest.test_empty_eligible_denominator_and_acceptance_remain_inconclusive) ... ok
+test_excluded_frames_do_not_enter_success_rate_denominator (tools.test_dbq_evaluate.DbqEvaluateTest.test_excluded_frames_do_not_enter_success_rate_denominator) ... ok
+test_identity_has_perfect_iou_corner_and_side_error (tools.test_dbq_evaluate.DbqEvaluateTest.test_identity_has_perfect_iou_corner_and_side_error) ... ok
+test_invalid_ground_truth_fails_closed_instead_of_becoming_a_success (tools.test_dbq_evaluate.DbqEvaluateTest.test_invalid_ground_truth_fails_closed_instead_of_becoming_a_success) ... ok
+test_loader_rejects_duplicate_clip_frame_keys (tools.test_dbq_evaluate.DbqEvaluateTest.test_loader_rejects_duplicate_clip_frame_keys) ... ok
+test_missing_and_invalid_predictions_are_counted_as_failures (tools.test_dbq_evaluate.DbqEvaluateTest.test_missing_and_invalid_predictions_are_counted_as_failures) ... ok
+test_polygon_intersection_uses_area_not_bounding_boxes (tools.test_dbq_evaluate.DbqEvaluateTest.test_polygon_intersection_uses_area_not_bounding_boxes) ... ok
+test_prediction_for_nonexistent_frame_is_reported_as_extra (tools.test_dbq_evaluate.DbqEvaluateTest.test_prediction_for_nonexistent_frame_is_reported_as_extra) ... ok
+test_duplicate_frame_or_manifest_identity_fails_closed (tools.test_dbq_compare.DbqCompareTests.test_duplicate_frame_or_manifest_identity_fails_closed) ... ok
+test_empty_and_null_success_fail_closed (tools.test_dbq_compare.DbqCompareTests.test_empty_and_null_success_fail_closed) ... ok
+test_failure_a_zero_has_unavailable_reduction (tools.test_dbq_compare.DbqCompareTests.test_failure_a_zero_has_unavailable_reduction) ... ok
+test_geometric_threshold_miss_without_reason_still_counts_as_failure (tools.test_dbq_compare.DbqCompareTests.test_geometric_threshold_miss_without_reason_still_counts_as_failure) ... ok
+test_ground_truth_hash_mismatch_fails_closed (tools.test_dbq_compare.DbqCompareTests.test_ground_truth_hash_mismatch_fails_closed) ... ok
+test_identity_effect_is_zero_and_never_selects_winner (tools.test_dbq_compare.DbqCompareTests.test_identity_effect_is_zero_and_never_selects_winner) ... ok
+test_known_paired_effect_and_frame_weighted_denominator (tools.test_dbq_compare.DbqCompareTests.test_known_paired_effect_and_frame_weighted_denominator) ... ok
+test_mismatched_frame_keys_fail_closed (tools.test_dbq_compare.DbqCompareTests.test_mismatched_frame_keys_fail_closed) ... ok
+test_seed_and_repetitions_make_bootstrap_deterministic (tools.test_dbq_compare.DbqCompareTests.test_seed_and_repetitions_make_bootstrap_deterministic) ... ok
+test_session_clusters_are_counted_instead_of_adjacent_frames (tools.test_dbq_compare.DbqCompareTests.test_session_clusters_are_counted_instead_of_adjacent_frames) ... ok
+test_tiny_session_count_is_inconclusive (tools.test_dbq_compare.DbqCompareTests.test_tiny_session_count_is_inconclusive) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.032s
+
+OK

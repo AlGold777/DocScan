@@ -29,6 +29,44 @@ class DocumentCropPlanInstrumentedTest {
     private data class StorageFixture(val suffix: String, val storage: ProductStorage)
 
     @Test
+    fun pixelCentreLastCornerNormalizesToOneAndWarpSamplesLastSourcePixel() {
+        DocumentCropProcessor.ensureOpenCvLoaded()
+        val width = 101
+        val height = 81
+        val right = (width - 1).toFloat()
+        val bottom = (height - 1).toFloat()
+        val detection = DocumentCropProcessor.Detection(
+            bufferPoints = floatArrayOf(0f, 0f, right, 0f, right, bottom, 0f, bottom),
+            imageWidth = width,
+            imageHeight = height,
+            score = 0.9,
+        )
+        val quad = detection.toNormalized()
+        assertEquals(1.0, quad.topRight.x, 0.0)
+        assertEquals(1.0, quad.bottomRight.x, 0.0)
+        assertEquals(1.0, quad.bottomRight.y, 0.0)
+        assertEquals(1.0, quad.bottomLeft.y, 0.0)
+
+        val source = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.BLACK)
+            setPixel(width - 1, height - 1, Color.MAGENTA)
+        }
+        try {
+            val warped = DocumentCropProcessor.rectifyManual(source, quad)
+            try {
+                assertEquals(width - 1, warped.width)
+                assertEquals(height - 1, warped.height)
+                assertEquals("Normalized 1.0 must warp from the final source pixel centre",
+                    Color.MAGENTA, warped.getPixel(width - 2, height - 2))
+            } finally {
+                warped.recycle()
+            }
+        } finally {
+            source.recycle()
+        }
+    }
+
+    @Test
     fun previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val calls = mutableListOf<Pair<Int, Int>>()
@@ -251,12 +289,23 @@ class DocumentCropPlanInstrumentedTest {
         )
     }
 
-    private fun detection(width: Int, height: Int) = DocumentCropProcessor.Detection(
-        bufferPoints = floatArrayOf(45f, 40f, 595f, 55f, 610f, 850f, 30f, 865f),
+    private fun detection(width: Int, height: Int): DocumentCropProcessor.Detection {
+        require(width > 1 && height > 1)
+        val right = (width - 1).toFloat()
+        val bottom = (height - 1).toFloat()
+        return DocumentCropProcessor.Detection(
+        // Keep the old perspective/skew intent, expressed in the detector's current pixel-centre space.
+        bufferPoints = floatArrayOf(
+            right * 0.07f, bottom * 0.045f,
+            right * 0.93f, bottom * 0.06f,
+            right * 0.95f, bottom * 0.945f,
+            right * 0.045f, bottom * 0.96f,
+        ),
         imageWidth = width,
         imageHeight = height,
         score = 0.90,
-    )
+        )
+    }
 
     private fun closeStorage(context: Context, fixture: StorageFixture) {
         fixture.storage.close()

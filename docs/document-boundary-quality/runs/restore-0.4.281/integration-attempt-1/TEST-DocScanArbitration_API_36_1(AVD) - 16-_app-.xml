@@ -1,0 +1,88 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="app.docscan.android.DocumentCropPlanInstrumentedTest" tests="7" failures="5" errors="0" skipped="0" time="18.385" timestamp="2026-10-20T19:59:50" hostname="localhost">
+  <properties>
+    <property name="device" value="DocScanArbitration_API_36_1(AVD) - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler" classname="app.docscan.android.DocumentCropPlanInstrumentedTest" time="0.1">
+    <failure>java.lang.AssertionError: unexpected exception type thrown; expected:&lt;java.lang.OutOfMemoryError&gt; but was:&lt;java.lang.IllegalArgumentException&gt;
+at org.junit.Assert.assertThrows(Assert.java:1020)
+at org.junit.Assert.assertThrows(Assert.java:981)
+at app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler(DocumentCropPlanInstrumentedTest.kt:147)
+... 32 trimmed
+Caused by: java.lang.IllegalArgumentException: Failed requirement.
+at app.docscan.core.edit.NormalizedCropPoint.&lt;init&gt;(CropQuadrilateral.kt:7)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)
+at app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)
+at app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler$lambda$2(DocumentCropPlanInstrumentedTest.kt:148)
+at app.docscan.android.DocumentCropPlanInstrumentedTest.$r8$lambda$n-sjHWczP37Di06cZBdjCqcYOVI(Unknown Source:0)
+at app.docscan.android.DocumentCropPlanInstrumentedTest$$ExternalSyntheticLambda5.run(D8$$SyntheticClass:0)
+at org.junit.Assert.assertThrows(Assert.java:1001)
+... 35 more
+</failure>
+  </testcase>
+  <testcase name="previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion" classname="app.docscan.android.DocumentCropPlanInstrumentedTest" time="0.033">
+    <failure>java.lang.IllegalArgumentException: Failed requirement.
+at app.docscan.core.edit.NormalizedCropPoint.&lt;init&gt;(CropQuadrilateral.kt:7)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)
+at app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)
+at app.docscan.android.DocumentCropPlanInstrumentedTest.previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion(DocumentCropPlanInstrumentedTest.kt:59)
+</failure>
+  </testcase>
+  <testcase name="stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection" classname="app.docscan.android.DocumentCropPlanInstrumentedTest" time="0.06">
+    <failure>java.lang.IllegalArgumentException: Failed requirement.
+at app.docscan.core.edit.NormalizedCropPoint.&lt;init&gt;(CropQuadrilateral.kt:7)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)
+at app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)
+at app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)
+at app.docscan.android.DocumentCropPlanInstrumentedTest.stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection(DocumentCropPlanInstrumentedTest.kt:93)
+</failure>
+  </testcase>
+  <testcase name="perspectiveCropProducesSeparateBoundedBitmapAndLeavesSourceDimensionsUnchanged" classname="app.docscan.android.ManualDocumentCropInstrumentedTest" time="0.03" />
+  <testcase name="deletingAndClearingCancelNativeOcrAndUndoCanRestartIt" classname="app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest" time="5.893">
+    <failure>java.lang.AssertionError: Direct Delete action for the OCR Page is missing
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.deletingAndClearingCancelNativeOcrAndUndoCanRestartIt$lambda$1(ProductActivityCaptureAndReorderInstrumentedTest.kt:844)
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$Dm_mZoL0Q_9qU5Wi6BaeLU3yY9U(Unknown Source:0)
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda42.perform(D8$$SyntheticClass:0)
+at androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)
+at androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)
+at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)
+at android.os.Handler.handleCallback(Handler.java:1070)
+at android.os.Handler.dispatchMessage(Handler.java:125)
+at android.os.Looper.dispatchMessage(Looper.java:333)
+at android.os.Looper.loopOnce(Looper.java:263)
+at android.os.Looper.loop(Looper.java:367)
+at android.app.ActivityThread.main(ActivityThread.java:9287)
+at java.lang.reflect.Method.invoke(Native Method)
+at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)
+at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)
+</failure>
+  </testcase>
+  <testcase name="validShutterProvidesOneLightFeedbackAndCommitsPage" classname="app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest" time="6.835" />
+  <testcase name="selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches" classname="app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest" time="3.76">
+    <failure>java.lang.AssertionError: Clear control is missing
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches$lambda$2(ProductActivityCaptureAndReorderInstrumentedTest.kt:709)
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$I6SSiFqDgtzr46w2YJuHQbHaVWQ(Unknown Source:0)
+at app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda12.perform(D8$$SyntheticClass:0)
+at androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)
+at androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)
+at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)
+at java.util.concurrent.FutureTask.run(FutureTask.java:317)
+at android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)
+at android.os.Handler.handleCallback(Handler.java:1070)
+at android.os.Handler.dispatchMessage(Handler.java:125)
+at android.os.Looper.dispatchMessage(Looper.java:333)
+at android.os.Looper.loopOnce(Looper.java:263)
+at android.os.Looper.loop(Looper.java:367)
+at android.app.ActivityThread.main(ActivityThread.java:9287)
+at java.lang.reflect.Method.invoke(Native Method)
+at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)
+at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)
+</failure>
+  </testcase>
+</testsuite>

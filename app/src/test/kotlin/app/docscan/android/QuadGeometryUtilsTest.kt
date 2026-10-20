@@ -121,4 +121,63 @@ class QuadGeometryUtilsTest {
         val resShifted = QuadGeometryUtils.checkAgreement(live, shifted)
         assertFalse("Significantly shifted quad must reject agreement", resShifted.agrees)
     }
+
+    @Test
+    fun `checkAgreement measures equal pixel translations isotropically in portrait viewport`() {
+        val live = CropQuadrilateral(
+            topLeft = NormalizedCropPoint(0.20, 0.20),
+            topRight = NormalizedCropPoint(0.80, 0.20),
+            bottomRight = NormalizedCropPoint(0.80, 0.80),
+            bottomLeft = NormalizedCropPoint(0.20, 0.80),
+        )
+        // For a 100x200 viewport, 5px means 0.05 normalized X or 0.025 normalized Y.
+        val shiftedX = live.translate(dx = 5.0 / 100.0, dy = 0.0)
+        val shiftedY = live.translate(dx = 0.0, dy = 5.0 / 200.0)
+
+        val horizontal = QuadGeometryUtils.checkAgreement(
+            live,
+            shiftedX,
+            maxRelativeShiftTolerance = 1.0,
+            minIouTolerance = 0.0,
+            imageAspectRatio = 100.0 / 200.0,
+        )
+        val vertical = QuadGeometryUtils.checkAgreement(
+            live,
+            shiftedY,
+            maxRelativeShiftTolerance = 1.0,
+            minIouTolerance = 0.0,
+            imageAspectRatio = 100.0 / 200.0,
+        )
+
+        assertEquals(horizontal.maxCornerDistance, vertical.maxCornerDistance, 1e-12)
+        assertEquals(horizontal.documentDiagonal, vertical.documentDiagonal, 1e-12)
+        assertEquals(horizontal.relativeCornerShift, vertical.relativeCornerShift, 1e-12)
+        assertTrue(horizontal.agrees)
+        assertTrue(vertical.agrees)
+    }
+
+    @Test
+    fun `checkAgreement rejects nonfinite or nonpositive image aspect ratio`() {
+        val quad = CropQuadrilateral(
+            topLeft = NormalizedCropPoint(0.1, 0.1),
+            topRight = NormalizedCropPoint(0.9, 0.1),
+            bottomRight = NormalizedCropPoint(0.9, 0.9),
+            bottomLeft = NormalizedCropPoint(0.1, 0.9),
+        )
+        for (aspect in listOf(0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            try {
+                QuadGeometryUtils.checkAgreement(quad, quad, imageAspectRatio = aspect)
+                throw AssertionError("Expected invalid aspect ratio $aspect to be rejected")
+            } catch (_: IllegalArgumentException) {
+                // Invalid geometry scale must fail closed.
+            }
+        }
+    }
+
+    private fun CropQuadrilateral.translate(dx: Double, dy: Double) = CropQuadrilateral(
+        topLeft = NormalizedCropPoint(topLeft.x + dx, topLeft.y + dy),
+        topRight = NormalizedCropPoint(topRight.x + dx, topRight.y + dy),
+        bottomRight = NormalizedCropPoint(bottomRight.x + dx, bottomRight.y + dy),
+        bottomLeft = NormalizedCropPoint(bottomLeft.x + dx, bottomLeft.y + dy),
+    )
 }

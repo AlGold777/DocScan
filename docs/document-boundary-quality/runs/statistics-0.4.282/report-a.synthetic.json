@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "inputSha256": {
+    "gt": "29d29b8703c3e5b9f3a5e270873c1b0b08f47a29caa6c399373bcb6ab5260690"
+  },
+  "frames": [
+    {
+      "clipId": "clip-0",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-0",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-1",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-1",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-2",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-2",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-3",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-3",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-4",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-4",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-5",
+      "frameId": "frame-0",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-5",
+      "frameId": "frame-1",
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-6",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-6",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-7",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-7",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-8",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-8",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-9",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-9",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-10",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-10",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-11",
+      "frameId": "frame-0",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    },
+    {
+      "clipId": "clip-11",
+      "frameId": "frame-1",
+      "success": true,
+      "reason": null,
+      "geometry": null
+    }
+  ],
+  "groups": {
+    "ordinary": {
+      "eligible": 24,
+      "success": 12,
+      "missing": 12,
+      "invalid": 0,
+      "clips": 12
+    }
+  }
+}

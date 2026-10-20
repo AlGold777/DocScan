@@ -10,7 +10,8 @@ import org.json.JSONArray
 
 /** Explicit debug opt-in only. No pixels; bounded, nonblocking producer; all disk work on one writer. */
 class DocumentBoundaryDiagnostics(private val output:File) : AutoCloseable {
-    private val queue=ArrayBlockingQueue<Snapshot>(128)
+    private sealed interface Event
+    private val queue=ArrayBlockingQueue<Event>(128)
     private val dropped=AtomicLong()
     private val writer=Executors.newSingleThreadExecutor()
     @Volatile private var running=true
@@ -23,8 +24,15 @@ class DocumentBoundaryDiagnostics(private val output:File) : AutoCloseable {
                 output.bufferedWriter().use { out ->
                     out.appendLine("{\"schemaVersion\":1,\"event\":\"start\",\"sensorMapping\":\"UNKNOWN\",\"presentTimestampNs\":null}")
                     while(running || queue.isNotEmpty()) {
-                        val snapshot=queue.poll(100,TimeUnit.MILLISECONDS) ?: continue
-                        out.appendLine(serialize(snapshot))
+                        val event=queue.poll(100,TimeUnit.MILLISECONDS) ?: continue
+                        out.appendLine(when(event) {
+                            is Snapshot -> serialize(event)
+                            is Marker -> JSONObject().put("event",event.phase)
+                                .put("publicationId",event.publicationId).put("generationId",event.generationId)
+                                .put("timestampNs",event.timestampNs)
+                                .put("screenQuad",event.screenPoints?.let { JSONArray(it.toList()) } ?: JSONObject.NULL)
+                                .put("presentTimestampNs",JSONObject.NULL).toString()
+                        })
                     }
                     out.appendLine(JSONObject().put("event","end").put("droppedEvents",dropped.get())
                         .put("writeFailed",false).toString())
@@ -33,7 +41,20 @@ class DocumentBoundaryDiagnostics(private val output:File) : AutoCloseable {
         }
     }
     private data class Snapshot(val identity:BoundaryFrameId,val timing:DocumentFrameTiming,
-        val result:DocumentBoundaryResult,val state:LiveDetectionState)
+        val result:DocumentBoundaryResult,val state:LiveDetectionState):Event
+    private data class Marker(val phase:String,val publicationId:Long,val generationId:Long,
+        val timestampNs:Long,val screenPoints:FloatArray?):Event
+
+    /** UI submission/draw are measured separately. Neither is display presentation. */
+    fun recordMarker(phase:String,publicationId:Long,generationId:Long,timestampNs:Long,
+                     screenPoints:FloatArray?=null) {
+        require(phase in setOf("UI_APPLY", "DRAW"))
+        require(timestampNs >= 0)
+        require(screenPoints == null || screenPoints.size == 8 && screenPoints.all { it.isFinite() })
+        if(!running || writeFailed) { dropped.incrementAndGet(); return }
+        if(!queue.offer(Marker(phase,publicationId,generationId,timestampNs,screenPoints?.clone())))
+            dropped.incrementAndGet()
+    }
     fun record(input:DocumentBoundaryInput,result:DocumentBoundaryResult,state:LiveDetectionState) {
         if(!running || writeFailed) { dropped.incrementAndGet(); return }
         val snapshot=Snapshot(input.identity,input.timing,result,
@@ -47,12 +68,17 @@ class DocumentBoundaryDiagnostics(private val output:File) : AutoCloseable {
             .put("generationId",identity.generationId).put("geometryId",identity.geometryId)
             .put("sensorNs",timing.sensorTimestampNs ?: JSONObject.NULL)
             .put("receivedNs",timing.receivedTimestampNs)
+            .put("preparedNs",timing.preparedTimestampNs ?: JSONObject.NULL)
+            .put("processedMs",if(state.publicationId > 0 && state.generationId == identity.generationId)
+                state.processedTimestampMonotonicMs else JSONObject.NULL)
             .put("detectorStartNs",result.detectorStartedNs).put("detectorEndNs",result.detectorFinishedNs)
             .put("detector",result.detectorId).put("config",result.configVersion)
             .put("outcome",result.outcome.name).put("reason",result.reason ?: JSONObject.NULL)
             .put("status",state.status.name).put("publicationId",state.publicationId)
-            .put("lastDetectionMs",state.lastDetectionTimestampMonotonicMs)
-            .put("geometryMs",state.frameTimestampMonotonicMs)
+            .put("lastDetectionMs",if(state.quadInBufferPixels != null)
+                state.lastDetectionTimestampMonotonicMs else JSONObject.NULL)
+            .put("geometryMs",if(state.quadInBufferPixels != null)
+                state.frameTimestampMonotonicMs else JSONObject.NULL)
             .put("tracked",state.isTrackedGeometry).put("trackId",state.trackId ?: JSONObject.NULL)
             .put("deadlineMs",state.visualDeadlineMonotonicMs)
             .put("displayBufferQuad",state.quadInBufferPixels?.let { JSONArray(it.toList()) } ?: JSONObject.NULL)

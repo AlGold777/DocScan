@@ -1,4 +1,4 @@
-# DBQ — общая цепочка и кандидаты 0.4.281
+# DBQ — общая цепочка 0.4.281, replay/диагностика 0.4.282
 
 `DocumentBoundaryPipeline` связывает синхронный borrowed RGBA frame, детектор и coordinator. CameraX KEEP_ONLY_LATEST и `LatestDocumentPublication` ограничивают очереди. Native buffers закрываются последовательным analyzer-владельцем; собственный previous gray tracker освобождается при reset/close. Смена generation/layout инвалидирует UI.
 
@@ -9,6 +9,8 @@
 Still processing сначала сохраняет оригинал, затем уточняет coarse quad на отдельной копии ≤2 Мп/1600 px с 32 МиБ admission. Refiner контролирует поддержку каждой стороны и откатывает ухудшение; отказ сохраняет полный кадр. Warp продолжает использовать существующий бюджет и version-bound plan v3.
 
 Подробности: [решение](document-boundary-quality/decision-record.md), [команды/диагностика](document-boundary-quality/software-runbook.md), [выполненные прогоны](document-boundary-quality/execution-log.md). Физическое совмещение, sensor-to-present, PSS/thermal/energy, реальный корпус и выбор движка пока не квалифицированы. Ниже сохранена историческая документация с её исходными границами доказательств.
+
+0.4.282 добавляет UI_APPLY/DRAW trace с экранным quad, временем подготовки входа и bounded сериализацией. DRAW не равен PRESENT; неизвестные времена не заменяются нулём. Общий replay и session-cluster bootstrap предназначены для будущего реального корпуса. Исправлены старые injected crop fixtures; production-геометрия не ослаблялась ради тестов.
 
 ---
 

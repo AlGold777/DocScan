@@ -17,6 +17,9 @@ class DocumentOverlayView(context: Context) : View(context) {
     private val path = Path()
     private var deadlineMs = 0L
     private var leaseIsCurrent: () -> Boolean = { false }
+    private var publicationId=0L
+    private var generationId=0L
+    var onBoundaryDraw: ((Long,Long,FloatArray)->Unit)? = null
     private val expire = Runnable {
         // Runs on the UI thread. clear() cancels this callback whenever the lease changes.
         if (SystemClock.elapsedRealtime() >= deadlineMs || !leaseIsCurrent()) clear()
@@ -54,10 +57,13 @@ class DocumentOverlayView(context: Context) : View(context) {
     private var isHeld: Boolean = false
 
     fun setPolygonPixels(newPoints: FloatArray?, isHeld: Boolean = false,
-                         deadlineMonotonicMs: Long, isCurrent: () -> Boolean) {
+                         deadlineMonotonicMs: Long, isCurrent: () -> Boolean,
+                         publicationId:Long=0L, generationId:Long=0L) {
         removeCallbacks(expire)
         deadlineMs = deadlineMonotonicMs
         leaseIsCurrent = isCurrent
+        this.publicationId=publicationId
+        this.generationId=generationId
         this.points = newPoints?.takeIf { it.size == 8 && it.all(Float::isFinite) }?.clone()
         this.isHeld = isHeld
         if (points == null || SystemClock.elapsedRealtime() >= deadlineMs || !leaseIsCurrent()) {
@@ -119,5 +125,6 @@ class DocumentOverlayView(context: Context) : View(context) {
             canvas.drawCircle(px, py, radius, cornerPaint)
             canvas.drawCircle(px, py, radius, cornerStrokePaint)
         }
+        onBoundaryDraw?.invoke(publicationId,generationId,p.clone())
     }
 }

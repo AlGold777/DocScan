@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "sourceGtSha256": "daecbc4b3ca971ca4a5a9a9efc634b4ee2f6e5fd5c01a8d9dcad881b6a660fd4",
+  "ordinaryGroups": [
+    "ordinary"
+  ],
+  "clips": {
+    "clip-0": {
+      "sessionId": "session-0",
+      "group": "ordinary"
+    },
+    "clip-1": {
+      "sessionId": "session-1",
+      "group": "ordinary"
+    },
+    "clip-2": {
+      "sessionId": "session-2",
+      "group": "ordinary"
+    },
+    "clip-3": {
+      "sessionId": "session-3",
+      "group": "ordinary"
+    },
+    "clip-4": {
+      "sessionId": "session-4",
+      "group": "ordinary"
+    },
+    "clip-5": {
+      "sessionId": "session-5",
+      "group": "ordinary"
+    },
+    "clip-6": {
+      "sessionId": "session-6",
+      "group": "ordinary"
+    },
+    "clip-7": {
+      "sessionId": "session-7",
+      "group": "ordinary"
+    },
+    "clip-8": {
+      "sessionId": "session-8",
+      "group": "ordinary"
+    },
+    "clip-9": {
+      "sessionId": "session-9",
+      "group": "ordinary"
+    },
+    "clip-10": {
+      "sessionId": "session-10",
+      "group": "ordinary"
+    },
+    "clip-11": {
+      "sessionId": "session-11",
+      "group": "ordinary"
+    }
+  },
+  "freeze": {
+    "independentCorpusFrozen": false
+  }
+}

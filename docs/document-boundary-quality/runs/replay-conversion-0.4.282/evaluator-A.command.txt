@@ -1,0 +1,1 @@
+python3 tools/dbq_evaluate.py --gt docs/document-boundary-quality/runs/replay-conversion-0.4.282/evaluator-inputs/gt.jsonl --predictions docs/document-boundary-quality/runs/replay-conversion-0.4.282/evaluator-inputs/predictions-A.jsonl --output docs/document-boundary-quality/runs/replay-conversion-0.4.282/evaluator-inputs/report-A.json

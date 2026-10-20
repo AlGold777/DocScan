@@ -1,0 +1,438 @@
+# proto-message: google.testing.platform.proto.api.core.TestSuiteResult
+# 2026-10-20T19:59:50.081979Z:
+test_suite_meta_data {
+  scheduled_test_case_count: 7
+  device {
+    id: "emulator-5554"
+    friendly_name: "primary"
+  }
+}
+test_status: FAILED
+test_result {
+  test_case {
+    test_class: "DocumentCropPlanInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler"
+    start_time {
+      seconds: 1792526371
+      nanos: 648000000
+    }
+    end_time {
+      seconds: 1792526371
+      nanos: 764000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.AssertionError: unexpected exception type thrown; expected:<java.lang.OutOfMemoryError> but was:<java.lang.IllegalArgumentException>\nat org.junit.Assert.assertThrows(Assert.java:1020)\nat org.junit.Assert.assertThrows(Assert.java:981)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler(DocumentCropPlanInstrumentedTest.kt:147)\n... 32 trimmed\nCaused by: java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler$lambda$2(DocumentCropPlanInstrumentedTest.kt:148)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.$r8$lambda$n-sjHWczP37Di06cZBdjCqcYOVI(Unknown Source:0)\nat app.docscan.android.DocumentCropPlanInstrumentedTest$$ExternalSyntheticLambda5.run(D8$$SyntheticClass:0)\nat org.junit.Assert.assertThrows(Assert.java:1001)\n... 35 more\n"
+    error_type: "java.lang.IllegalArgumentException"
+    stack_trace: "java.lang.AssertionError: unexpected exception type thrown; expected:<java.lang.OutOfMemoryError> but was:<java.lang.IllegalArgumentException>\nat org.junit.Assert.assertThrows(Assert.java:1020)\nat org.junit.Assert.assertThrows(Assert.java:981)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler(DocumentCropPlanInstrumentedTest.kt:147)\n... 32 trimmed\nCaused by: java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler$lambda$2(DocumentCropPlanInstrumentedTest.kt:148)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.$r8$lambda$n-sjHWczP37Di06cZBdjCqcYOVI(Unknown Source:0)\nat app.docscan.android.DocumentCropPlanInstrumentedTest$$ExternalSyntheticLambda5.run(D8$$SyntheticClass:0)\nat org.junit.Assert.assertThrows(Assert.java:1001)\n... 35 more\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.DocumentCropPlanInstrumentedTest-previewAndApplyOutOfMemoryFailuresRecycleBitmapsAndPreservePageAndScheduler.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "DocumentCropPlanInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion"
+    start_time {
+      seconds: 1792526371
+      nanos: 777000000
+    }
+    end_time {
+      seconds: 1792526371
+      nanos: 808000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion(DocumentCropPlanInstrumentedTest.kt:59)\n"
+    error_type: "java.lang.IllegalArgumentException"
+    stack_trace: "java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion(DocumentCropPlanInstrumentedTest.kt:59)\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.DocumentCropPlanInstrumentedTest-previewThenApplyUsesOneDetectionAndInvalidatesRecognitionForNewImageVersion.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "DocumentCropPlanInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection"
+    start_time {
+      seconds: 1792526371
+      nanos: 810000000
+    }
+    end_time {
+      seconds: 1792526371
+      nanos: 868000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection(DocumentCropPlanInstrumentedTest.kt:93)\n"
+    error_type: "java.lang.IllegalArgumentException"
+    stack_trace: "java.lang.IllegalArgumentException: Failed requirement.\nat app.docscan.core.edit.NormalizedCropPoint.<init>(CropQuadrilateral.kt:7)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized$p(DocumentCropProcessor.kt:28)\nat app.docscan.android.DocumentCropProcessor$Detection.toNormalized(DocumentCropProcessor.kt:34)\nat app.docscan.android.ProductStorage.createDocumentCropPreview(ProductStorage.kt:718)\nat app.docscan.android.DocumentCropPlanInstrumentedTest.stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection(DocumentCropPlanInstrumentedTest.kt:93)\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.DocumentCropPlanInstrumentedTest-stalePlanAfterEditAndDeleteIsRejectedWithoutChangingCurrentProjection.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "ManualDocumentCropInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "perspectiveCropProducesSeparateBoundedBitmapAndLeavesSourceDimensionsUnchanged"
+    start_time {
+      seconds: 1792526371
+      nanos: 869000000
+    }
+    end_time {
+      seconds: 1792526371
+      nanos: 900000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: PASSED
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.ManualDocumentCropInstrumentedTest-perspectiveCropProducesSeparateBoundedBitmapAndLeavesSourceDimensionsUnchanged.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "ProductActivityCaptureAndReorderInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "deletingAndClearingCancelNativeOcrAndUndoCanRestartIt"
+    start_time {
+      seconds: 1792526371
+      nanos: 901000000
+    }
+    end_time {
+      seconds: 1792526377
+      nanos: 792000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.AssertionError: Direct Delete action for the OCR Page is missing\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.deletingAndClearingCancelNativeOcrAndUndoCanRestartIt$lambda$1(ProductActivityCaptureAndReorderInstrumentedTest.kt:844)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$Dm_mZoL0Q_9qU5Wi6BaeLU3yY9U(Unknown Source:0)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda42.perform(D8$$SyntheticClass:0)\nat androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)\nat androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)\nat java.util.concurrent.FutureTask.run(FutureTask.java:317)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)\nat android.os.Handler.handleCallback(Handler.java:1070)\nat android.os.Handler.dispatchMessage(Handler.java:125)\nat android.os.Looper.dispatchMessage(Looper.java:333)\nat android.os.Looper.loopOnce(Looper.java:263)\nat android.os.Looper.loop(Looper.java:367)\nat android.app.ActivityThread.main(ActivityThread.java:9287)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)\n"
+    error_type: "java.lang.AssertionError"
+    stack_trace: "java.lang.AssertionError: Direct Delete action for the OCR Page is missing\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.deletingAndClearingCancelNativeOcrAndUndoCanRestartIt$lambda$1(ProductActivityCaptureAndReorderInstrumentedTest.kt:844)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$Dm_mZoL0Q_9qU5Wi6BaeLU3yY9U(Unknown Source:0)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda42.perform(D8$$SyntheticClass:0)\nat androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)\nat androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)\nat java.util.concurrent.FutureTask.run(FutureTask.java:317)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)\nat android.os.Handler.handleCallback(Handler.java:1070)\nat android.os.Handler.dispatchMessage(Handler.java:125)\nat android.os.Looper.dispatchMessage(Looper.java:333)\nat android.os.Looper.loopOnce(Looper.java:263)\nat android.os.Looper.loop(Looper.java:367)\nat android.app.ActivityThread.main(ActivityThread.java:9287)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest-deletingAndClearingCancelNativeOcrAndUndoCanRestartIt.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "ProductActivityCaptureAndReorderInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "validShutterProvidesOneLightFeedbackAndCommitsPage"
+    start_time {
+      seconds: 1792526377
+      nanos: 794000000
+    }
+    end_time {
+      seconds: 1792526384
+      nanos: 628000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: PASSED
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest-validShutterProvidesOneLightFeedbackAndCommitsPage.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+test_result {
+  test_case {
+    test_class: "ProductActivityCaptureAndReorderInstrumentedTest"
+    test_package: "app.docscan.android"
+    test_method: "selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches"
+    start_time {
+      seconds: 1792526384
+      nanos: 630000000
+    }
+    end_time {
+      seconds: 1792526388
+      nanos: 386000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: FAILED
+  error {
+    error_message: "java.lang.AssertionError: Clear control is missing\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches$lambda$2(ProductActivityCaptureAndReorderInstrumentedTest.kt:709)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$I6SSiFqDgtzr46w2YJuHQbHaVWQ(Unknown Source:0)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda12.perform(D8$$SyntheticClass:0)\nat androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)\nat androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)\nat java.util.concurrent.FutureTask.run(FutureTask.java:317)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)\nat android.os.Handler.handleCallback(Handler.java:1070)\nat android.os.Handler.dispatchMessage(Handler.java:125)\nat android.os.Looper.dispatchMessage(Looper.java:333)\nat android.os.Looper.loopOnce(Looper.java:263)\nat android.os.Looper.loop(Looper.java:367)\nat android.app.ActivityThread.main(ActivityThread.java:9287)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)\n"
+    error_type: "java.lang.AssertionError"
+    stack_trace: "java.lang.AssertionError: Clear control is missing\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches$lambda$2(ProductActivityCaptureAndReorderInstrumentedTest.kt:709)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest.$r8$lambda$I6SSiFqDgtzr46w2YJuHQbHaVWQ(Unknown Source:0)\nat app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest$$ExternalSyntheticLambda12.perform(D8$$SyntheticClass:0)\nat androidx.test.core.app.ActivityScenario.lambda$onActivity$2$androidx-test-core-app-ActivityScenario(ActivityScenario.java:794)\nat androidx.test.core.app.ActivityScenario$$ExternalSyntheticLambda2.run(D8$$SyntheticClass:0)\nat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:520)\nat java.util.concurrent.FutureTask.run(FutureTask.java:317)\nat android.app.Instrumentation$SyncRunnable.run(Instrumentation.java:2647)\nat android.os.Handler.handleCallback(Handler.java:1070)\nat android.os.Handler.dispatchMessage(Handler.java:125)\nat android.os.Looper.dispatchMessage(Looper.java:333)\nat android.os.Looper.loopOnce(Looper.java:263)\nat android.os.Looper.loop(Looper.java:367)\nat android.app.ActivityThread.main(ActivityThread.java:9287)\nat java.lang.reflect.Method.invoke(Native Method)\nat com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:566)\nat com.android.internal.os.ZygoteInit.main(ZygoteInit.java:929)\n"
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/logcat-app.docscan.android.ProductActivityCaptureAndReorderInstrumentedTest-selectedDeleteAndConfirmedClearUndoRestoreWorkspaceAsWholeBatches.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/cpuinfo"
+    }
+  }
+}
+output_artifact {
+  label {
+    label: "test-results.log"
+    namespace: "com.google.testing.platform.runtime.android.driver.AndroidInstrumentationDriver"
+  }
+  source_path {
+    path: "/private/tmp/docscan-dbq-restore-0.4.281/app/build/outputs/androidTest-results/connected/debug/DocScanArbitration_API_36_1(AVD) - 16/testlog/test-results.log"
+  }
+  type: TEST_DATA
+  mime_type: "text/plain"
+}

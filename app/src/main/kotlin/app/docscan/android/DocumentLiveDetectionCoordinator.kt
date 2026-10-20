@@ -232,8 +232,10 @@ class DocumentLiveDetectionCoordinator(
         }
         if (!isRecent(provisionalTimestampMs, frameTimestampMonotonicMs)) clearProvisional()
 
-        val confirmedAgreement = measuredConfirmedQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
-        val provisionalAgreement = provisionalQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate) }
+        val confirmedAgreement = measuredConfirmedQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate,
+            imageAspectRatio = spec.orientedAspectRatio) }
+        val provisionalAgreement = provisionalQuad?.let { QuadGeometryUtils.checkAgreement(it, candidate,
+            imageAspectRatio = spec.orientedAspectRatio) }
         val reference = when {
             confirmedAgreement?.agrees == true -> confirmedPoints
             provisionalAgreement?.agrees == true -> provisionalPoints

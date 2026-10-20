@@ -1,0 +1,5 @@
+restore_entries=1039 dist_entries=1039 changed_payloads=1 restore_only=0 dist_only=0
+changed_payload_names:
+META-INF/version-control-info.textproto
+restore_only:
+dist_only:

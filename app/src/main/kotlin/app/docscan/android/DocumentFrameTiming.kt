@@ -7,8 +7,12 @@ data class DocumentFrameTiming(
     val sensorTimestampNs: Long?,
     val receivedTimestampNs: Long,
     val sensorClock: DocumentSensorClock = DocumentSensorClock.UNKNOWN,
+    val preparedTimestampNs: Long? = null,
 ) {
-    init { require(receivedTimestampNs >= 0) }
+    init {
+        require(receivedTimestampNs >= 0)
+        require(preparedTimestampNs == null || preparedTimestampNs >= receivedTimestampNs)
+    }
 
     fun sensorAgeNs(nowElapsedRealtimeNs: Long): Long? {
         val sensor = sensorTimestampNs ?: return null

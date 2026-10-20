@@ -78,7 +78,8 @@ class ClassicalDocumentBoundaryDetector(private val enhanced: Boolean = false) :
                     val normalized=CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(fullQuad.toFloatArray(),input.spec)
                     if(hypotheses.any { QuadGeometryUtils.checkAgreement(
                         CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(it.quad.toFloatArray(),input.spec),normalized,
-                        maxRelativeShiftTolerance=0.005,minIouTolerance=0.98).agrees }) continue
+                        maxRelativeShiftTolerance=0.005,minIouTolerance=0.98,
+                        imageAspectRatio=input.spec.orientedAspectRatio).agrees }) continue
                     val originalFull=q.points.map { inverseResize.map(it).let { p -> BoundaryPoint(r.left+p.x,r.top+p.y) } }
                     val rawQuad=BoundaryQuad(originalFull[0],originalFull[1],originalFull[2],originalFull[3])
                     val evidence=fit.edges.map { it.copy(residualPx=it.residualPx?.div(scale)) }

@@ -836,10 +836,11 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             val activeScenario = requireNotNull(scenario)
             awaitCaptureReady(activeScenario)
             assertTrue("The first Page reaches native OCR progress", firstOcrProgress.await(90, TimeUnit.SECONDS))
+            openWorkspaceMenuForTest(activeScenario)
             val device = UiDevice.getInstance(instrumentation)
             activeScenario.onActivity { activity ->
                 val delete = findViewByTag(
-                    activity.window.decorView,
+                    nativeWorkspaceRoot(activity),
                     ProductActivity.WORKSPACE_PAGE_DELETE_BUTTON_TAG_PREFIX + deletingPage.pageId.value,
                 ) ?: throw AssertionError("Direct Delete action for the OCR Page is missing")
                 assertTrue(delete.isEnabled)

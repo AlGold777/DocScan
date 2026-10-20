@@ -30,7 +30,8 @@ object DocumentCapturePolicy {
             live.analysisSpec?.let { CameraGeometryTransform.isGeometryCompatible(it, jpeg) } == true
         if (!canCompare) return DocumentCaptureDecision.RECTIFY_STILL
         return if (QuadGeometryUtils.checkAgreement(live!!.quadInNormalizedViewPort!!, stillQuad,
-                maxRelativeShiftTolerance = 0.05, minIouTolerance = 0.85).agrees)
+                maxRelativeShiftTolerance = 0.05, minIouTolerance = 0.85,
+                imageAspectRatio = jpeg.aspectRatio).agrees)
             DocumentCaptureDecision.RECTIFY_STILL else DocumentCaptureDecision.BOUNDARIES_DISAGREE
     }
 }

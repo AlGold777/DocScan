@@ -49,6 +49,8 @@ internal class DocAlignerAndroidTestAdapter(
 
     private val environment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
+    var lastRawReference: RawReference? = null
+        private set
 
     init {
         val bytes = assets.open(model.asset).use { it.readBytes() }
@@ -129,7 +131,7 @@ internal class DocAlignerAndroidTestAdapter(
 
     override fun detect(input: DocumentBoundaryInput): DocumentBoundaryResult {
         val started = android.os.SystemClock.elapsedRealtimeNanos()
-        val raw = inferRaw(input)
+        val raw = inferRaw(input).also { lastRawReference = it }
         val corners = raw.channelCornersXY
         val candidates = if (corners.size == 4 && corners.all { it != null }) {
             val points = corners.map { point ->

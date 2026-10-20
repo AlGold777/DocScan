@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "scope": "original-pixel geometry replay only",
+  "groups": {
+    "ordinary": {
+      "eligible": 12,
+      "success": 1,
+      "missing": 11,
+      "invalid": 0,
+      "excluded": 0,
+      "clips": 12,
+      "successRate": 0.08333333333333333,
+      "acceptance": "INCONCLUSIVE"
+    }
+  },
+  "frames": [
+    {
+      "clipId": "clip-0",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-1",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-2",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-3",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-4",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-5",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-6",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-7",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-8",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-9",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-10",
+      "frameId": 1,
+      "success": false,
+      "reason": "missing",
+      "geometry": null
+    },
+    {
+      "clipId": "clip-11",
+      "frameId": 1,
+      "success": true,
+      "reason": null,
+      "geometry": {
+        "iou": 1.0,
+        "cornerError": 0.0,
+        "maxSideError": 0.0
+      }
+    }
+  ],
+  "extraPredictions": 0,
+  "physicalAcceptance": "NOT_RUN",
+  "confirmedPrecision": null,
+  "displayedJitter": null,
+  "captureToPresent": null,
+  "inputSha256": {
+    "gt": "daecbc4b3ca971ca4a5a9a9efc634b4ee2f6e5fd5c01a8d9dcad881b6a660fd4",
+    "predictions": "7c2804fececd01da123afe592121b0c43e56d4b1101d859ae326749023fa9e58"
+  }
+}
