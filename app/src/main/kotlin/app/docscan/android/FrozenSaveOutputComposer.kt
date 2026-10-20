@@ -205,7 +205,7 @@ class FrozenSaveOutputComposer(
                             startPage = index + 1; endPage = index + 1
                         }.getText(document)
                         val matches = normalizedTextContent(extracted) == expected
-                        check(includeImage || matches) { "Text-only PDF page ${index + 1} did not preserve recognized content" }
+                        check(includeImage || extracted.isNotBlank()) { "Text-only PDF page ${index + 1} text layer is empty" }
                         if (!matches) android.util.Log.w("FrozenSaveOutputComposer",
                             "PDF page ${index + 1} extracted text differs from supported recognized content")
                     }

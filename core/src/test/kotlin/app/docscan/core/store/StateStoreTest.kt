@@ -1587,9 +1587,9 @@ class StateStoreTest {
         val uri = "content://media/external/document/scan-1"
         store.recordVerifiedPublicExport(exportId, uri, "Scan.pdf", 2L, "PARTIAL")
 
-        assertEquals(1L, database.schemaQueries.pageById(pages[0].pageId.value).executeAsOne().tombstone)
+        assertEquals(0L, database.schemaQueries.pageById(pages[0].pageId.value).executeAsOne().tombstone)
         assertEquals(0L, database.schemaQueries.pageById(pages[1].pageId.value).executeAsOne().tombstone)
-        assertEquals(1L, store.visiblePageCount(workspaceId))
+        assertEquals(2L, store.visiblePageCount(workspaceId))
         val recent = store.recentDocuments(1_000L).single()
         assertEquals(uri, recent.documentUri)
         assertEquals("Scan.pdf", recent.displayName)
@@ -1603,7 +1603,7 @@ class StateStoreTest {
 
         store.recordVerifiedPublicExport(exportId, uri, "Scan.pdf", 2L, "PARTIAL")
         assertEquals(recent, store.recentDocuments(1_000L).single())
-        assertEquals(1L, store.visiblePageCount(workspaceId))
+        assertEquals(2L, store.visiblePageCount(workspaceId))
         assertThrows(StoreInvariantViolation::class.java) {
             store.recordVerifiedPublicExport(exportId, uri, "Other.pdf", 2L, "PARTIAL")
         }
@@ -3198,10 +3198,10 @@ class StateStoreTest {
 
         assertEquals("SUCCEEDED", store.externalExportPackage(fixture.export.exportArtifactId)?.state)
         val remaining = store.workspaceProjection(workspaceId).pages
-        assertEquals(listOf(unselected.pageId), remaining.map { it.pageId })
-        assertEquals(false, remaining.single().selected)
-        assertEquals(1L, store.visiblePageCount(workspaceId))
-        assertEquals(1L, database.schemaQueries.pageById(frozenPage.pageId.value).executeAsOne().tombstone)
+        assertEquals(listOf(frozenPage.pageId, unselected.pageId), remaining.map { it.pageId })
+        assertEquals(false, remaining.last().selected)
+        assertEquals(2L, store.visiblePageCount(workspaceId))
+        assertEquals(0L, database.schemaQueries.pageById(frozenPage.pageId.value).executeAsOne().tombstone)
     }
 
     @Test
@@ -3282,8 +3282,8 @@ class StateStoreTest {
         )
 
         assertEquals("SUCCEEDED", store.externalExportPackage(fixture.export.exportArtifactId)?.state)
-        assertEquals(0L, store.visiblePageCount(workspaceId))
-        assertEquals(1L, database.schemaQueries.pageById(sourcePageId.value).executeAsOne().tombstone)
+        assertEquals(1L, store.visiblePageCount(workspaceId))
+        assertEquals(0L, database.schemaQueries.pageById(sourcePageId.value).executeAsOne().tombstone)
     }
 
     private fun confirmPackageOutputs(fixture: CommittedExportPackageFixture) {

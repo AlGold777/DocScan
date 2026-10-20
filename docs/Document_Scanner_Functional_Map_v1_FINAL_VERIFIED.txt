@@ -1,0 +1,243 @@
+﻿Document Scanner
+Функциональная карта — FINAL VERIFIED v1
+Консолидированная и верифицированная версия после закрытия продуктовых конфликтов и незакрытых решений.
+Статус	FUNCTIONAL MAP — COMPLETE / FROZEN v1
+Область	Продуктовое поведение, UX, lifecycle и системные инварианты. Конкретные библиотеки/API/worker-pool и внутренние лимиты относятся к архитектурному этапу.
+
+1. Назначение и продуктовые границы
+    • Android-приложение для быстрого сканирования бумажных документов камерой и импорта изображений/PDF.
+    • Основной поток: фото/импорт → автоматическая обработка → OCR → временный workspace страниц → выбор → изменение порядка → searchable PDF → сохранение PDF + соответствующих JPG.
+    • Приложение не является постоянным архивом документов: workspace — временный рабочий буфер, постоянное хранение выполняется в выбранной пользователем файловой системе.
+    • Основной экран остаётся минималистичным: без поиска, категорий, фильтров и постоянной внутренней библиотеки документов.
+    • OCR и обработка документов выполняются локально на устройстве; сеть не требуется для основного сценария.
+2. Главный экран
+    • Верхний блок сохраняет чёрный фон и содержит горизонтальную ленту миниатюр Page. Сначала показываются Page текущей workspace session; затем через заметный минималистичный разделитель — несохранённые Page предыдущих неистёкших sessions.
+    • Средний блок Documents сохраняет визуальный язык утверждённого прототипа. Каждая Page отображается отдельной карточкой со статусом, preview, checkbox и доступными действиями.
+    • В заголовке Documents располагаются: импорт «+», Select all, Save и Clear.
+    • Внизу располагается большая круглая кнопка камеры; слева от неё — preview последнего сохранённого PDF, если в 24-hour recent index есть документы.
+    • Нажатие на preview последнего PDF открывает универсальный Viewer/PDF Editor примерно на 90% экрана.
+3. Модель Page, workspace и session
+    • Каждая фотография, импортированное изображение и каждая страница импортированного PDF являются равноправной Page.
+    • Снятые/импортированные Page сами по себе не образуют Document. Состав итогового документа определяется текущим workspace selection в момент PDF Save.
+    • Checkbox определяет состав создаваемого из workspace документа; Drag & Drop определяет порядок. Эти состояния независимы.
+    • До PDF Save отдельная persistent-сущность Document в workspace не требуется: документ материализуется из выбранных Page[] в текущем относительном порядке.
+    • Несохранённые Page принадлежат WorkspaceSession. Retention применяется к session, а не к независимому createdAt каждой Page.
+4. Камера и серийное сканирование
+    • Нажатие shutter немедленно создаёт Page и добавляет её в workspace.
+    • После снимка камера сразу доступна для следующего кадра; пользователь не ждёт crop, image processing или OCR предыдущей Page.
+    • Несколько Page обрабатываются асинхронно; каждая имеет независимый processing state.
+    • Shutter сопровождается лёгким haptic feedback.
+5. Автоматическая обработка изображения
+    • Первичный pipeline: edge detection → crop → perspective correction → rotation detection → image enhancement → quality check → OCR.
+    • Автоматически исправляются перспектива, ориентация и изображение для повышения читаемости/OCR без недопустимого искажения документа.
+    • Нормальный кадр не требует ручного подтверждения.
+    • Автоматическая первичная обработка и OCR относятся только к первичному capture/import pipeline. Ручная графическая правка в Viewer сама по себе OCR не запускает.
+6. Quality check, Retake и ручные исправления
+    • Quality check минимум оценивает blur/резкость, motion blur, glare/засвет, экспозицию, контраст, crop completeness, перспективу и разрешение.
+    • Плохая Page получает Low quality, остаётся в workspace и не выбирается автоматически для Save.
+    • Retake заменяет содержимое той же Page: сохраняются stable Page ID, позиция и selection.
+    • При Retake старые processed image, OCR-result и quality-result инвалидируются; новая фотография заново проходит processing → quality check → OCR.
+    • Пользовательские metadata, не зависящие от изображения, при Retake сохраняются.
+    • Доступен ручной Rotate 90° и ручная коррекция crop/границ четырьмя угловыми точками. Эти операции являются графическим редактированием и не запускают OCR автоматически.
+7. Состояния Page
+    • Основные user-visible состояния: Processing / Ready / Low quality / Failed / Saving.
+    • Processing: показывается spinner; Ready: изображение готово к дальнейшей работе; Low quality: доступны Retake/Rotate/Crop; Failed: показывается Retry вместо бесконечного spinner; Saving: Page участвует в транзакции PDF Save.
+    • Наличие OCR является отдельным атрибутом текущей версии изображения. Ready Page может иметь валидный OCR либо требовать Re-OCR после сохранённой ручной графической правки.
+    • После process death фиктивный вечный Processing запрещён: незавершённая job восстанавливается, перезапускается либо переводится в recoverable failure.
+8. OCR, Re-OCR и привязка к версии изображения
+    • OCR первичного capture/import запускается автоматически и не блокирует съёмку/интерфейс.
+    • При OCR failure Page переходит в Failed и показывает Retry.
+    • После окончательного OCR failure пользователь может явно сохранить Page как image-only PDF; она не должна маркироваться searchable.
+    • Для любой Page доступна отдельная команда Re-OCR/Refresh. В графическом Viewer это отдельная иконка и отдельная операция от «Попробовать ещё раз» сохранённого PDF.
+    • OCR-result всегда привязан к конкретной imageVersionId. После сохранения новой графической версии текущая Page считается нераспознанной, пока пользователь явно не выполнит Re-OCR.
+    • Если Re-OCR повторно запускается для image version, у которой уже есть OCR-result, предыдущий результат сохраняется до успешного завершения нового распознавания и заменяется только при success. При failure предыдущий OCR остаётся доступен, если он относится к той же image version.
+    • Re-OCR никогда не создаёт новую Page: сохраняются Page ID, position и workspace selection.
+    • Поддерживается multilingual OCR с автоматическим определением языка. Конкретный набор локальных language models является конфигурацией OCR engine и не меняет зафиксированную пользовательскую семантику.
+9. Searchable PDF
+    • Нормальный результат: визуальное изображение Page + невидимый/прозрачный OCR text layer той же image version.
+    • Нельзя формировать searchable PDF, если OCR относится к другой image version. Пользователь должен выполнить Re-OCR либо явно выбрать image-only fallback.
+    • Текст должен быть доступен для поиска, выделения, копирования и машинного анализа.
+    • JPEG compression должен быть контролируемым с балансом читаемости, размера и скорости.
+    • Визуальная структура документа не заменяется plain text.
+10. Импорт изображений и PDF
+    • «+» открывает Android File Picker; поддерживается импорт одного/нескольких изображений и PDF.
+    • Изображения проходят тот же processing/OCR pipeline, что и camera capture.
+    • Каждая страница импортированного PDF становится отдельной Page и может удаляться, переставляться, выбираться и объединяться с другими источниками.
+    • PDF без пригодного text layer автоматически OCR-ится; PDF с пригодным text layer повторно не OCR-ится, существующий слой переиспользуется насколько технически возможно.
+    • Можно объединять в произвольной комбинации camera pages + images + OCR-less PDF pages + searchable PDF pages.
+    • Большой PDF разбирается в фоне; показывается progress indicator, UI не блокируется, готовые Page появляются по мере материализации.
+    • После crash/process death большой import является restartable: сохраняются source URI, уже материализованные Page и progress marker; готовые Page не теряются, продолжение безопасно перезапускается с первой ещё не материализованной страницы без дублей.
+11. Selection и Active state
+    • Active и Selected — разные состояния: белая рамка миниатюры означает Active; круглый checkbox означает Selected.
+    • Tap по thumbnail всегда делает Page Active и открывает её в основном окне Viewer.
+    • Tap по checkbox на thumbnail либо checkbox на большой Page меняет Selected. Long press по thumbnail может использоваться как дополнительный вход в selection mode, но не заменяет базовую семантику tap.
+    • Selection допускает одну, несколько последовательных/несмежных Page и Select all.
+    • Новая Page текущей session автоматически Selected только после успешного перехода в Ready. Low quality и Failed не auto-select.
+    • Импортированные Page после успешной подготовки также auto-select как часть импортированного рабочего набора.
+    • Workspace Viewer и главный экран используют одно и то же selection state. Drag & Drop не меняет selection.
+12. Drag & Drop и порядок
+    • В workspace Page можно переставлять Drag & Drop; основной жест — в Documents, при необходимости также в верхней thumbnail-strip.
+    • Порядок синхронно отражается во всех workspace views; перестановка не запускает OCR повторно.
+    • Во время drag показываются перемещаемая Page и место вставки; завершение сопровождается лёгким haptic feedback.
+    • Итоговый workspace PDF содержит выбранные Page в их текущем относительном workspace-порядке.
+    • В Saved PDF Editor порядок страниц также можно менять Drag & Drop непосредственно через верхнюю thumbnail-strip. Это изменяет порядок временной EditorSession; исходный сохранённый PDF не меняется до Save, а новый PDF создаётся в текущем порядке EditorSession.
+13. Удаление, Clear и Undo
+    • В workspace можно удалить конкретную Page без Clear. Быстрый direct gesture: swipe карточки → Delete.
+    • Toolbar Delete является batch-operation и disabled при explicit selection = 0. Он не удаляет Active Page неявно.
+    • После workspace Delete доступен короткий Undo, восстанавливающий Page, позицию, selection, OCR и metadata.
+    • Clear удаляет все unsaved Page текущего workspace после подтверждения и предоставляет короткий Undo.
+    • Во время активного PDF Save Clear недоступен.
+    • Во время обычного Processing Clear разрешён: session/Page сначала помечаются deleted, связанные jobs отменяются, поздние callbacks игнорируются по stable ID/state version, затем удаляются temp-data.
+    • Clear и workspace Delete никогда не затрагивают уже сохранённые пользовательские PDF/JPG или recent saved metadata.
+14. PDF Save из workspace и транзакционность
+    • PDF Save активен при выборе минимум одной Page. Одна выбранная Page → одностраничный PDF; несколько → один многостраничный PDF.
+    • Если выбранная Page ещё Processing, Save ждёт завершения и показывает понятный статус, например «Preparing 2 of 4 pages…». Неполный searchable PDF создать нельзя.
+    • Если среди выбранных Page есть Low quality/Failed либо текущая image version не имеет валидного OCR, Save требует исправления/Re-OCR либо явного image-only fallback.
+    • После первого нажатия Save кнопка блокируется до завершения операции; повторный tap не создаёт дубликат.
+    • PDF + соответствующие JPG являются одной пользовательской транзакцией. Workspace удаляет сохранённые Page только после успешного commit полного выходного комплекта.
+    • Выходные файлы сначала пишутся во временные имена/временную область; финальные имена публикуются только после успешной записи всего комплекта. При ошибке temporary artifacts удаляются best-effort, workspace остаётся неизменным и пользователь получает Retry.
+    • Если файловая система не поддерживает полностью атомарный commit набора файлов, реализация должна эмулировать транзакционное поведение максимально близко.
+15. Файлы, имена и папка назначения
+    • Одностраничный результат: <name>.pdf + <name>.jpg. Многостраничный: <name>.pdf + <name> — 01.jpg, 02.jpg и т.д.
+    • JPG numbering всегда соответствует порядку страниц итогового PDF, а не исходным индексам workspace/PDF.
+    • Экспортируемый JPG берётся из текущей активной image version Page.
+    • Имя автоматически формируется по смыслу и дате; fallback: Scan <date time>.
+    • При конфликте имён существующие файлы не перезаписываются: добавляется suffix (1), (2)…; связанные JPG используют тот же resolved basename.
+    • Папка выбирается через Storage Access Framework; сохраняется persistable URI permission. При утрате доступа приложение повторно запрашивает destination вместо падения.
+    • Перед тяжёлым импортом/сохранением проверяется свободное место.
+16. Retention и восстановление WorkspaceSession
+    • Retention несохранённого workspace является inactivity-based: WorkspaceSession истекает через 24 часа после lastActivityAt/sessionExpiresAt, а не независимо для каждой Page.
+    • Любое существенное пользовательское/системное изменение активной session обновляет её activity timestamp. Пока session открыта, Page редактируется/выбрана либо участвует в pending/running job, retention cleanup её не удаляет.
+    • Cleanup запрещён для Page с pending/running job. При необходимости удаления job сначала безопасно отменяется/завершается, затем удаляются временные данные.
+    • Все Page одной WorkspaceSession разделяют общий retention deadline; отдельная Page не «переживает» соседей только из-за более позднего добавления.
+    • Page, возвращённые через «Попробовать ещё раз», добавляются в текущую WorkspaceSession и наследуют её retention deadline. Если workspace отсутствует, создаётся новая session и все возвращённые Page получают единый новый session TTL.
+    • После restart/process death восстанавливаются Page, порядок, selection, source type, image version, OCR/quality status, timestamps и незавершённые jobs.
+    • Сохранённые PDF/JPG retention cleanup не затрагивает.
+17. Универсальный Viewer — общий контейнер и режимы
+    • Workspace Viewer, graphical Page Viewer и Saved PDF Editor используют общий визуальный контейнер, но работают как разные modes с контекстными actions/gestures.
+    • Сверху находится горизонтальная thumbnail-strip текущего контекста. Active Page выделяется белой рамкой; Selected показывается отдельным круглым checkbox/indicator.
+    • Tap thumbnail = Active; tap checkbox = Selected. Горизонтальный swipe основной Page переключает Active Page и синхронизирует thumbnail-strip.
+    • Viewer закрывается Android Back/Cancel или tap по пустой области вне окна, если текущий mode не имеет dirty state, требующего подтверждения.
+    • Грязное состояние защищается правилами конкретного mode: graphical edit использует Cancel | Save; Saved PDF Editor может отменить временные editor changes без изменения исходного PDF.
+18. Workspace Viewer
+    • В верхнем ряду располагаются миниатюры Page текущего workspace.
+    • В Viewer доступны Delete, Re-OCR и PDF Save по общим workspace rules.
+    • Selection полностью синхронизирован с главным экраном.
+    • Toolbar Delete disabled при selection=0; swipe Delete карточки на главном экране остаётся direct delete одной Page.
+    • Re-OCR применяется к explicitly selected Page/страницам либо к текущей Page через её отдельную Re-OCR action в graphical context.
+19. Preview последнего сохранённого документа и recent navigation
+    • Слева от shutter показывается thumbnail последнего документа, входящего в 24-hour recent index.
+    • Если recent index пуст, preview отсутствует либо показывается нейтральный placeholder. Приложение не ищет более старые PDF по файловой системе.
+    • Tap по preview открывает Saved PDF Viewer на последнем recent документе.
+    • Вертикальный swipe вверх/вниз переключает recent документы; горизонтальный swipe влево/вправо — страницы текущего PDF.
+    • При смене документа thumbnail-strip полностью обновляется страницами нового документа.
+20. Saved PDF Editor
+    • Viewer сохранённого PDF показывает thumbnails всех страниц текущей EditorSession; initial order совпадает с исходным PDF.
+    • Tap thumbnail делает страницу Active. Selection выполняется только через checkbox на thumbnail/большой Page; long press может быть дополнительным входом в selection mode.
+    • До первого explicit selection все страницы визуально могут иметь тусклый «implicit all» marker. Это не explicit selection и не включает Delete; marker показывает default scope действия «Попробовать ещё раз». После первого explicit selection яркие checkmarks показывают только выбранные страницы.
+    • Между thumbnail-strip и основной Page располагается action bar: Delete слева, «Попробовать ещё раз» по центру, Save справа.
+    • Delete применяется только к explicitly selected pages и disabled при explicit selection=0. Удаление изменяет только временную EditorSession; оригинальный PDF не меняется.
+    • После Delete доступен Undo: Page восстанавливается на прежнюю позицию и с прежним selection. Если она была Active и пользователь не успел перейти на другую Page, Active также восстанавливается; если пользователь уже перешёл, текущий Active не меняется.
+    • Порядок страниц EditorSession можно менять Drag & Drop thumbnails. Delete и reorder считаются editor changes.
+    • Save создаёт новый PDF из всех страниц, оставшихся в EditorSession, в их текущем порядке. Selection не является вторым фильтром Save.
+    • Если пригодный text layer уже существует и относится к соответствующей image content, Save PDF Editor не запускает OCR повторно.
+    • «Попробовать ещё раз»: при explicit selection копирует в workspace только выбранные страницы; если explicit selection отсутствует — копирует все страницы текущей EditorSession. Исходный PDF остаётся неизменным.
+    • Selection является локальным временным состоянием текущего saved PDF и не переносится между recent documents.
+21. Recent saved documents
+    • Приложение хранит минимальный индекс успешно сохранённых им документов за последние 24 часа для thumbnail-preview, навигации и «Попробовать ещё раз».
+    • Recent index — временный навигационный механизм, а не постоянная библиотека и не document manager.
+    • Индекс содержит достаточные URI/metadata для открытия PDF и materialization его страниц в workspace.
+22. Permissions, privacy и accessibility
+    • Корректно обрабатываются camera permission, отказ и Don’t ask again с переходом Open Settings.
+    • Файловый доступ реализуется современными Android SAF/API без избыточного broad-storage permission.
+    • Опционально доступно скрытие чувствительных документов из screenshots/Recents через secure-window mechanism (FLAG_SECURE).
+    • Основные touch targets ≥48dp; корректные contentDescription/TalkBack; состояние не передаётся только цветом.
+23. Архитектурные ограничения
+    • Single Source of Truth: Workspace содержит единую Page[]; верхняя лента, Documents и workspace Viewer являются UI-проекциями этой коллекции.
+    • Page имеет stable ID и содержит source/provenance, current imageVersionId, image versions, order, selected, processing/quality state, OCR data keyed by imageVersionId, timestamps и pending job metadata.
+    • Document до Save не является persistent workspace entity.
+    • Saved PDF Editor использует отдельную временную EditorSession и не владеет Workspace Page[]. Это отдельная aggregate boundary, поэтому Single Source of Truth не нарушается.
+    • Графический Save создаёт новую внутреннюю image version той же Page и делает её current. Предыдущая версия не отображается как отдельная Page.
+    • Camera capture, PDF parsing, image processing и OCR выполняются вне UI thread, не блокируют интерфейс и имеют recoverable state.
+    • Конкретная concurrency model (очередь/worker pool/limits/backpressure) определяется архитектурным этапом при соблюдении функционального инварианта: новая Page не ждёт завершения обработки предыдущей.
+24. Системные инварианты
+    • No data loss: Save/Clear/crash не должны незаметно уничтожать unsaved Page до session retention либо явного подтверждённого удаления.
+    • No incomplete searchable PDF: PDF не может считаться searchable, если хотя бы у включённой Page нет OCR для её current image version; допустим только явный image-only fallback.
+    • Selection ≠ Order: checkbox задаёт состав workspace PDF; Drag & Drop задаёт порядок.
+    • Source neutrality: camera/image/OCR-less PDF/searchable PDF Page могут объединяться по одинаковым правилам.
+    • Save commits only on success: workspace Page удаляются только после подтверждённого commit полного output set.
+    • UI views do not own workspace data: представления не содержат независимые копии Page.
+    • Processing is asynchronous: создание новой Page никогда не ждёт предыдущую.
+    • Saved PDF originals immutable by default: PDF Editor создаёт новый PDF и не перезаписывает исходный saved PDF.
+    • OCR consistency: OCR-result считается валидным только для той imageVersionId, на которой он был получен.
+25. Концептуальная структура UI
+MAIN
+┌──────────────────────────────────────────────┐
+│ [01] [02] [03] [04] │ older [05] [06]      │
+└──────────────────────────────────────────────┘
+ Documents     [+]  Select all  Save  Clear
+ [preview] Page / status / refresh / checkbox
+ [preview] Page / status / refresh / checkbox
+ [recent PDF]                      [ CAMERA ]
+
+UNIVERSAL VIEWER — WORKSPACE / GRAPHICAL PAGE
+┌──────────────────────────────────────────────┐
+│ [01] [02] [03] [04] [05]                   │
+│ active = white frame; selected = ○/✓        │
+├──────────────────────────────────────────────┤
+│ Delete             Re-OCR             Save  │
+├──────────────────────────────────────────────┤
+│ ↶ Undo                                      │
+│                CURRENT PAGE                  │
+│                                      ○ / ✓   │
+├──────────────────────────────────────────────┤
+│ Rotate  Crop  Brightness  Contrast  Sharp   │
+└──────────────────────────────────────────────┘
+
+SAVED PDF EDITOR
+┌──────────────────────────────────────────────┐
+│ [01] [02] [03] [04] [05]    drag ↔ reorder │
+├──────────────────────────────────────────────┤
+│ Delete        Try again               Save  │
+├──────────────────────────────────────────────┤
+│                CURRENT PAGE                  │
+│                                      ○ / ✓   │
+└──────────────────────────────────────────────┘
+←/→ pages; ↑/↓ recent documents
+26. Графический Viewer сканированной Page
+    • Нажатие на миниатюру сканированной Page открывает universal Viewer в graphical mode.
+    • Сверху — thumbnail-strip workspace; Active Page выделяется белой рамкой. Между thumbnails и Page располагаются Delete, Re-OCR и Save.
+    • В нижней части доступны только простые инструменты: Rotate, Crop, Brightness, Contrast, Sharpness. Resize отсутствует.
+    • Изменения показываются в preview сразу, но до Save существуют только как dirty editing state.
+    • Save в graphical mode сохраняет изображение, а не PDF: создаёт новую внутреннюю image version той же Page и делает её current. Отдельная Page/видимый дубликат не создаётся.
+    • После Save current image version не имеет OCR, пока пользователь явно не запустит Re-OCR. Старый OCR остаётся связан только с предыдущей image version и не используется для новой.
+    • Предыдущая image version может храниться внутренне до lifecycle cleanup для согласованности/recovery, но не является отдельным пользовательским документом и не возвращается обычным Undo после Save.
+    • Save disabled до первого dirty change; после изменения enabled; после успешного Save снова disabled.
+    • В левом верхнем углу области Page располагается Undo. Undo multi-step и отменяет изменения текущей editing session в обратном порядке только до состояния последнего Save.
+    • После Save editing Undo stack очищается. Если все dirty changes отменены до Save, Save снова disabled.
+    • При попытке закрыть Viewer, перейти к другой Page или выполнить Android Back с dirty changes показывается только «Save changes?» → Cancel | Save. Cancel сохраняет edit session и отменяет переход; Save фиксирует image version и затем выполняет исходное действие.
+    • Отдельного Discard нет: намеренная отмена dirty changes выполняется Undo.
+    • Re-OCR запускает распознавание current saved image version и не создаёт новую Page.
+27. Разведение Re-OCR и «Попробовать ещё раз»
+    • Re-OCR сканированной Page и «Попробовать ещё раз» сохранённого PDF — разные операции с разными иконками.
+    • Re-OCR повторно распознаёт current saved image version конкретной Page.
+    • «Попробовать ещё раз» materializes выбранные либо все страницы saved PDF в workspace для новой работы и последующего сохранения как нового документа.
+    • UI и архитектура не должны реализовывать эти действия как одну команду с меняющейся скрытой семантикой.
+28. Финальное правило Delete/Save в PDF Editor
+    • Delete удаляет explicitly selected pages только из текущей EditorSession. Исходный saved PDF физически не изменяется.
+    • Undo Delete восстанавливает Page и её editor state по правилам раздела 20.
+    • После Delete и/или Drag & Drop Save создаёт новый PDF из всех Page, оставшихся в EditorSession, в текущем editor order.
+    • Автоматический overwrite исходного saved PDF запрещён.
+    • Чтобы получить PDF-подмножество, пользователь выбирает ненужные Page → Delete → Save оставшегося набора.
+29. Lifecycle страниц, возвращённых из saved PDF
+    • «Попробовать ещё раз» materializes Page в workspace в текущем порядке EditorSession (изначально это порядок исходного PDF; он может быть изменён Drag & Drop до возврата).
+    • Каждая materialized Page получает новый workspace Page ID. Provenance сохраняет source=SavedPdfPage, URI/идентификатор исходного PDF и исходный page index.
+    • PDF Editor selection не переносится как самостоятельное состояние, но Page, сознательно возвращённые через «Попробовать ещё раз», добавляются в workspace с Selected=true. При возврате всего документа все materialized Page Selected=true.
+    • Если у source page есть usable text layer, он копируется как OCR/text data текущей imported image version и считается валидным до ручного изменения изображения.
+    • Повторное «Попробовать ещё раз» для той же saved page разрешено и создаёт новую workspace Page с новым ID; автоматической дедупликации нет. Action временно disabled на время materialization для защиты от случайного double tap.
+    • Все returned Page добавляются в конец существующего workspace единым последовательным блоком; если workspace отсутствует, создаётся новая WorkspaceSession.
+    • Returned Page наследуют общий retention deadline текущей WorkspaceSession; при создании новой session получают общий новый session TTL.
+    • После добавления returned Page полностью подчиняются обычным workspace rules: selection, image editing, Re-OCR, Drag & Drop, Delete, Clear и PDF Save.
+30. Статус функциональной карты
+FUNCTIONAL MAP — COMPLETE / FROZEN v1
+Продуктовый функциональный контур v1 считается закрытым и внутренне согласованным. Следующий этап — аудит платформенных ограничений Android, предархитектурный бриф и архитектурное проектирование. Технические решения, не меняющие наблюдаемое пользователем поведение (конкретные OCR-библиотеки, worker-pool, лимиты памяти, формат внутренних таблиц/очередей и т.п.), могут определяться на следующих этапах без разморозки функциональной карты.

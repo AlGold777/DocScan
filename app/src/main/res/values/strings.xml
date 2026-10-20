@@ -166,6 +166,13 @@
     <string name="document_mode_enabled_description">Document mode: enabled</string>
     <string name="document_mode_disabled_description">Document mode: disabled</string>
     <string name="document_mode_status_enabled">Document mode: auto-detect boundaries and rectification</string>
+    <string name="ocr_toggle_description">Optical character recognition (OCR)</string>
+    <string name="ocr_state_enabled">Enabled</string>
+    <string name="ocr_state_disabled">Disabled</string>
+    <string name="bw_mode_name">B&amp;W</string>
+    <string name="bw_mode_toggle_description">Toggle black-and-white mode</string>
+    <string name="bw_mode_state_enabled">Enabled</string>
+    <string name="bw_mode_state_disabled">Disabled</string>
     <string name="document_save_rectified">Document rectified</string>
     <string name="document_save_no_crop_undetected">Photo saved without crop: boundaries not found</string>
     <string name="document_save_no_crop_disagreement">Photo saved without crop: boundaries not confirmed</string>

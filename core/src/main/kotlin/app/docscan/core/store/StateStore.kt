@@ -1812,14 +1812,8 @@ class StateStore(
         ) throw StoreInvariantViolation("Successful SaveManifest Page identities are malformed")
 
         val workspaceId = WorkspaceId.parse(manifest.workspace_id)
-        val stillSameVisibleSources = frozenPages.filter { frozen ->
-            val page = queries.pageById(frozen.pageId.value).executeAsOneOrNull()
-            page != null && page.workspace_id == workspaceId.value && page.tombstone == 0L
-                && page.content_revision == frozen.contentRevision
-        }
-        if (stillSameVisibleSources.isNotEmpty()) {
-            tombstoneVisiblePagesWithinTransaction(workspaceId, stillSameVisibleSources, clock.read())
-        }
+        // Saved pages intentionally remain active and non-tombstoned in the workspace
+        // so that the user's thumbnail strip and workspace remain populated after saving.
     }
 
     private fun editedPdfOutputPageCount(encodedIndexes: String): Long {

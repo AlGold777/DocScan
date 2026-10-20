@@ -12,6 +12,7 @@ import android.provider.OpenableColumns
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -62,7 +63,12 @@ import androidx.recyclerview.widget.RecyclerView
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
+import android.graphics.RenderEffect
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
@@ -106,6 +112,7 @@ class ProductActivity : AppCompatActivity() {
     private var workspaceMenuDialog: AlertDialog? = null
     private lateinit var versionLabel: TextView
     private lateinit var status: TextView
+    private val errorLog: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     private lateinit var previewView: PreviewView
     private lateinit var documentOverlayView: DocumentOverlayView
     private lateinit var captureButton: Button
@@ -120,7 +127,8 @@ class ProductActivity : AppCompatActivity() {
     }
     private val liveDetectionCoordinator = DocumentLiveDetectionCoordinator()
     private lateinit var ocrButton: Button
-    private lateinit var ocrCheckBox: CheckBox
+    private lateinit var blackAndWhiteButton: Button
+    @Volatile private var isBlackAndWhiteMode: Boolean = false
     private var autoOcrEnabled: Boolean = true
     private lateinit var importButton: Button
     private lateinit var destinationButton: Button
@@ -130,8 +138,8 @@ class ProductActivity : AppCompatActivity() {
     private lateinit var selectionButton: Button
     private lateinit var recoverExportsButton: Button
     private lateinit var resumeExportsButton: Button
-    private lateinit var deleteSelectedButton: Button
-    private lateinit var floatingDeleteButton: Button
+    private lateinit var deleteSelectedButton: ImageButton
+    private lateinit var floatingDeleteButton: ImageButton
     private lateinit var clearWorkspaceButton: Button
     private var pagesContainer: RecyclerView? = null
     private var workspacePageAdapter: WorkspacePageAdapter? = null
@@ -181,7 +189,7 @@ class ProductActivity : AppCompatActivity() {
             if (::documentModeButton.isInitialized) documentModeButton.visibility = View.GONE
             permissionActionButton.setOnClickListener { permissionRequest.launch(Manifest.permission.CAMERA) }
         } else {
-            status.text = getString(R.string.camera_permission_denied)
+            recordError(getString(R.string.camera_permission_denied))
             permissionActionButton.text = getString(R.string.open_app_settings)
             permissionActionButton.visibility = View.VISIBLE
             if (::documentModeButton.isInitialized) documentModeButton.visibility = View.GONE
@@ -208,6 +216,7 @@ class ProductActivity : AppCompatActivity() {
         pendingMainSave = savedInstanceState?.getBoolean(STATE_PENDING_MAIN_SAVE) ?: false
         destinationPickerPending = savedInstanceState?.getBoolean(STATE_DESTINATION_PICKER_PENDING) ?: false
         isDocumentMode = savedInstanceState?.getBoolean(STATE_DOCUMENT_MODE) ?: false
+        isBlackAndWhiteMode = savedInstanceState?.getBoolean(STATE_BLACK_AND_WHITE_MODE) ?: false
         buildContent()
         status.text = getString(R.string.storage_initializing)
         io.execute {
@@ -257,10 +266,10 @@ class ProductActivity : AppCompatActivity() {
                         }
                     } catch (failure: Exception) {
                         runOnUiThread {
-                            if (!isFinishing) status.text = getString(
+                            if (!isFinishing) recordError(getString(
                                 R.string.resume_pdf_import_failed,
                                 failure.message ?: failure.javaClass.simpleName,
-                            )
+                            ))
                         }
                     }
                     val refreshed = runCatching { initialized.workspaceProjection() }.getOrNull() ?: return@execute
@@ -303,6 +312,7 @@ class ProductActivity : AppCompatActivity() {
         outState.putBoolean(STATE_PENDING_MAIN_SAVE, pendingMainSave)
         outState.putBoolean(STATE_DESTINATION_PICKER_PENDING, destinationPickerPending)
         outState.putBoolean(STATE_DOCUMENT_MODE, isDocumentMode)
+        outState.putBoolean(STATE_BLACK_AND_WHITE_MODE, isBlackAndWhiteMode)
         super.onSaveInstanceState(outState)
     }
 
@@ -340,17 +350,19 @@ class ProductActivity : AppCompatActivity() {
         disabledBg: Int = 0xFF14171C.toInt(),
         strokeColor: Int = 0xFF374151.toInt(),
         radiusDp: Int = 12,
+        strokeWidthDp: Int = 1,
     ): StateListDrawable {
         val radiusPx = dp(radiusDp).toFloat()
+        val strokeWidthPx = dp(strokeWidthDp)
         val pressed = GradientDrawable().apply {
             cornerRadius = radiusPx
             setColor(pressedBg)
-            setStroke(dp(1), strokeColor)
+            setStroke(strokeWidthPx, strokeColor)
         }
         val normal = GradientDrawable().apply {
             cornerRadius = radiusPx
             setColor(normalBg)
-            setStroke(dp(1), strokeColor)
+            setStroke(strokeWidthPx, strokeColor)
         }
         val disabled = GradientDrawable().apply {
             cornerRadius = radiusPx
@@ -365,38 +377,68 @@ class ProductActivity : AppCompatActivity() {
         }
     }
 
+    private fun borderlessRippleDrawable(): android.graphics.drawable.Drawable? {
+        val outValue = android.util.TypedValue()
+        return if (theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)) {
+            androidx.core.content.ContextCompat.getDrawable(this, outValue.resourceId)
+        } else null
+    }
+
     private fun updateOcrButtonAppearance() {
-        if (::ocrCheckBox.isInitialized && ocrCheckBox.isChecked != autoOcrEnabled) {
-            ocrCheckBox.isChecked = autoOcrEnabled
+        if (!::ocrButton.isInitialized) return
+        val active = autoOcrEnabled
+        ocrButton.text = "[Aa]"
+        ocrButton.setTextColor(if (active) Color.WHITE else 0xFF94A3B8.toInt())
+        ocrButton.background = borderlessRippleDrawable()
+        androidx.core.view.ViewCompat.setStateDescription(
+            ocrButton,
+            getString(if (active) R.string.ocr_state_enabled else R.string.ocr_state_disabled),
+        )
+    }
+
+    private fun updateBlackAndWhiteButtonAppearance() {
+        if (!::blackAndWhiteButton.isInitialized) return
+        val active = isBlackAndWhiteMode
+        blackAndWhiteButton.text = "◪"
+        blackAndWhiteButton.setTextColor(if (active) Color.WHITE else 0xFF94A3B8.toInt())
+        blackAndWhiteButton.background = borderlessRippleDrawable()
+        androidx.core.view.ViewCompat.setStateDescription(
+            blackAndWhiteButton,
+            getString(if (active) R.string.bw_mode_state_enabled else R.string.bw_mode_state_disabled),
+        )
+        updateCameraPreviewFilter()
+    }
+
+    private fun updateCameraPreviewFilter() {
+        if (!::previewView.isInitialized) return
+        val grayFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+        if (Build.VERSION.SDK_INT >= 31) {
+            previewView.setRenderEffect(
+                if (isBlackAndWhiteMode) {
+                    RenderEffect.createColorFilterEffect(grayFilter)
+                } else null
+            )
+        } else {
+            val grayPaint = if (isBlackAndWhiteMode) Paint().apply { colorFilter = grayFilter } else null
+            previewView.setLayerType(View.LAYER_TYPE_HARDWARE, grayPaint)
         }
-        if (::ocrButton.isInitialized) {
-            if (autoOcrEnabled) {
-                ocrButton.text = "✅ OCR"
-                ocrButton.setTextColor(0xFF93C5FD.toInt())
-                ocrButton.background = modernButtonDrawable(
-                    normalBg = 0xFF1E3A5F.toInt(),
-                    pressedBg = 0xFF2563EB.toInt(),
-                    strokeColor = 0xFF3B82F6.toInt(),
-                    radiusDp = 12,
-                )
-            } else {
-                ocrButton.text = "OCR"
-                ocrButton.setTextColor(0xFF94A3B8.toInt())
-                ocrButton.background = modernButtonDrawable(
-                    normalBg = 0xFF1E222A.toInt(),
-                    pressedBg = 0xFF334155.toInt(),
-                    strokeColor = 0xFF374151.toInt(),
-                    radiusDp = 12,
-                )
-            }
+    }
+
+    private fun applyBlackAndWhiteFilter(source: Bitmap): Bitmap {
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
         }
+        canvas.drawBitmap(source, 0f, 0f, paint)
+        return output
     }
 
     private fun updateDocumentModeButtonAppearance() {
         if (!::documentModeButton.isInitialized) return
         documentModeButton.isAllCaps = false
         documentModeButton.text = getString(R.string.document_mode_name)
-        documentModeButton.background = null
+        documentModeButton.background = borderlessRippleDrawable()
         documentModeButton.isSelected = isDocumentMode
         documentModeButton.contentDescription = getString(R.string.document_mode_toggle_description)
         androidx.core.view.ViewCompat.setStateDescription(
@@ -467,17 +509,19 @@ class ProductActivity : AppCompatActivity() {
         }
         ocrButton = Button(this).apply {
             tag = "docscan-ocr-toggle-button"
-            contentDescription = "OCR toggle"
-            textSize = 12f
-            maxLines = 1
+            text = "[Aa]"
+            textSize = 15f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
+            contentDescription = getString(R.string.ocr_toggle_description)
+            background = borderlessRippleDrawable()
+            setPadding(0, 0, 0, 0)
+            includeFontPadding = false
+            minWidth = 0
+            minHeight = 0
             setOnClickListener {
                 autoOcrEnabled = !autoOcrEnabled
                 uiHapticFeedback(this)
                 updateOcrButtonAppearance()
-                status.text = if (autoOcrEnabled) "Авто-OCR включен" else "Авто-OCR выключен"
                 if (autoOcrEnabled) {
                     val activeStorage = storage
                     if (activeStorage != null) {
@@ -491,38 +535,30 @@ class ProductActivity : AppCompatActivity() {
                     }
                 }
             }
-        }
-        updateOcrButtonAppearance()
-        ocrCheckBox = CheckBox(this).apply {
-            text = "OCR"
-            textSize = 14f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            isChecked = autoOcrEnabled
-            background = null
-            tag = "docscan-ocr-checkbox"
-            buttonTintList = ColorStateList.valueOf(Color.WHITE)
-            setOnCheckedChangeListener { _, isChecked ->
-                if (autoOcrEnabled != isChecked) {
-                    autoOcrEnabled = isChecked
-                    uiHapticFeedback(this)
-                    updateOcrButtonAppearance()
-                    status.text = if (autoOcrEnabled) "Авто-OCR включен" else "Авто-OCR выключен"
-                    if (autoOcrEnabled) {
-                        val activeStorage = storage
-                        if (activeStorage != null) {
-                            io.execute {
-                                val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
-                                if (projection != null) {
-                                    projection.pages.filter { it.recognizedText == null && it.artifactState == "COMMITTED" }
-                                        .forEach { scheduleOcr(activeStorage, it) }
-                                }
-                            }
-                        }
-                    }
-                }
+            setOnLongClickListener {
+                showOcrLangSelectionDialog()
+                true
             }
         }
+        updateOcrButtonAppearance()
+        blackAndWhiteButton = Button(this).apply {
+            tag = "docscan-bw-toggle-button"
+            text = "◪"
+            textSize = 20f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            contentDescription = getString(R.string.bw_mode_toggle_description)
+            background = borderlessRippleDrawable()
+            setPadding(0, 0, 0, 0)
+            includeFontPadding = false
+            minWidth = 0
+            minHeight = 0
+            setOnClickListener {
+                isBlackAndWhiteMode = !isBlackAndWhiteMode
+                uiHapticFeedback(this)
+                updateBlackAndWhiteButtonAppearance()
+            }
+        }
+        updateBlackAndWhiteButtonAppearance()
         importButton = Button(this).apply {
             text = "+"
             textSize = 22f
@@ -612,17 +648,17 @@ class ProductActivity : AppCompatActivity() {
             isEnabled = false
             setOnClickListener { resumeIncompleteExports() }
         }
-        deleteSelectedButton = Button(this).apply {
-            text = "🗑"
-            textSize = 20f
+        deleteSelectedButton = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_delete_trash)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
             contentDescription = getString(R.string.delete_selected_pages)
             tag = "docscan-delete-selected-button"
             visibility = View.GONE
-            setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(0xFF18181B.toInt())
-                setStroke(dp(1), 0x99FFFFFF.toInt())
+                setStroke(dp(1), Color.WHITE)
             }
             elevation = dp(8).toFloat()
             setOnClickListener {
@@ -651,7 +687,7 @@ class ProductActivity : AppCompatActivity() {
             textSize = 13f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             visibility = if (hasCameraPermission()) View.VISIBLE else View.GONE
-            background = null
+            background = borderlessRippleDrawable()
             setOnClickListener {
                 isDocumentMode = !isDocumentMode
                 updateDocumentModeButtonAppearance()
@@ -659,11 +695,6 @@ class ProductActivity : AppCompatActivity() {
                 liveDetectionCoordinator.invalidate()
                 if (::documentOverlayView.isInitialized) {
                     documentOverlayView.clear()
-                }
-                status.text = if (isDocumentMode) {
-                    getString(R.string.document_mode_status_enabled)
-                } else {
-                    getString(R.string.camera_ready)
                 }
             }
         }
@@ -681,11 +712,7 @@ class ProductActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             contentDescription = getString(R.string.workspace_menu)
             tag = "docscan-menu-button"
-            background = android.util.TypedValue().let { outValue ->
-                if (theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)) {
-                    androidx.core.content.ContextCompat.getDrawable(this@ProductActivity, outValue.resourceId)
-                } else null
-            }
+            background = borderlessRippleDrawable()
             setOnClickListener { showWorkspaceMenu() }
         }
         val titleView = TextView(this).apply {
@@ -711,11 +738,25 @@ class ProductActivity : AppCompatActivity() {
             documentOverlayView = DocumentOverlayView(this@ProductActivity)
             addView(documentOverlayView, android.widget.FrameLayout.LayoutParams(-1, -1))
             addView(top, android.widget.FrameLayout.LayoutParams(-1, dp(56), Gravity.TOP))
-            status.apply { setTextColor(Color.WHITE); textSize = 12f; maxLines = 3; setPadding(dp(16), dp(8), dp(16), dp(8)) }
+            status.apply {
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                maxLines = 3
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                visibility = View.GONE
+            }
             addView(status, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = dp(60) })
+            val leftButtonsContainer = LinearLayout(this@ProductActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(ocrButton, LinearLayout.LayoutParams(dp(40), dp(44)))
+                addView(blackAndWhiteButton, LinearLayout.LayoutParams(dp(40), dp(44)).apply {
+                    marginStart = dp(4)
+                })
+            }
             val shutterRow = android.widget.FrameLayout(this@ProductActivity).apply {
-                addView(ocrCheckBox, android.widget.FrameLayout.LayoutParams(-2, dp(48), Gravity.START or Gravity.CENTER_VERTICAL).apply {
-                    leftMargin = dp(8)
+                addView(leftButtonsContainer, android.widget.FrameLayout.LayoutParams(-2, dp(48), Gravity.START or Gravity.CENTER_VERTICAL).apply {
+                    leftMargin = dp(4)
                 })
                 addView(captureButton, android.widget.FrameLayout.LayoutParams(dp(72), dp(72), Gravity.CENTER))
                 addView(permissionActionButton, android.widget.FrameLayout.LayoutParams(dp(104), dp(56), Gravity.END or Gravity.CENTER_VERTICAL))
@@ -740,7 +781,7 @@ class ProductActivity : AppCompatActivity() {
                 }.onSuccess { projection ->
                     if (projection != null) runOnUiThread { renderPages(projection) }
                 }.onFailure { failure ->
-                    runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
+                    runOnUiThread { recordError(getString(R.string.capture_error, failure.message.orEmpty())) }
                 }
             } },
             onPageActive = { page -> if (canInteractWorkspace()) io.execute {
@@ -789,7 +830,7 @@ class ProductActivity : AppCompatActivity() {
                 if (direction == androidx.recyclerview.widget.ItemTouchHelper.DOWN) {
                     val pos = viewHolder.bindingAdapterPosition
                     if (pos != RecyclerView.NO_POSITION) {
-                        val page = homeThumbnailAdapter.getItem(pos).page
+                        val page = homeThumbnailAdapter.getItem(pos)?.page ?: return
                         deleteSinglePage(page.pageId)
                     }
                 }
@@ -825,12 +866,11 @@ class ProductActivity : AppCompatActivity() {
                                     activeStorage.reorderPages(projection, newPages)
                                     val refreshed = activeStorage.workspaceProjection()
                                     runOnUiThread {
-                                        status.text = getString(R.string.page_order_updated)
                                         uiHapticFeedback(root)
                                         renderPages(refreshed)
                                     }
                                 } catch (failure: Exception) {
-                                    runOnUiThread { status.text = getString(R.string.capture_error, failure.message.orEmpty()) }
+                                    runOnUiThread { recordError(getString(R.string.capture_error, failure.message.orEmpty())) }
                                 }
                             }
                         }
@@ -885,8 +925,8 @@ class ProductActivity : AppCompatActivity() {
                 addView(bottomSpacer, LinearLayout.LayoutParams(dp(44), dp(34)))
             }
             addView(importContainer, LinearLayout.LayoutParams(dp(44), ViewGroup.LayoutParams.MATCH_PARENT).apply {
-                marginStart = dp(8)
-                marginEnd = dp(4)
+                marginStart = dp(3)
+                marginEnd = dp(2)
             })
             addView(homeRail, LinearLayout.LayoutParams(0, -1, 1f))
         }
@@ -894,9 +934,7 @@ class ProductActivity : AppCompatActivity() {
             tag = "docscan-home-thumbnail-strip"
             addView(homeRailContent, android.widget.FrameLayout.LayoutParams(-1, -1))
             homeEmptyLabel = TextView(this@ProductActivity).apply {
-                text = getString(R.string.no_pages)
-                setTextColor(0xffb9c0cb.toInt())
-                gravity = Gravity.CENTER
+                visibility = View.GONE
             }
             addView(homeEmptyLabel, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
             addView(floatingDeleteButton, android.widget.FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_HORIZONTAL or Gravity.TOP).apply {
@@ -912,6 +950,46 @@ class ProductActivity : AppCompatActivity() {
         setContentView(root)
     }
 
+    private fun recordError(message: String) {
+        if (message.isNotBlank()) {
+            errorLog.add(message)
+        }
+        status.text = message
+    }
+
+    private fun showErrorsModal() {
+        val dialog = android.app.Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(0xFF1E222A.toInt())
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+        }
+        val listLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        synchronized(errorLog) {
+            for (errorText in errorLog) {
+                val item = TextView(this).apply {
+                    text = errorText
+                    textSize = 13f
+                    setTextColor(0xFFFCA5A5.toInt())
+                    setPadding(0, dp(4), 0, dp(4))
+                }
+                listLayout.addView(item)
+            }
+        }
+        scroll.addView(listLayout, ViewGroup.LayoutParams(-1, -2))
+        dialog.setContentView(scroll)
+        dialog.window?.setBackgroundDrawable(
+            GradientDrawable().apply {
+                setColor(0xFF1E222A.toInt())
+                cornerRadius = dp(16).toFloat()
+            }
+        )
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.show()
+    }
+
     @androidx.annotation.VisibleForTesting
     internal fun showWorkspaceMenu() {
         if (!canInteractWorkspace()) return
@@ -923,7 +1001,41 @@ class ProductActivity : AppCompatActivity() {
             addView(workspaceMenu, ViewGroup.LayoutParams(-1, -2))
         }
         val appVersion = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
-        val dialog = dialogHost.builder(this).setTitle("Версия $appVersion").setView(scroll)
+        val titleLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(24), dp(18), dp(24), dp(8))
+        }
+        val versionView = TextView(this).apply {
+            text = "Версия $appVersion"
+            textSize = 18f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            tag = "docscan-version-label"
+            setOnClickListener { onVersionLabelTapped() }
+        }
+        titleLayout.addView(versionView)
+
+        val errorBadge = TextView(this).apply {
+            tag = "docscan-error-badge"
+            text = errorLog.size.toString()
+            textSize = 11f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            val badgeSize = dp(20)
+            layoutParams = LinearLayout.LayoutParams(badgeSize, badgeSize).apply {
+                marginStart = dp(8)
+            }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFFEF4444.toInt())
+            }
+            setOnClickListener { showErrorsModal() }
+        }
+        titleLayout.addView(errorBadge)
+
+        val dialog = dialogHost.builder(this).setCustomTitle(titleLayout).setView(scroll)
             .setNegativeButton(android.R.string.cancel, null).create()
         workspaceMenuDialog = dialog
         dialog.setOnDismissListener {
@@ -947,7 +1059,7 @@ class ProductActivity : AppCompatActivity() {
 
     private fun refreshHomeRail(projection: app.docscan.core.store.WorkspaceProjection) {
         homeThumbnailAdapter.submitPages(projection.pages, projection.activePageId)
-        homeEmptyLabel.visibility = if (projection.pages.isEmpty()) View.VISIBLE else View.GONE
+        homeEmptyLabel.visibility = View.GONE
         val manager = homeRail.layoutManager as? LinearLayoutManager ?: return
         val activeIndex = projection.pages.indexOfFirst { it.pageId == projection.activePageId }
         if (activeIndex >= 0 && (activeIndex < manager.findFirstVisibleItemPosition() || activeIndex > manager.findLastVisibleItemPosition())) {
@@ -957,103 +1069,59 @@ class ProductActivity : AppCompatActivity() {
 
     private fun buildWorkspaceMenuContents() {
         workspaceMenu.removeAllViews()
-        workspaceMenu.setPadding(dp(16), dp(8), dp(16), dp(16))
+        workspaceMenu.setPadding(dp(16), dp(12), dp(16), dp(16))
 
         fun createCard(): LinearLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 setColor(0xFF1E222A.toInt())
-                cornerRadius = dp(14).toFloat()
+                cornerRadius = dp(16).toFloat()
                 setStroke(dp(1), 0xFF334155.toInt())
             }
-            setPadding(dp(14), dp(12), dp(14), dp(12))
+            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
 
         // 1. Storage Folder Card
         val folderCard = createCard().apply {
             val title = TextView(this@ProductActivity).apply {
-                text = "📁 Папка сохранения"
-                textSize = 14f
+                text = "📁  Папка сохранения"
+                textSize = 13f
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 setTextColor(0xFF93C5FD.toInt())
-                setPadding(0, 0, 0, dp(4))
-            }
-            val help = TextView(this@ProductActivity).apply {
-                text = getString(R.string.default_save_folder_help)
-                tag = "docscan-default-folder-help"
-                textSize = 12f
-                setTextColor(0xFFCBD5E1.toInt())
                 setPadding(0, 0, 0, dp(8))
             }
             destinationButton.apply {
-                background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 10)
+                background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 12)
                 setTextColor(Color.WHITE)
-            }
-            val defaultBtn = Button(this@ProductActivity).apply {
-                text = "Использовать /DocScan по умолчанию"
-                textSize = 12f
-                setTextColor(0xFF94A3B8.toInt())
-                background = modernButtonDrawable(normalBg = 0xFF0F172A.toInt(), pressedBg = 0xFF1E293B.toInt(), radiusDp = 10)
-                setOnClickListener {
-                    val activeStorage = storage ?: return@setOnClickListener
-                    if (!canInteractWorkspace()) return@setOnClickListener
-                    io.execute {
-                        try {
-                            activeStorage.useDefaultSaveFolder()
-                            runOnUiThread {
-                                status.text = "Папка сохранения: Download/DocScan"
-                                refreshDestinationGrantStatus(activeStorage)
-                            }
-                        } catch (failure: Exception) {
-                            runOnUiThread { status.text = failure.message ?: "Не удалось сменить папку" }
-                        }
-                    }
-                }
+                textSize = 14f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                minHeight = dp(46)
             }
             addView(title)
-            addView(help)
             addView(destinationButton, matchWrap())
-            addView(defaultBtn, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         }
-        workspaceMenu.addView(folderCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        workspaceMenu.addView(folderCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
 
         // 2. OCR Language Card
         val ocrCard = createCard().apply {
             val title = TextView(this@ProductActivity).apply {
-                text = "🌐 Язык распознавания (OCR)"
-                textSize = 14f
+                text = "🌐  Язык распознавания (OCR)"
+                textSize = 13f
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 setTextColor(0xFF93C5FD.toInt())
-                setPadding(0, 0, 0, dp(6))
+                setPadding(0, 0, 0, dp(8))
             }
             ocrLangButton.apply {
-                background = modernButtonDrawable(normalBg = 0xFF334155.toInt(), pressedBg = 0xFF475569.toInt(), radiusDp = 10)
+                background = modernButtonDrawable(normalBg = 0xFF334155.toInt(), pressedBg = 0xFF475569.toInt(), radiusDp = 12)
                 setTextColor(Color.WHITE)
+                textSize = 14f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                minHeight = dp(46)
             }
             addView(title)
             addView(ocrLangButton, matchWrap())
         }
-        workspaceMenu.addView(ocrCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-
-        workspaceEmptyLabel = TextView(this).apply {
-            text = getString(R.string.no_pages)
-            visibility = View.GONE
-        }
-        workspaceMenu.addView(workspaceEmptyLabel, matchWrap())
-        workspacePageAdapter = WorkspacePageAdapter(
-            loader = workspaceThumbnailLoader,
-            createRow = ::createWorkspacePageRow,
-            bindRowThumbnail = ::bindWorkspacePageThumbnail,
-        )
-        pagesContainer = RecyclerView(this).apply {
-            tag = "docscan-pages-container"
-            layoutManager = LinearLayoutManager(this@ProductActivity, RecyclerView.VERTICAL, false)
-            adapter = workspacePageAdapter
-            itemAnimator = null
-            isNestedScrollingEnabled = true
-            setItemViewCacheSize(2)
-        }
-        workspaceMenu.addView(pagesContainer, LinearLayout.LayoutParams(-1, dp(1)))
+        workspaceMenu.addView(ocrCard, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun updateOcrLangButtonText(target: Button? = if (::ocrLangButton.isInitialized) ocrLangButton else null) {
@@ -1097,12 +1165,13 @@ class ProductActivity : AppCompatActivity() {
 
     private fun lockWorkspace(message: String) {
         workspaceActionBlocked = true
-        status.text = message
+        recordError(message)
         listOf(
             captureButton,
             permissionActionButton,
             documentModeButton,
             ocrButton,
+            blackAndWhiteButton,
             importButton,
             destinationButton,
             recentDocumentsButton,
@@ -1200,7 +1269,7 @@ class ProductActivity : AppCompatActivity() {
             failure != null -> {
                 cancelAction?.invoke()
                 val message = getString(R.string.save_destination_check_failed, failure.message ?: failure.javaClass.simpleName)
-                status.text = message
+                recordError(message)
                 dialogHost.builder(this)
                     .setTitle(R.string.export_selected_pages)
                     .setMessage(message)
@@ -1214,7 +1283,7 @@ class ProductActivity : AppCompatActivity() {
     private fun handleDestinationResult(result: ActivityResult) {
         destinationPickerPending = false
         if (result.resultCode != RESULT_OK || result.data?.data == null) {
-            if (result.resultCode != RESULT_CANCELED) status.text = getString(R.string.destination_failed, "Picker returned no folder")
+            if (result.resultCode != RESULT_CANCELED) recordError(getString(R.string.destination_failed, "Picker returned no folder"))
             if (destinationSetupRunning.get() || pendingMainSave) finishDestinationSetup(cancelled = true)
             return
         }
@@ -1246,9 +1315,10 @@ class ProductActivity : AppCompatActivity() {
                 checkSaveDestination(activeStorage, uri)
                 if (!continueSave && providerSaveReady) {
                     runOnUiThread {
-                        if (!isFinishing && !isDestroyed) status.text = getString(
-                            if (oldGrantCleanupFailed) R.string.destination_saved_cleanup_failed else R.string.destination_saved,
-                        )
+                        if (!isFinishing && !isDestroyed) {
+                            if (oldGrantCleanupFailed) recordError(getString(R.string.destination_saved_cleanup_failed))
+                            else status.text = getString(R.string.destination_saved)
+                        }
                     }
                 }
             } catch (failure: Exception) {
@@ -1270,7 +1340,7 @@ class ProductActivity : AppCompatActivity() {
             val valid = runCatching { SafDestinationGrantManager(this).revalidate(grant, activeStorage) }.getOrDefault(false)
             providerSaveReady = valid && hasQualifiedProvider(activeStorage, grant.treeUri)
             runOnUiThread {
-                if (!valid) status.text = getString(R.string.destination_revoked)
+                if (!valid) recordError(getString(R.string.destination_revoked))
                 else if (!providerSaveReady && !destinationSetupRunning.get()) status.text = getString(R.string.save_destination_setup_hint)
             }
             updateSaveButtonState(activeStorage)
@@ -1301,12 +1371,11 @@ class ProductActivity : AppCompatActivity() {
                 activeStorage.setAllVisiblePagesSelected(selectAll)
                 val projection = activeStorage.workspaceProjection()
                 runOnUiThread {
-                    status.text = getString(if (selectAll) R.string.all_pages_selected else R.string.all_pages_deselected)
                     renderPages(projection)
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    status.text = getString(R.string.selection_update_failed, failure.message ?: failure.javaClass.simpleName)
+                    recordError(getString(R.string.selection_update_failed, failure.message ?: failure.javaClass.simpleName))
                     if (::selectionButton.isInitialized) selectionButton.isEnabled = true
                 }
             }
@@ -1704,7 +1773,7 @@ class ProductActivity : AppCompatActivity() {
             } catch (failure: Exception) {
                 val message = "Ошибка сохранения: ${failure.message ?: failure.javaClass.simpleName}"
                 runOnUiThread {
-                    status.text = message
+                    recordError(message)
                     Toast.makeText(this@ProductActivity, message, Toast.LENGTH_LONG).show()
                 }
             } finally {
@@ -1767,7 +1836,7 @@ class ProductActivity : AppCompatActivity() {
                 }
                 updateRecentDocuments(activeStorage)
             } catch (failure: Exception) {
-                runOnUiThread { status.text = getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName) }
+                runOnUiThread { recordError(getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName)) }
             } finally {
                 externalWorkflowRunning.set(false)
                 val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
@@ -1815,7 +1884,7 @@ class ProductActivity : AppCompatActivity() {
                 updateRecentDocuments(activeStorage)
                 runOnUiThread { status.text = getString(R.string.export_resume_summary, finished, packages.size) }
             } catch (failure: Exception) {
-                runOnUiThread { status.text = getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName) }
+                runOnUiThread { recordError(getString(R.string.export_failed, failure.message ?: failure.javaClass.simpleName)) }
             } finally {
                 externalWorkflowRunning.set(false)
                 val projection = runCatching { activeStorage.workspaceProjection() }.getOrNull()
@@ -1833,7 +1902,7 @@ class ProductActivity : AppCompatActivity() {
     private fun beginExternalWorkflow(): Boolean {
         if (workspaceActionBlocked) return false
         if (!externalWorkflowRunning.compareAndSet(false, true)) {
-            status.text = getString(R.string.workspace_operation_already_running)
+            recordError(getString(R.string.workspace_operation_already_running))
             return false
         }
         saveButton.isEnabled = false
@@ -1951,7 +2020,7 @@ class ProductActivity : AppCompatActivity() {
         val activeStorage = storage ?: return
         io.execute {
             val recent = runCatching { activeStorage.recentDocuments() }.getOrElse {
-                runOnUiThread { status.text = getString(R.string.recent_documents_failed, it.message ?: it.javaClass.simpleName) }
+                runOnUiThread { recordError(getString(R.string.recent_documents_failed, it.message ?: it.javaClass.simpleName)) }
                 return@execute
             }
             runOnUiThread {
@@ -1994,13 +2063,13 @@ class ProductActivity : AppCompatActivity() {
         val activeStorage = storage ?: return
         val pageCount = document.pageCount.toInt()
         if (pageCount !in 1..MAX_IMPORTED_PDF_PAGES) {
-            status.text = getString(R.string.recent_document_unavailable, "Unsupported saved PDF page count")
+            recordError(getString(R.string.recent_document_unavailable, "Unsupported saved PDF page count"))
             return
         }
         val session = try {
             SavedPdfEditSession(pageCount)
         } catch (failure: Exception) {
-            status.text = getString(R.string.recent_document_unavailable, failure.message ?: failure.javaClass.simpleName)
+            recordError(getString(R.string.recent_document_unavailable, failure.message ?: failure.javaClass.simpleName))
             return
         }
 
@@ -2301,9 +2370,10 @@ class ProductActivity : AppCompatActivity() {
                 val confirmed = savedAttempts.count { it.state == "SUCCEEDED" }
                 val unknown = savedAttempts.count { it.state == "UNKNOWN_OUTCOME" || it.state == "WRITING_EXTERNAL" }
                 runOnUiThread {
-                    status.text = if (exportId != null && (confirmed > 0 || unknown > 0)) {
+                    val err = if (exportId != null && (confirmed > 0 || unknown > 0)) {
                         getString(R.string.export_partial, confirmed, 1, unknown, detail)
                     } else getString(R.string.saved_pdf_edit_save_failed, detail)
+                    recordError(err)
                 }
             } finally {
                 candidate?.file?.delete()
@@ -2319,7 +2389,7 @@ class ProductActivity : AppCompatActivity() {
     internal fun showSavedPdfPreview(document: app.docscan.core.store.RecentDocumentSnapshot) {
         val activeStorage = storage ?: return
         if (document.pageCount !in 1L..MAX_IMPORTED_PDF_PAGES.toLong()) {
-            status.text = getString(R.string.recent_document_unavailable, "Unsupported saved PDF page count")
+            recordError(getString(R.string.recent_document_unavailable, "Unsupported saved PDF page count"))
             return
         }
         val image = ImageView(this).apply {
@@ -2414,7 +2484,7 @@ class ProductActivity : AppCompatActivity() {
     internal fun tryAgainWithSavedPdf(document: app.docscan.core.store.RecentDocumentSnapshot) {
         val activeStorage = storage ?: return
         if (!savedPdfImportRunning.compareAndSet(false, true)) {
-            status.text = getString(R.string.try_again_already_running)
+            recordError(getString(R.string.try_again_already_running))
             return
         }
         val importSessionId = app.docscan.core.model.ImportSessionId.new()
@@ -2450,7 +2520,7 @@ class ProductActivity : AppCompatActivity() {
                 activeStorage.workspaceProjection()
             } catch (failure: Exception) {
                 runOnUiThread {
-                    status.text = getString(R.string.try_again_failed, failure.message ?: failure.javaClass.simpleName)
+                    recordError(getString(R.string.try_again_failed, failure.message ?: failure.javaClass.simpleName))
                     savedPdfImportRunning.set(false)
                 }
                 return@execute
@@ -2462,10 +2532,12 @@ class ProductActivity : AppCompatActivity() {
             runOnUiThread {
                 try {
                     val failed = failureMessage
-                    status.text = when {
-                        failed == null -> getString(R.string.try_again_complete, importedPageIds.size)
-                        importedPageIds.isEmpty() -> getString(R.string.try_again_failed, failed)
-                        else -> getString(R.string.try_again_partial, importedPageIds.size, failed)
+                    if (failed != null) {
+                        val err = if (importedPageIds.isEmpty()) getString(R.string.try_again_failed, failed)
+                                  else getString(R.string.try_again_partial, importedPageIds.size, failed)
+                        recordError(err)
+                    } else {
+                        status.text = getString(R.string.try_again_complete, importedPageIds.size)
                     }
                     renderPages(projection)
                 } finally {
@@ -2485,7 +2557,7 @@ class ProductActivity : AppCompatActivity() {
                 },
             )
         } catch (failure: Exception) {
-            status.text = getString(R.string.recent_document_unavailable, failure.message ?: failure.javaClass.simpleName)
+            recordError(getString(R.string.recent_document_unavailable, failure.message ?: failure.javaClass.simpleName))
         }
     }
 
@@ -2625,13 +2697,14 @@ class ProductActivity : AppCompatActivity() {
                 imageAnalysis = analysis
                 cameraStartupPending = false
                 captureButton.isEnabled = true
+                updateCameraPreviewFilter()
                 if (status.text?.toString() == statusAtStart) {
                     status.text = getString(R.string.camera_ready)
                 }
             } catch (failure: Exception) {
                 cameraStartupPending = false
                 if (status.text?.toString() == statusAtStart) {
-                    status.text = getString(R.string.camera_error, failure.message ?: failure.javaClass.simpleName)
+                    recordError(getString(R.string.camera_error, failure.message ?: failure.javaClass.simpleName))
                 }
                 captureButton.isEnabled = false
             }
@@ -2645,6 +2718,7 @@ class ProductActivity : AppCompatActivity() {
         captureButton.isEnabled = false
         val pageBeingRetaken = retakeTarget
         val captureDocumentMode = isDocumentMode
+        val captureBlackAndWhiteMode = isBlackAndWhiteMode
         val shutterTimestampMs = SystemClock.elapsedRealtime()
         val generationAtShutter = liveDetectionCoordinator.currentGeneration()
         val liveSnapshot = if (captureDocumentMode) liveDetectionCoordinator.captureSnapshot() else null
@@ -2699,9 +2773,16 @@ class ProductActivity : AppCompatActivity() {
                                             try {
                                                 val rectified = DocumentCropProcessor.rectifyManual(oriented, cropQuad)
                                                 try {
-                                                    FileOutputStream(output).use { out ->
-                                                        check(rectified.compress(Bitmap.CompressFormat.JPEG, 95, out))
-                                                        out.fd.sync()
+                                                    val finalBitmap = if (captureBlackAndWhiteMode) {
+                                                        applyBlackAndWhiteFilter(rectified)
+                                                    } else rectified
+                                                    try {
+                                                        FileOutputStream(output).use { out ->
+                                                            check(finalBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out))
+                                                            out.fd.sync()
+                                                        }
+                                                    } finally {
+                                                        if (finalBitmap !== rectified) finalBitmap.recycle()
                                                     }
                                                 } finally { rectified.recycle() }
                                             } finally { oriented.recycle() }
@@ -2723,6 +2804,34 @@ class ProductActivity : AppCompatActivity() {
                             prepared = null
                             wasRectified = false
                             cropStatusRes = R.string.document_save_oom_kept_original
+                        }
+                        if (captureBlackAndWhiteMode && prepared == null) {
+                            try {
+                                val heavyScheduler = (application as DocScanApplication).heavyWorkScheduler
+                                val output = File(cacheDir, "bw-${System.nanoTime()}.jpg")
+                                val workingBytes = temp.length() * 4L
+                                heavyScheduler.withAdmission(workingBytes) {
+                                    val decoded = ProductImageDecoder.decodePrecisely(temp, maxPixels = 16L * 1024L * 1024L)
+                                    try {
+                                        val bwBitmap = applyBlackAndWhiteFilter(decoded)
+                                        try {
+                                            FileOutputStream(output).use { out ->
+                                                check(bwBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out))
+                                                out.fd.sync()
+                                            }
+                                            prepared = output
+                                        } finally {
+                                            if (bwBitmap !== decoded) bwBitmap.recycle()
+                                        }
+                                    } finally {
+                                        decoded.recycle()
+                                    }
+                                }
+                            } catch (failure: Exception) {
+                                android.util.Log.w("DocScan", "Black-and-white conversion failed; retaining original", failure)
+                                prepared?.delete()
+                                prepared = null
+                            }
                         }
                         val artifact = try {
                             prepared?.let { FileInputStream(it).use(activeStorage::stageCapturedJpeg) } ?: captureSource
@@ -2760,10 +2869,12 @@ class ProductActivity : AppCompatActivity() {
                         runOnUiThread {
                             captureButton.isEnabled = imageCapture != null
                             retakeTarget = null
-                            status.text = if (cropStatusRes != null) {
-                                getString(cropStatusRes)
+                            if (cropStatusRes == R.string.document_save_error_kept_original || cropStatusRes == R.string.document_save_oom_kept_original) {
+                                recordError(getString(cropStatusRes))
+                            } else if (cropStatusRes != null) {
+                                status.text = getString(cropStatusRes)
                             } else {
-                                getString(if (pageBeingRetaken == null) R.string.capture_saved else R.string.retake_saved)
+                                status.text = getString(if (pageBeingRetaken == null) R.string.capture_saved else R.string.retake_saved)
                             }
                             renderPages(projection)
                         }
@@ -2771,7 +2882,7 @@ class ProductActivity : AppCompatActivity() {
                         runOnUiThread {
                             captureButton.isEnabled = imageCapture != null
                             retakeTarget = null
-                            status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
+                            recordError(getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName))
                         }
                     } finally {
                         temp.delete()
@@ -2783,7 +2894,7 @@ class ProductActivity : AppCompatActivity() {
                 temp.delete()
                 captureButton.isEnabled = imageCapture != null
                 retakeTarget = null
-                status.text = getString(R.string.capture_error, exception.message ?: exception.imageCaptureError.toString())
+                recordError(getString(R.string.capture_error, exception.message ?: exception.imageCaptureError.toString()))
             }
         })
     }
@@ -2808,6 +2919,9 @@ class ProductActivity : AppCompatActivity() {
         selectionButton.contentDescription = getString(if (allSelected) R.string.deselect_all_pages else R.string.select_all_pages)
         if (::ocrButton.isInitialized) {
             ocrButton.isEnabled = !externalWorkflowRunning.get() && !workspaceActionBlocked
+        }
+        if (::blackAndWhiteButton.isInitialized) {
+            blackAndWhiteButton.isEnabled = !externalWorkflowRunning.get() && !workspaceActionBlocked
         }
         if (workspaceMenuDialog?.isShowing == true) {
             workspaceEmptyLabel?.visibility = if (pages.isEmpty()) View.VISIBLE else View.GONE
@@ -2912,7 +3026,7 @@ class ProductActivity : AppCompatActivity() {
                             val projection = activeStorage.workspaceProjection()
                             runOnUiThread { renderPages(projection) }
                         } catch (failure: Exception) {
-                            runOnUiThread { status.text = getString(R.string.capture_error, failure.message ?: "") }
+                            runOnUiThread { recordError(getString(R.string.capture_error, failure.message ?: "")) }
                         }
                     }
                 }
@@ -3029,7 +3143,7 @@ class ProductActivity : AppCompatActivity() {
                             } catch (failure: Exception) {
                                 runOnUiThread {
                                     isEnabled = true
-                                    status.text = getString(R.string.capture_error, failure.message ?: "")
+                                    recordError(getString(R.string.capture_error, failure.message ?: ""))
                                 }
                             }
                         }
@@ -3060,7 +3174,7 @@ class ProductActivity : AppCompatActivity() {
                                     }
                                 }
                             } catch (failure: Exception) {
-                                runOnUiThread { status.text = getString(R.string.capture_error, failure.message ?: "") }
+                                runOnUiThread { recordError(getString(R.string.capture_error, failure.message ?: "")) }
                             }
                         }
                     }
@@ -3129,7 +3243,7 @@ class ProductActivity : AppCompatActivity() {
                     renderPages(refreshed)
                 }
             } catch (failure: Exception) {
-                runOnUiThread { status.text = getString(R.string.capture_error, failure.message ?: "") }
+                runOnUiThread { recordError(getString(R.string.capture_error, failure.message ?: "")) }
             }
         }
     }
@@ -3157,7 +3271,7 @@ class ProductActivity : AppCompatActivity() {
                     renderPages(refreshed)
                 }
             } catch (failure: Exception) {
-                runOnUiThread { status.text = getString(R.string.capture_error, failure.message ?: "") }
+                runOnUiThread { recordError(getString(R.string.capture_error, failure.message ?: "")) }
             }
         }
     }
@@ -3173,7 +3287,7 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = getString(R.string.page_deleted)
                     renderPages(projection)
-                    Snackbar.make(dialogHost.foregroundView ?: root, R.string.page_deleted, 8_000)
+                    Snackbar.make(dialogHost.foregroundView ?: root, R.string.page_deleted, 2_000)
                         .setAction(R.string.undo_delete) { undoWorkspaceDelete(receipt.pageId) }
                         .show()
                 }
@@ -3277,7 +3391,7 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = getString(R.string.pages_deleted, 1)
                     renderPages(refreshed)
-                    Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, 1), 8_000)
+                    Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, 1), 2_000)
                         .setAction(R.string.undo_delete) { undoWorkspaceDeleteBatch(receipt.batchId) }
                         .show()
                 }
@@ -3321,7 +3435,7 @@ class ProductActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = getString(R.string.pages_deleted, receipt.pageIds.size)
                     renderPages(refreshed)
-                    Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, receipt.pageIds.size), 8_000)
+                    Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, receipt.pageIds.size), 2_000)
                         .setAction(R.string.undo_delete) { undoWorkspaceDeleteBatch(receipt.batchId) }
                         .show()
                 }
@@ -3364,7 +3478,7 @@ class ProductActivity : AppCompatActivity() {
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    status.text = getString(R.string.delete_undo_failed, failure.message ?: "")
+                    recordError(getString(R.string.delete_undo_failed, failure.message ?: ""))
                 }
             }
         }
@@ -3386,7 +3500,7 @@ class ProductActivity : AppCompatActivity() {
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
-                    status.text = getString(R.string.delete_undo_failed, failure.message ?: "")
+                    recordError(getString(R.string.delete_undo_failed, failure.message ?: ""))
                 }
             }
         }
@@ -3453,31 +3567,87 @@ class ProductActivity : AppCompatActivity() {
         val selection = CropSelectionView(this).apply {
             contentDescription = getString(R.string.manual_crop_view_description)
         }
-        val message = TextView(this).apply {
-            text = getString(R.string.manual_crop_preparing)
-            setTextColor(0xFFE2E8F0.toInt())
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(8))
-        }
-        val cropContent = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFF16191E.toInt())
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            addView(message, matchWrap())
-            addView(selection, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(dp(120), minOf(dp(440), root.height - dp(240)))))
-        }
         var sourceBitmap: android.graphics.Bitmap? = null
         var cropApplying = false
         var cropDismissed = false
         val cropViewerAtStart = pageViewer
         val cropGenerationAtStart = pageViewerGeneration
+
+        val cropRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(0xFF111316.toInt())
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), 0xFF27272A.toInt())
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(16))
+        }
+
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+
+        val backBtn = Button(this).apply {
+            text = "⏎"
+            textSize = 18f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(radiusDp = 18)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+        }
+
+        val saveTopBtn = Button(this).apply {
+            text = "Сохранить"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 8)
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            isEnabled = false
+        }
+
+        topBar.addView(backBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+        topBar.addView(android.widget.Space(this), LinearLayout.LayoutParams(0, dp(36), 1f))
+        topBar.addView(saveTopBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)))
+        cropRoot.addView(topBar, matchWrap())
+
+        val cropHeight = maxOf(dp(220), minOf(dp(440), root.height - dp(180)))
+        cropRoot.addView(selection, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cropHeight))
+
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(14), 0, 0)
+        }
+
+        val cancelBtn = Button(this).apply {
+            text = "Отмена"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0x22FFFFFF.toInt(), pressedBg = 0x44FFFFFF.toInt(), strokeColor = 0x44FFFFFF.toInt(), radiusDp = 10)
+        }
+
+        val applyBtn = Button(this).apply {
+            text = "Применить"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 10)
+            isEnabled = false
+        }
+
+        bottomBar.addView(cancelBtn, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(8) })
+        bottomBar.addView(applyBtn, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(8) })
+        cropRoot.addView(bottomBar, matchWrap())
+
         val cropDialog = dialogHost.builder(this)
-            .setTitle(R.string.manual_crop_title)
-            .setView(cropContent)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.manual_crop_apply, null)
+            .setView(cropRoot)
             .create()
+        cropDialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         cropDialog.setCanceledOnTouchOutside(false)
         cropDialog.setOnDismissListener {
             cropDismissed = true
@@ -3487,14 +3657,14 @@ class ProductActivity : AppCompatActivity() {
                 sourceBitmap = null
             }
         }
-        cropDialog.show()
-        val applyButton = cropDialog.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false }
-        applyButton.setOnClickListener {
-            if (!applyButton.isEnabled) return@setOnClickListener
-            val source = sourceBitmap ?: return@setOnClickListener
+
+        fun executeCrop() {
+            if (cropApplying) return
+            val source = sourceBitmap ?: return
             val quad = selection.quadrilateral
             cropApplying = true
-            applyButton.isEnabled = false
+            saveTopBtn.isEnabled = false
+            applyBtn.isEnabled = false
             status.text = getString(R.string.edit_applying)
             io.execute {
                 var cropped: android.graphics.Bitmap? = null
@@ -3532,21 +3702,56 @@ class ProductActivity : AppCompatActivity() {
                         if (cropDismissed) {
                             sourceBitmap?.recycle()
                             sourceBitmap = null
-                        } else applyButton.isEnabled = true
+                        } else {
+                            saveTopBtn.isEnabled = true
+                            applyBtn.isEnabled = true
+                        }
                         status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                     }
                 }
             }
         }
+
+        backBtn.setOnClickListener { cropDialog.dismiss() }
+        cancelBtn.setOnClickListener { cropDialog.dismiss() }
+        saveTopBtn.setOnClickListener { executeCrop() }
+        applyBtn.setOnClickListener { executeCrop() }
+
+        cropDialog.show()
+
         io.execute {
             try {
                 val decoded = decodeEditableImage(imageFile) ?: throw IllegalArgumentException("Cannot decode image")
                 sourceBitmap = decoded
+
+                // Автоматическая детекция границ документа по алгоритмам «зелёных линий» (DocumentCropProcessor)
+                val detectedQuad = try {
+                    val detectionThumb = try {
+                        ProductImageDecoder.decodeThumbnailForDetection(imageFile, maxSide = 720)
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (detectionThumb != null) {
+                        try {
+                            DocumentCropProcessor.detectCorners(detectionThumb)?.toNormalized()
+                        } finally {
+                            detectionThumb.recycle()
+                        }
+                    } else {
+                        DocumentCropProcessor.detectCorners(decoded)?.toNormalized()
+                    }
+                } catch (_: Throwable) {
+                    null
+                }
+
                 runOnUiThread {
                     if (cropDialog.isShowing) {
                         selection.bitmap = decoded
-                        message.text = getString(R.string.manual_crop_instruction)
-                        applyButton.isEnabled = true
+                        if (detectedQuad != null) {
+                            selection.quadrilateral = detectedQuad
+                        }
+                        saveTopBtn.isEnabled = true
+                        applyBtn.isEnabled = true
                     } else {
                         decoded.recycle()
                     }
@@ -3554,7 +3759,7 @@ class ProductActivity : AppCompatActivity() {
             } catch (failure: Exception) {
                 runOnUiThread {
                     if (cropDialog.isShowing) {
-                        message.text = getString(R.string.edit_preview_failed, failure.message ?: "")
+                        recordError(getString(R.string.edit_preview_failed, failure.message ?: ""))
                     }
                 }
             }
@@ -3567,11 +3772,98 @@ class ProductActivity : AppCompatActivity() {
         pageViewerPages = pages.toList()
         pageViewerIndex = index
 
+        val dialogRoot = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF111316.toInt())
+        }
+
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFF111316.toInt())
             setPadding(dp(12), dp(10), dp(12), dp(10))
             minimumHeight = dp(420)
+        }
+
+        // Expanded preview overlay for double-tap zoom
+        val expandedPreviewOverlay = android.widget.FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0xFF0B0D10.toInt())
+        }
+        val expandedImage = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+        }
+        val closeExpandedBtn = Button(this).apply {
+            text = "✕"
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(radiusDp = 18)
+        }
+        expandedPreviewOverlay.addView(
+            expandedImage,
+            android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            ).apply {
+                setMargins(dp(8), dp(48), dp(8), dp(8))
+            },
+        )
+        expandedPreviewOverlay.addView(
+            closeExpandedBtn,
+            android.widget.FrameLayout.LayoutParams(dp(36), dp(36), Gravity.START or Gravity.TOP).apply {
+                marginStart = dp(12)
+                topMargin = dp(12)
+            },
+        )
+
+        fun collapsePreview() {
+            if (expandedPreviewOverlay.visibility != View.VISIBLE) return
+            uiHapticFeedback(closeExpandedBtn)
+            expandedPreviewOverlay.animate()
+                .alpha(0f)
+                .scaleX(0.85f)
+                .scaleY(0.85f)
+                .setDuration(180)
+                .setInterpolator(android.view.animation.AccelerateInterpolator())
+                .withEndAction {
+                    expandedPreviewOverlay.visibility = View.GONE
+                    expandedImage.setImageDrawable(null)
+                }
+                .start()
+        }
+
+        fun expandPreview() {
+            val drawable = pageViewerImage?.drawable ?: return
+            expandedImage.setImageDrawable(drawable)
+            uiHapticFeedback(pageViewerImage ?: dialogRoot)
+            expandedPreviewOverlay.visibility = View.VISIBLE
+            expandedPreviewOverlay.alpha = 0f
+            expandedPreviewOverlay.scaleX = 0.85f
+            expandedPreviewOverlay.scaleY = 0.85f
+            expandedPreviewOverlay.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(220)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .setListener(null)
+                .start()
+        }
+
+        closeExpandedBtn.setOnClickListener { collapsePreview() }
+        expandedPreviewOverlay.setOnClickListener { collapsePreview() }
+
+        val collapseGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                collapsePreview()
+                return true
+            }
+        })
+        expandedImage.setOnTouchListener { _, event ->
+            collapseGestureDetector.onTouchEvent(event)
+            true
         }
 
         // Header: Back/Close button + Title "Page X of Y"
@@ -3613,6 +3905,13 @@ class ProductActivity : AppCompatActivity() {
             addView(pageViewerStrip, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
 
+        val viewerGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                expandPreview()
+                return true
+            }
+        })
         pageViewerImage = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
@@ -3625,6 +3924,7 @@ class ProductActivity : AppCompatActivity() {
             var touchDownX = 0f
             var touchDownY = 0f
             setOnTouchListener { _, event ->
+                viewerGestureDetector.onTouchEvent(event)
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         touchDownX = event.x
@@ -3700,13 +4000,12 @@ class ProductActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(dp(6), 0, 0, 0)
         }
-        val retakeBtn = Button(this).apply {
-            text = "ReClick"
-            textSize = 11f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFFCBD5E1.toInt())
+        val retakeBtn = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_reclick_aperture)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            imageTintList = ColorStateList.valueOf(0xFFF1F5F9.toInt())
             background = modernButtonDrawable(radiusDp = 10)
-            setPadding(dp(4), 0, dp(4), 0)
+            contentDescription = getString(R.string.retake_instruction, pageViewerIndex + 1)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 retakeTarget = page
@@ -3715,12 +4014,16 @@ class ProductActivity : AppCompatActivity() {
             }
         }
         val ocrBtn = Button(this).apply {
-            text = "ReOCR"
-            textSize = 11f
+            text = "[Aa]"
+            textSize = 13f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFFCBD5E1.toInt())
+            setTextColor(0xFFF1F5F9.toInt())
             background = modernButtonDrawable(radiusDp = 10)
-            setPadding(dp(4), 0, dp(4), 0)
+            setPadding(0, 0, 0, 0)
+            includeFontPadding = false
+            minWidth = 0
+            minHeight = 0
+            contentDescription = "ReOCR"
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 val activeStorage = storage ?: return@setOnClickListener
@@ -3752,18 +4055,18 @@ class ProductActivity : AppCompatActivity() {
         val deleteBtn = ImageButton(this).apply {
             setImageResource(R.drawable.ic_delete_trash)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            imageTintList = ColorStateList.valueOf(0xFFFCA5A5.toInt())
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
             contentDescription = getString(R.string.delete_page)
-            background = modernButtonDrawable(normalBg = 0xFF2A1517.toInt(), strokeColor = 0xFF7F1D1D.toInt(), radiusDp = 10)
+            background = modernButtonDrawable(strokeColor = Color.TRANSPARENT, radiusDp = 10)
             setOnClickListener {
                 val page = pageViewerPages.getOrNull(pageViewerIndex) ?: return@setOnClickListener
                 pageViewer?.dismiss()
                 deleteWorkspacePage(page)
             }
         }
-        viewerActions.addView(retakeBtn, LinearLayout.LayoutParams(dp(58), dp(38)).apply { bottomMargin = dp(8) })
-        viewerActions.addView(ocrBtn, LinearLayout.LayoutParams(dp(58), dp(38)).apply { bottomMargin = dp(8) })
-        viewerActions.addView(deleteBtn, LinearLayout.LayoutParams(dp(58), dp(38)))
+        viewerActions.addView(retakeBtn, LinearLayout.LayoutParams(dp(40), dp(40)).apply { bottomMargin = dp(8) })
+        viewerActions.addView(ocrBtn, LinearLayout.LayoutParams(dp(40), dp(40)).apply { bottomMargin = dp(8) })
+        viewerActions.addView(deleteBtn, LinearLayout.LayoutParams(dp(40), dp(40)))
         previewRow.addView(viewerActions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         content.addView(previewRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -3830,14 +4133,32 @@ class ProductActivity : AppCompatActivity() {
         navigation.addView(next, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginStart = dp(8) })
 
         content.addView(viewerFooter(requireNotNull(pageViewerStripScroll), navigation), LinearLayout.LayoutParams(-1, dp(154)))
+        dialogRoot.addView(content, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
+        dialogRoot.addView(expandedPreviewOverlay, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
 
         pageViewer = dialogHost.builder(this)
-            .setView(content)
+            .setView(dialogRoot)
             .create()
             .also { dialog ->
+                dialog.setOnKeyListener { _, keyCode, event ->
+                    if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+                        if (expandedPreviewOverlay.visibility == View.VISIBLE) {
+                            collapsePreview()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    false
+                }
                 dialog.setOnDismissListener {
                     pageViewerGeneration += 1
                     (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
+                    expandedImage.setImageDrawable(null)
                     pageViewerStrip?.let(::unbindWorkspaceThumbnails)
                     pageViewerImage = null
                     pageViewerTitle = null
@@ -3932,6 +4253,7 @@ class ProductActivity : AppCompatActivity() {
                 minimumWidth = dp(56)
                 minimumHeight = dp(48)
                 tag = VIEWER_PAGE_SELECTION_TAG_PREFIX + page.pageId.value
+                buttonTintList = ColorStateList.valueOf(Color.WHITE)
                 isChecked = page.selected
                 setOnCheckedChangeListener { _, checked ->
                     io.execute {
@@ -3945,7 +4267,7 @@ class ProductActivity : AppCompatActivity() {
                                 }
                             }
                         } catch (failure: Exception) {
-                            runOnUiThread { status.text = getString(R.string.capture_error, failure.message ?: "") }
+                            runOnUiThread { recordError(getString(R.string.capture_error, failure.message ?: "")) }
                         }
                     }
                 }
@@ -4028,7 +4350,6 @@ class ProductActivity : AppCompatActivity() {
         (pageViewerImage?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
         pageViewerImage?.setImageDrawable(null)
         pageViewerImage?.contentDescription = getString(R.string.page_image_description, index + 1)
-        status.text = getString(R.string.active_page, index + 1)
         io.execute {
             try {
                 // Active is navigation state and is durable even if image decoding later fails.
@@ -4071,25 +4392,6 @@ class ProductActivity : AppCompatActivity() {
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = getString(R.string.edit_preview_description)
         }
-        val hint = TextView(this).apply {
-            text = getString(R.string.edit_adjustment_summary, 0, 100, 0, 0)
-            gravity = Gravity.CENTER
-        }
-        val rotateButton = Button(this).apply {
-            text = getString(R.string.edit_rotate_clockwise)
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
-        }
-        val cropButton = Button(this).apply {
-            text = getString(R.string.edit_crop_four_points)
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
-        }
-        val undoButton = Button(this).apply {
-            text = getString(R.string.edit_undo)
-            minimumWidth = dp(48)
-            minimumHeight = dp(48)
-        }
         val brightness = android.widget.SeekBar(this).apply {
             max = 200
             progress = 100
@@ -4111,30 +4413,105 @@ class ProductActivity : AppCompatActivity() {
             minimumWidth = dp(48)
             minimumHeight = dp(48)
         }
-        fun adjustmentControl(title: Int, bar: android.widget.SeekBar) = LinearLayout(this).apply {
+        fun adjustmentControl(title: String, bar: android.widget.SeekBar) = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(TextView(this@ProductActivity).apply { text = getString(title) }, matchWrap())
+            setPadding(0, dp(4), 0, dp(4))
+            addView(TextView(this@ProductActivity).apply {
+                text = title
+                textSize = 13f
+                setTextColor(0xFFCBD5E1.toInt())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }, matchWrap())
             addView(
                 bar,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)),
             )
         }
+
+        val adjustRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(0xFF111316.toInt())
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), 0xFF27272A.toInt())
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(16))
+        }
+
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+
+        val backBtn = Button(this).apply {
+            text = "⏎"
+            textSize = 18f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(radiusDp = 18)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+        }
+
+        val saveTopBtn = Button(this).apply {
+            text = "Сохранить"
+            textSize = 13f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 8)
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            isEnabled = false
+        }
+
+        topBar.addView(backBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+        topBar.addView(android.widget.Space(this), LinearLayout.LayoutParams(0, dp(36), 1f))
+        topBar.addView(saveTopBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)))
+        adjustRoot.addView(topBar, matchWrap())
+
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            addView(hint, matchWrap())
-            addView(rotateButton, matchWrap())
-            addView(cropButton, matchWrap())
-            addView(undoButton, matchWrap())
-            addView(adjustmentControl(R.string.edit_brightness, brightness), matchWrap())
-            addView(adjustmentControl(R.string.edit_contrast, contrast), matchWrap())
-            addView(adjustmentControl(R.string.edit_sharpness, sharpness), matchWrap())
-            addView(image, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)))
+            addView(image, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(240)).apply {
+                bottomMargin = dp(8)
+            })
+            addView(adjustmentControl("Яркость", brightness), matchWrap())
+            addView(adjustmentControl("Контраст", contrast), matchWrap())
+            addView(adjustmentControl("Резкость", sharpness), matchWrap())
         }
         val editorScroll = ScrollView(this).apply {
             isFillViewport = true
             addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        val editorHeight = maxOf(dp(260), minOf(dp(440), root.height - dp(180)))
+        adjustRoot.addView(editorScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, editorHeight))
+
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(14), 0, 0)
+        }
+
+        val cancelBtn = Button(this).apply {
+            text = "Отмена"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0x22FFFFFF.toInt(), pressedBg = 0x44FFFFFF.toInt(), strokeColor = 0x44FFFFFF.toInt(), radiusDp = 10)
+        }
+
+        val applyBtn = Button(this).apply {
+            text = "Применить"
+            textSize = 14f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = modernButtonDrawable(normalBg = 0xFF2563EB.toInt(), pressedBg = 0xFF1D4ED8.toInt(), radiusDp = 10)
+            isEnabled = false
+        }
+
+        bottomBar.addView(cancelBtn, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(8) })
+        bottomBar.addView(applyBtn, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(8) })
+        adjustRoot.addView(bottomBar, matchWrap())
+
         val draft = PageImageEditDraft()
         var previewBitmap: android.graphics.Bitmap? = null
         var sourceBitmap: android.graphics.Bitmap? = null
@@ -4143,12 +4520,11 @@ class ProductActivity : AppCompatActivity() {
         var dismissed = false
         var busy = false
         var syncingControls = false
+
         val dialog = dialogHost.builder(this)
-            .setTitle(R.string.edit_image_title)
-            .setView(editorScroll)
-            .setNegativeButton(R.string.edit_cancel, null)
-            .setPositiveButton(R.string.edit_save, null)
+            .setView(adjustRoot)
             .create()
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         dialog.setOnDismissListener {
             dismissed = true
             image.setImageDrawable(null)
@@ -4160,31 +4536,26 @@ class ProductActivity : AppCompatActivity() {
             }
         }
         dialog.setCanceledOnTouchOutside(false)
+
         fun updateControls() {
             syncingControls = true
             brightness.progress = draft.state.brightness + 100
             contrast.progress = draft.state.contrastPercent
             sharpness.progress = draft.state.sharpnessPercent
             syncingControls = false
-            hint.text = getString(
-                R.string.edit_adjustment_summary,
-                draft.state.clockwiseTurns * 90,
-                draft.state.brightness,
-                draft.state.contrastPercent,
-                draft.state.sharpnessPercent,
-            )
-            if (dialog.isShowing) {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = sourceBitmap != null && draft.isDirty && !busy
-                dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.isEnabled = !busy
-            }
+
+            val canSave = sourceBitmap != null && draft.isDirty && !busy
+            saveTopBtn.isEnabled = canSave
+            applyBtn.isEnabled = canSave
+            cancelBtn.isEnabled = !busy
+            backBtn.isEnabled = !busy
+
             val ready = sourceBitmap != null
-            rotateButton.isEnabled = ready && !busy
-            cropButton.isEnabled = ready && !busy
-            undoButton.isEnabled = ready && draft.canUndo && !busy
             brightness.isEnabled = ready && !busy
             contrast.isEnabled = ready && !busy
             sharpness.isEnabled = ready && !busy
         }
+
         fun releaseIfClosed() {
             if (!dismissed || pendingWork != 0) return
             sourceBitmap?.recycle()
@@ -4192,6 +4563,7 @@ class ProductActivity : AppCompatActivity() {
             previewBitmap?.recycle()
             previewBitmap = null
         }
+
         fun requestPreview(state: PageImageEditState) {
             val source = sourceBitmap ?: return
             val ticket = ++previewGeneration
@@ -4216,13 +4588,14 @@ class ProductActivity : AppCompatActivity() {
                             image.setImageBitmap(it)
                         }
                         failure?.let {
-                            status.text = getString(R.string.edit_preview_failed, it.message ?: it.javaClass.simpleName)
+                            recordError(getString(R.string.edit_preview_failed, it.message ?: it.javaClass.simpleName))
                         }
                     } else candidate?.recycle()
                     releaseIfClosed()
                 }
             }
         }
+
         fun saveDraft() {
             if (!draft.isDirty || busy) return
             if (sourceBitmap == null) return
@@ -4259,79 +4632,14 @@ class ProductActivity : AppCompatActivity() {
                         renderPages(savedProjection)
                     } else {
                         busy = false
-                        status.text = getString(R.string.capture_error, failure?.message ?: "Image edit failed")
+                        recordError(getString(R.string.capture_error, failure?.message ?: "Image edit failed"))
                         updateControls()
                     }
                     releaseIfClosed()
                 }
             }
         }
-        fun showManualCropSelector() {
-            val source = sourceBitmap ?: return
-            val selection = CropSelectionView(this).apply {
-                contentDescription = getString(R.string.manual_crop_view_description)
-            }
-            val message = TextView(this).apply { text = getString(R.string.manual_crop_preparing) }
-            val cropContent = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(8), dp(12), dp(8))
-                addView(message, matchWrap())
-                addView(selection, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(dp(96), minOf(dp(420), root.height - dp(400)))))
-            }
-            var cropPreview: android.graphics.Bitmap? = null
-            val cropDialog = dialogHost.builder(this)
-                .setTitle(R.string.manual_crop_title)
-                .setView(cropContent)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.manual_crop_apply, null)
-                .create()
-            cropDialog.setCanceledOnTouchOutside(false)
-            cropDialog.setOnDismissListener {
-                selection.bitmap = null
-                cropPreview?.recycle()
-                cropPreview = null
-            }
-            cropDialog.show()
-            val applyButton = cropDialog.getButton(AlertDialog.BUTTON_POSITIVE).apply { isEnabled = false }
-            applyButton.setOnClickListener {
-                if (!applyButton.isEnabled) return@setOnClickListener
-                draft.apply(draft.state.copy(crop = selection.quadrilateral))
-                updateControls()
-                requestPreview(draft.state)
-                cropDialog.dismiss()
-            }
-            pendingWork++
-            val uncroppedState = draft.state.copy(crop = null)
-            io.execute {
-                var rendered: android.graphics.Bitmap? = null
-                var failure: Exception? = null
-                try {
-                    rendered = (application as DocScanApplication).heavyWorkScheduler.withAdmission(
-                        EDIT_WORKING_SET_BYTES,
-                    ) { PageImageAdjustmentProcessor.render(source, uncroppedState) }
-                } catch (problem: Exception) {
-                    failure = problem
-                }
-                runOnUiThread {
-                    pendingWork--
-                    if (cropDialog.isShowing) {
-                        val readyPreview = rendered
-                        if (readyPreview != null) {
-                            cropPreview = readyPreview
-                            selection.bitmap = readyPreview
-                            message.text = getString(R.string.manual_crop_instruction)
-                            applyButton.isEnabled = true
-                        } else {
-                            message.text = getString(
-                                R.string.edit_preview_failed,
-                                failure?.message ?: "Image crop preview failed",
-                            )
-                        }
-                    } else rendered?.recycle()
-                    releaseIfClosed()
-                }
-            }
-        }
+
         fun promptDirtyExit() {
             dialogHost.builder(this)
                 .setTitle(R.string.edit_unsaved_title)
@@ -4343,6 +4651,15 @@ class ProductActivity : AppCompatActivity() {
                 .apply { setCanceledOnTouchOutside(false) }
                 .show()
         }
+
+        fun onCancelClicked() {
+            if (!draft.isDirty && !busy) {
+                dialog.dismiss()
+            } else if (draft.isDirty && !busy) {
+                promptDirtyExit()
+            }
+        }
+
         dialog.setOnKeyListener { _, keyCode, event ->
             if (keyCode != android.view.KeyEvent.KEYCODE_BACK
                 || event.action != android.view.KeyEvent.ACTION_UP
@@ -4351,28 +4668,15 @@ class ProductActivity : AppCompatActivity() {
             promptDirtyExit()
             true
         }
+
+        backBtn.setOnClickListener { onCancelClicked() }
+        cancelBtn.setOnClickListener { onCancelClicked() }
+        saveTopBtn.setOnClickListener { saveDraft() }
+        applyBtn.setOnClickListener { saveDraft() }
+
         dialog.show()
         updateControls()
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
-            if (!draft.isDirty && !busy) {
-                dialog.dismiss()
-            } else if (draft.isDirty) promptDirtyExit()
-        }
-        rotateButton.setOnClickListener {
-            val current = draft.state
-            val nextTurns = (current.clockwiseTurns + 1) % 4
-            val deltaTurns = (nextTurns - current.clockwiseTurns + 4) % 4
-            val crop = current.crop?.rotatedClockwise(deltaTurns)
-            draft.apply(current.copy(clockwiseTurns = nextTurns, crop = crop))
-            updateControls()
-            requestPreview(draft.state)
-        }
-        cropButton.setOnClickListener { showManualCropSelector() }
-        undoButton.setOnClickListener {
-            if (draft.canUndo) draft.undo()
-            updateControls()
-            requestPreview(draft.state)
-        }
+
         fun bindSlider(bar: android.widget.SeekBar, value: (Int) -> PageImageEditState) {
             bar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
@@ -4392,7 +4696,7 @@ class ProductActivity : AppCompatActivity() {
         bindSlider(brightness) { draft.state.copy(brightness = it - 100) }
         bindSlider(contrast) { draft.state.copy(contrastPercent = it) }
         bindSlider(sharpness) { draft.state.copy(sharpnessPercent = it) }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { saveDraft() }
+
         val maxImagePixels = 3L * 1024L * 1024L
         pendingWork++
         io.execute {
@@ -4414,9 +4718,9 @@ class ProductActivity : AppCompatActivity() {
             } catch (failure: Exception) {
                 runOnUiThread {
                     pendingWork--
-                    if (dialog.isShowing) status.text = getString(
+                    if (dialog.isShowing) recordError(getString(
                         R.string.edit_preview_failed, failure.message ?: failure.javaClass.simpleName,
-                    )
+                    ))
                     updateControls()
                     releaseIfClosed()
                 }
@@ -4498,10 +4802,10 @@ class ProductActivity : AppCompatActivity() {
                         } else {
                             getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                         }
-                        status.text = errorMsg
+                        recordError(errorMsg)
                     }
                 } catch (_: OutOfMemoryError) {
-                    runOnUiThread { status.text = getString(R.string.document_crop_oom_page_unchanged) }
+                    runOnUiThread { recordError(getString(R.string.document_crop_oom_page_unchanged)) }
                 }
             }
         }
@@ -4615,7 +4919,7 @@ class ProductActivity : AppCompatActivity() {
                 throw cancelled
             } catch (failure: Exception) {
                 runOnUiThread {
-                    if (!isFinishing) status.text = getString(R.string.ocr_failed, failure.message ?: "")
+                    if (!isFinishing) recordError(getString(R.string.ocr_failed, failure.message ?: ""))
                 }
                 throw failure
             }
@@ -4688,16 +4992,21 @@ class ProductActivity : AppCompatActivity() {
                     .forEach { scheduleOcr(activeStorage, it) }
             }
             runOnUiThread {
-                status.text = when {
-                    failures.isEmpty() -> getString(R.string.import_documents_complete, importedPageIds.size, uris.size)
-                    importedPageIds.isEmpty() -> getString(R.string.import_documents_failed, failures.size, failures.first())
-                    else -> getString(
-                        R.string.import_documents_partial,
-                        importedPageIds.size,
-                        uris.size,
-                        failures.size,
-                        failures.first(),
-                    )
+                if (failures.isNotEmpty()) {
+                    val err = if (importedPageIds.isEmpty()) {
+                        getString(R.string.import_documents_failed, failures.size, failures.first())
+                    } else {
+                        getString(
+                            R.string.import_documents_partial,
+                            importedPageIds.size,
+                            uris.size,
+                            failures.size,
+                            failures.first(),
+                        )
+                    }
+                    recordError(err)
+                } else {
+                    status.text = getString(R.string.import_documents_complete, importedPageIds.size, uris.size)
                 }
                 renderPages(projection)
             }
@@ -4769,5 +5078,6 @@ class ProductActivity : AppCompatActivity() {
         private const val STATE_PENDING_MAIN_SAVE = "pending_main_save"
         private const val STATE_DESTINATION_PICKER_PENDING = "destination_picker_pending"
         private const val STATE_DOCUMENT_MODE = "state_document_mode"
+        private const val STATE_BLACK_AND_WHITE_MODE = "state_black_and_white_mode"
     }
 }

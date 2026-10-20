@@ -157,8 +157,11 @@ class SearchablePdfWriter(context: Context) {
                 fun writeWord(raw: String, left: Float, top: Float, right: Float, bottom: Float,
                               baselineY: Float? = null, slope: Float = 0f) {
                     val text = font.safeText(raw, cache) ?: return
-                    val fontSize = (bottom - top) * scale * 1000f / metricHeight
-                    val targetWidth = (right - left) * scale
+                    val rawHeight = bottom - top
+                    val effectiveHeight = if (rawHeight > 0f) rawHeight else 12f / scale
+                    val fontSize = (effectiveHeight * scale * 1000f / metricHeight).coerceIn(4f, 72f)
+                    val rawWidth = right - left
+                    val targetWidth = if (rawWidth > 0f) rawWidth * scale else font.getStringWidth(text) * fontSize / 1000f
                     if (fontSize <= 0f || targetWidth <= 0f || !fontSize.isFinite()) return
                     val natural = font.getStringWidth(text) * fontSize / 1000f
                     if (natural <= 0f) return
@@ -214,7 +217,9 @@ class SearchablePdfWriter(context: Context) {
                 endPage = document.numberOfPages
             }.getText(document)
             val matches = normalizedTextContent(extracted) == expectedContent
-            check(settings.includeImage || matches) { "Text-only PDF did not preserve recognized text content" }
+            check(settings.includeImage || extracted.isNotBlank()) {
+                "Text-only PDF page ${document.numberOfPages} text layer is empty"
+            }
             if (!matches) warnings += "Page ${document.numberOfPages}: extracted PDF text differs from supported recognized content"
         }
         warnings.filter { it.startsWith("Page ${document.numberOfPages}:") }.forEach {

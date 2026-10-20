@@ -162,6 +162,13 @@
     <string name="document_mode_enabled_description">Режим «Документ»: включён</string>
     <string name="document_mode_disabled_description">Режим «Документ»: выключен</string>
     <string name="document_mode_status_enabled">Режим «Документ»: автоопределение границ и выравнивание</string>
+    <string name="ocr_toggle_description">Распознавание текста (OCR)</string>
+    <string name="ocr_state_enabled">Включён</string>
+    <string name="ocr_state_disabled">Выключен</string>
+    <string name="bw_mode_name">Ч/Б</string>
+    <string name="bw_mode_toggle_description">Переключение чёрно-белого режима съёмки</string>
+    <string name="bw_mode_state_enabled">Включён</string>
+    <string name="bw_mode_state_disabled">Выключен</string>
     <string name="document_save_rectified">Документ выровнен</string>
     <string name="document_save_no_crop_undetected">Снимок сохранён без обрезки: границы не найдены</string>
     <string name="document_save_no_crop_disagreement">Снимок сохранён без обрезки: границы не подтверждены</string>

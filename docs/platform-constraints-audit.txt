@@ -1,0 +1,163 @@
+1. Исходный подсчёт
+
+Модель	Исходных идей
+GPT	11
+Claude	10
+Qwen	17
+Z.ai	9
+Gemini	8
+Grok	8
+DeepSeek	12
+Le Chat	4
+Perplexity	10
+Всего	89
+
+Присвоены ID [GPT 01]…[GPT 11], [Claude 01]…[Claude 10] и т. д. Нумерация соответствует порядку первичных идей внутри ответа каждой модели.
+
+2. Схлопнутые смысловые блоки
+Camera / permissions
+1. ([GPT 01], [Claude 09], [Qwen 01], [Z.ai 01], [Grok 01], [DeepSeek 01], [Le Chat 01], [Perplexity 01]) — Permanent denial CAMERA permission
+
+Доступ к камере требует runtime permission; после окончательного/repeated denial обычный permission dialog может больше не появляться, поэтому восстановление доступа требует перехода пользователя в системные настройки. Различия моделей касаются деталей определения Don't ask again, но механизм и влияние на CAP-001 совпадают.
+
+2. ([Claude 01], [Gemini 06], [DeepSeek 10], [Le Chat 02]) — Камера привязана к foreground/lifecycle
+
+Camera capture предполагает активное foreground-состояние приложения/Activity. При уходе приложения в background камера должна быть освобождена или доступ к ней становится ограниченным. Зафиксированная серийная съёмка совместима с этим, пока сценарий остаётся foreground.
+
+3. ([DeepSeek 02]) — Дополнительные требования при использовании camera Foreground Service
+
+Если архитектура использует foreground service для camera access, новые версии Android требуют соответствующего FGS type и permissions; кроме того, while-in-use CAMERA permission ограничивает возможность старта такого сервиса из background.
+
+4. ([Qwen 02]) — Камера может быть недоступна независимо от permission
+
+Даже при выданном CAMERA permission устройство камеры может отсутствовать, быть отключено политикой/системным состоянием, занято другим клиентом или перейти в error/disconnected state. Это отдельный от permission denial failure path.
+
+Haptics
+5. ([GPT 02], [Claude 10], [Qwen 03], [Gemini 08], [Grok 02], [DeepSeek 11], [Le Chat 03], [Perplexity 02]) — Haptic feedback нельзя гарантировать как физически ощущаемый результат
+
+Приложение может инициировать haptic feedback, однако фактический отклик зависит от оборудования и системных/user settings. Часть моделей дополнительно отмечает различие между стандартным performHapticFeedback() и прямым Vibrator, для которого могут действовать дополнительные permission/API-условия.
+
+File access / SAF
+6. ([Qwen 04], [Grok 03]) — Пользовательский файловый доступ строится вокруг SAF/content URI
+
+Современная Android storage model не предполагает произвольный прямой доступ к пользовательской файловой системе. Import/save/reopen должны учитывать URI/grant semantics Storage Access Framework.
+
+7. ([GPT 03]) — SAF не даёт выбрать любую директорию
+
+ACTION_OPEN_DOCUMENT_TREE имеет платформенно запрещённые/ограниченные locations. Следовательно, «пользователь выбирает destination» не эквивалентно «пользователь может выбрать абсолютно любую папку устройства».
+
+8. ([GPT 04], [Claude 04], [Qwen 05], [Qwen 06], [DeepSeek 07], [Perplexity 04]) — Persisted URI может стать недействительным
+
+Persistable grant может переживать перезапуск/reboot, но не является бессрочной гарантией доступа. Перемещение/удаление файла, удаление provider, извлечение носителя или отзыв grant способны сделать destination либо recent saved PDF недоступным раньше продуктового retention deadline.
+
+9. ([Claude 03], [Z.ai 02], [Gemini 01]) — Persistable URI grants являются ограниченным ресурсом
+
+Количество одновременно сохраняемых persistable URI grants конечно. При большом количестве source/destination URI приложению нужна стратегия жизненного цикла grants; модели отдельно поднимают риск достижения platform limit.
+
+10. ([Claude 07], [DeepSeek 12], [Perplexity 03]) — Возможности системного File Picker зависят от типа picker и provider
+
+Images+PDF должны выбираться через document picker/SAF, а не через Photo Picker, рассчитанный на visual media. Multiple MIME/multiple selection поддерживаются API, но доступный контент и конкретное поведение зависят от DocumentsProvider/OEM environment.
+
+11. ([GPT 06], [Qwen 07], [Grok 08], [Perplexity 05]) — Финальное filename/collision behaviour зависит от provider
+
+Запрашиваемое приложением имя не всегда является гарантированным фактическим именем. DocumentsProvider может участвовать в разрешении collisions и изменить displayName; поэтому exact suffix semantics (1), (2)… требуют отдельного внимания.
+
+12. ([GPT 05], [Qwen 08], [Z.ai 03], [Gemini 03], [Grok 04], [Perplexity 07]) — Свободное место через SAF не всегда можно определить заранее
+
+Для SAF/provider destinations данные о свободном месте и/или размере source могут отсутствовать либо быть ненадёжными. Поэтому universal deterministic preflight вида «до операции точно доказать, что всё поместится» не гарантирован.
+
+Multi-file save / transaction semantics
+13. ([Qwen 16], [Gemini 02], [Grok 07], [Perplexity 06]) — SAF не предоставляет атомарный commit всего PDF+JPG set
+
+Набор из PDF и нескольких JPG не является одной платформенной filesystem transaction. Требование «либо опубликовано всё, либо ничего» должно достигаться поверх файловых API; remote/document providers могут иметь ещё более слабую commit semantics.
+
+14. ([Z.ai 04]) — Compound: нет multi-file atomicity и нет универсального create-exclusive primitive
+
+Z.ai объединяет два связанных ограничения в одном сценарии: SAF не предоставляет общей атомарной транзакции для нескольких файлов и одновременно не даёт универсального POSIX-подобного create-if-not-exists/exclusive-create механизма для collision-safe финализации. Сохраняю как отдельную составную идею, а не искусственно разбиваю.
+
+Lifecycle / background / recovery
+15. ([GPT 07], [Qwen 09], [Grok 05], [DeepSeek 05]) — Process death возможен без финального callback
+
+Android может завершить процесс до окончания import/processing/OCR и без надёжного «последнего шанса» сохранить состояние. Следовательно, restartable import и workspace recovery не могут зависеть от callback непосредственно перед смертью процесса.
+
+16. ([GPT 08], [GPT 09], [Claude 02], [Z.ai 08], [Gemini 05], [DeepSeek 04], [Le Chat 04], [Perplexity 08]) — Background execution ограничено и может откладываться/прерываться
+
+Doze, App Standby, cached-process killing, WorkManager/JobScheduler/FGS rules и version-specific quotas не позволяют считать тяжёлую работу бесконечно продолжающейся в обычном background thread. Progressive import/OCR остаётся возможным, но требует архитектурно корректной модели continuation/resumption.
+
+17. ([Grok 06], [DeepSeek 06]) — Retention cleanup должен учитывать незавершённые jobs
+
+24-hour cleanup и выполнение pending/running processing jobs могут пересечься. Cleanup не должен уничтожать данные, которые ещё нужны job; при этом сама job может быть остановлена платформой. Нужна согласованная модель job state и cleanup protection.
+
+18. ([Qwen 10]) — Unsaved dirty graphical edits отдельно уязвимы к process death
+
+Сохранённая imageVersion и временный dirty editor state — не одно и то же. Если процесс погибает до graphical Save, спецификация должна явно определять, требуется ли восстанавливать unsaved edits или только последнюю сохранённую image version.
+
+19. ([Claude 08]) — Большой workspace state нельзя складывать целиком в Activity instance-state Bundle
+
+Стандартный Android state-saving механизм имеет IPC/size ограничения. Полное восстановление многостраничного workspace с OCR, metadata, page state и jobs требует другого persistent state mechanism; выбор конкретной реализации остаётся архитектурным.
+
+Resource / memory limits
+20. ([Claude 06], [Qwen 14], [Z.ai 07]) — Обработка больших PDF/images ограничена heap и memory pressure
+
+Full-resolution bitmaps, PDF rendering и OCR могут потреблять значительный heap. На слабых устройствах тяжелая страница способна привести к OOM/process kill; некоторые модели дополнительно отмечают изменения memory-pressure callbacks в новых Android.
+
+Android version compatibility
+21. ([GPT 11], [Qwen 17]) — Не задан supported Android API range
+
+Без minSdk/поддерживаемого диапазона Android нельзя окончательно определить, какие platform restrictions и API alternatives обязательны. Этот пробел влияет сразу на permissions, PDF APIs, background execution и другие области.
+
+PDF parsing / text layer
+22. ([GPT 10], [Qwen 11], [Gemini 04]) — Native PDF text extraction зависит от Android API capabilities
+
+Классический PdfRenderer исторически ориентирован на rendering и не давал полноценного text-layer extraction; новые text/search возможности появляются только на более новых API levels. Поэтому reuse existing text layer не может безусловно полагаться на один framework API на всём Android range.
+
+23. ([Z.ai 05]) — Compound: framework PDF API не покрывает ни extraction text layer, ни direct page copy
+
+Z.ai объединяет две функциональные дыры framework PDF stack: недостаточные возможности чтения existing text layer и отсутствие готового механизма копирования PDF pages при редактировании. Составная идея сохранена отдельным блоком.
+
+24. ([Qwen 15]) — Searchable PDF с invisible text layer не является готовой high-level Android capability
+
+Формирование визуальной страницы плюс корректного searchable/selectable/copyable OCR text layer требует отдельного PDF-generation решения; платформа не предоставляет абстракцию уровня «сделай searchable scanned PDF».
+
+25. ([Perplexity 10]) — Compound: extraction и generation text layer одновременно API-level-dependent
+
+Perplexity рассматривает проблему двусторонне: нужно и извлечь существующий text layer, и сгенерировать новый invisible searchable layer. Framework support этих направлений различается и зависит от API level; поэтому это сохранено как отдельный составной сценарий.
+
+26. ([Qwen 12], [Perplexity 09]) — Ограничения PDF renderer: compatibility/fidelity и постраничная модель
+
+Framework rendering работает постранично и имеет собственные ограничения lifecycle/concurrency. Для нестандартных, сложных или protected PDF фактическая fidelity/совместимость требует проверки на реальном корпусе документов.
+
+OCR
+27. ([Qwen 13], [Z.ai 06]) — В Android framework нет универсального встроенного offline OCR
+
+Платформа Android сама по себе не гарантирует системный OCR engine, обеспечивающий требуемое локальное multilingual recognition/automatic language detection. OCR component должен быть выбран отдельно.
+
+28. ([Claude 05]) — Multilingual OCR зависит от набора script-specific models
+
+Claude уточняет более сильную версию предыдущей проблемы: конкретный on-device OCR stack может разделять Latin/Chinese/Japanese/Korean/Devanagari и т. п. на отдельные recognizer/models. Поэтому «automatic language detection» и реальный supported language/script coverage — не обязательно одно и то же.
+
+Image output
+29. ([Z.ai 09]) — JPEG encoder не гарантирует целевой размер/качество одним параметром
+
+Стандартное JPEG encoding управление в основном задаёт quality, но не обеспечивает платформенной гарантии одновременно получить конкретный file size, скорость и readability. Количественные acceptance thresholds остаются отдельной задачей.
+
+Android system integration
+30. ([Gemini 07]) — Predictive Back меняет способ защиты dirty state
+
+На новых Android Back navigation проходит через современный callback/predictive-back механизм. Dirty editor protection должен быть встроен в корректный Back handling; простой старый onBackPressed() не является универсальной моделью на всём диапазоне Android.
+
+31. ([DeepSeek 08]) — App-specific state не переживает uninstall
+
+Workspace retention/recent metadata, если они находятся в app-specific storage, удаляются при uninstall приложения. Это platform boundary retention semantics, хотя текущий продукт и не обещает recovery после reinstall.
+
+32. ([DeepSeek 09]) — 16 KB memory page size ограничивает выбранные native dependencies
+
+Для актуального Android/Google Play native .so dependencies должны поддерживать новые memory page-size requirements. Если OCR/image processing используют native code, совместимость становится build/packaging constraint.
+
+33. ([DeepSeek 03]) — FLAG_SECURE имеет version-dependent observable behaviour
+
+Optional protection от screenshots/Recents/remote views может вести себя по-разному на разных Android versions. DeepSeek рассматривает это как отдельное platform-specific observable отличие существующей optional privacy-функции.
+
+34. [Nemotron 3-01] — App-managed recent index. Android/SAF не предоставляет системный 24-hour recent index сохранённых PDF; приложение должно поддерживать его семантику самостоятельно.
+
+35. [Nemotron 3-02] — Retention deadline ≠ момент физического cleanup. Android может задерживать background execution, поэтому истечение 24h определяется persisted deadline, а не гарантированным запуском cleanup ровно через 24 часа.

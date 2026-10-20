@@ -91,9 +91,25 @@ internal class InsetDialogHost(private val background: View) {
         host.addView(region, FrameLayout.LayoutParams(-1, -1).apply {
             leftMargin = dp(20); rightMargin = dp(20); topMargin = dp(24); bottomMargin = hostBottomMargin
         })
-        val value = android.util.TypedValue()
-        dialog.context.theme.resolveAttribute(android.R.attr.colorBackground, value, true)
-        panel.background = GradientDrawable().apply { setColor(value.data); cornerRadius = dp(20).toFloat() }
+        val customPanel = panel.findViewById<ViewGroup>(androidx.appcompat.R.id.customPanel)
+        if (customPanel != null) {
+            customPanel.layoutParams = androidx.appcompat.widget.LinearLayoutCompat.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                0f,
+            )
+            val contentPanel = panel.findViewById<ViewGroup>(androidx.appcompat.R.id.contentPanel)
+            val messageView = contentPanel?.findViewById<View>(android.R.id.message)
+            if (messageView == null || messageView.visibility == View.GONE) {
+                contentPanel?.visibility = View.GONE
+            }
+            val buttonPanel = panel.findViewById<ViewGroup>(androidx.appcompat.R.id.buttonPanel)
+            if (buttonPanel != null) {
+                val hasButtons = (0 until buttonPanel.childCount).any { buttonPanel.getChildAt(it).visibility == View.VISIBLE }
+                if (!hasButtons) buttonPanel.visibility = View.GONE
+            }
+        }
+        panel.background = GradientDrawable().apply { setColor(0xFF111316.toInt()); cornerRadius = dp(20).toFloat() }
         panel.clipToOutline = true
         panel.tag = PANEL_TAG
         region.addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))

@@ -28,7 +28,12 @@ class CropSelectionView(context: Context) : View(context) {
         }
 
     var quadrilateral = defaultQuadrilateral()
-        private set
+        set(value) {
+            field = value
+            dragStartQuad = value
+            accessibilityHelper.invalidateRoot()
+            invalidate()
+        }
 
     private var activeCorner = -1
     private var activeEdge = -1
@@ -45,21 +50,27 @@ class CropSelectionView(context: Context) : View(context) {
     private val imageBounds = RectF()
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val polygonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xff6750a4.toInt()
+        color = 0xFF22C55E.toInt() // Emerald Green (#22C55E)
         style = Paint.Style.STROKE
         strokeWidth = 3f * resources.displayMetrics.density
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x2422C55E // Subtle emerald green transparent fill
+        style = Paint.Style.FILL
     }
     private val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xffffffff.toInt()
         style = Paint.Style.FILL
     }
     private val handleStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xff6750a4.toInt()
+        color = 0xFF22C55E.toInt()
         style = Paint.Style.STROKE
         strokeWidth = 3f * resources.displayMetrics.density
     }
     private val edgeHandleStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xff6750a4.toInt()
+        color = 0xFF22C55E.toInt()
         style = Paint.Style.STROKE
         strokeWidth = 2.5f * resources.displayMetrics.density
     }
@@ -206,6 +217,7 @@ class CropSelectionView(context: Context) : View(context) {
             points.drop(1).forEach { lineTo(it.first, it.second) }
             close()
         }
+        canvas.drawPath(path, fillPaint)
         canvas.drawPath(path, polygonPaint)
 
         // Draw midpoint pill handles for edges
