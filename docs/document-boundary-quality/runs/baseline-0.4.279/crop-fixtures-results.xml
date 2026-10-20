@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="app.docscan.android.DocumentCropProcessorInstrumentedTest" tests="3" failures="0" errors="0" skipped="0" time="8.227" timestamp="2026-10-20T15:38:27" hostname="localhost">
+  <properties>
+    <property name="device" value="DocScanArbitration_API_36_1(AVD) - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="rectifiesStrongPageBoundaryWithoutChangingSource" classname="app.docscan.android.DocumentCropProcessorInstrumentedTest" time="0.537" />
+  <testcase name="returnsNoCandidateForUniformImage" classname="app.docscan.android.DocumentCropProcessorInstrumentedTest" time="0.104" />
+  <testcase name="opencvDetectsNearFullFramePagesAndLongReceiptsInBothOrientations" classname="app.docscan.android.DocumentCropProcessorInstrumentedTest" time="3.828" />
+</testsuite>

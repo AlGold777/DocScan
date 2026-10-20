@@ -1,0 +1,13 @@
+DocScan DBQ baseline source manifest
+Commit: e62a5b5009acc603f590b74062e4039960e381ca
+Branch: codex/document-boundary-quality
+Worktree state: clean at baseline capture
+Version: versionName=0.4.279; versionCode=398
+JDK: OpenJDK 17.0.18
+Android SDK: /Users/restart/Library/Android/sdk
+ef9f8eb85360a0b480ba34dbf76ad3a7e430448bccb42ebecd0969ce5cf00668  app/src/main/kotlin/app/docscan/android/ProductActivity.kt
+634218cb5652b6e6f54ec38fcaac3abbaee92dc4d2b8aa8cb049f88a13e09898  core/src/main/kotlin/app/docscan/core/store/StateStore.kt
+ecca8f6a5cc28e3875fa5377609d851024a503762328bf8ef4c815f2bff66ed1  app/src/main/kotlin/app/docscan/android/DocumentCropProcessor.kt
+795c45e75626ba8593fff2a3f7146dcef07faad4f23d6ece4eb360122d15fd71  app/src/main/kotlin/app/docscan/android/DocumentLiveDetectionCoordinator.kt
+da97486fbae1aa6883e4cb97b96b2bec2367b6c083f8a796f129989e60d0de8b  app/src/androidTest/kotlin/app/docscan/android/DocumentCropProcessorInstrumentedTest.kt
+Source archive SHA256: 3062607eaad3c315fb78af385de6281bfd26ea9734b05cef5321edae34db31f5  /Users/restart/Documents/GitHub/before-dbq-20261020-source/before-dbq-20261020.tar.gz

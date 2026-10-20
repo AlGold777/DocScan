@@ -1,0 +1,6 @@
+Baseline fixture suite: PASS (emulator only)
+Command: ./gradlew :app:connectedDebugAndroidTest -Pandroid.injected.device.serial=emulator-5554 -Pandroid.testInstrumentationRunnerArguments.class=app.docscan.android.DocumentCropProcessorInstrumentedTest
+Source: isolated worktree e62a5b5009acc603f590b74062e4039960e381ca (version 0.4.279 / 398)
+AVD tuple: DocScanArbitration_API_36_1; sdk_gphone64_arm64; Android 16 / API 36; emulator-5554.
+Executed: 3 tests; 0 failures, 0 errors, 0 skipped. Exact test names and XML are in crop-fixtures-results.xml.
+First AVD attempt on DocScanMvpTest_API_36.1 did not execute tests due INSTALL_FAILED_INSUFFICIENT_STORAGE (0 tests). Retried successfully on a second existing AVD with 3.7 GiB free. No data was wiped and no physical device was used.

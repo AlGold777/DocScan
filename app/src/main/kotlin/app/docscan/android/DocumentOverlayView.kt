@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.os.SystemClock
 import android.view.View
 
 /**
@@ -14,6 +15,13 @@ class DocumentOverlayView(context: Context) : View(context) {
 
     private var points: FloatArray? = null
     private val path = Path()
+    private var deadlineMs = 0L
+    private var leaseIsCurrent: () -> Boolean = { false }
+    private val expire = Runnable {
+        // Runs on the UI thread. clear() cancels this callback whenever the lease changes.
+        if (SystemClock.elapsedRealtime() >= deadlineMs || !leaseIsCurrent()) clear()
+        else scheduleExpiry()
+    }
 
     init {
         setWillNotDraw(false)
@@ -45,20 +53,45 @@ class DocumentOverlayView(context: Context) : View(context) {
 
     private var isHeld: Boolean = false
 
-    fun setPolygonPixels(newPoints: FloatArray?, isHeld: Boolean = false) {
-        this.points = newPoints?.takeIf { it.size == 8 }?.clone()
+    fun setPolygonPixels(newPoints: FloatArray?, isHeld: Boolean = false,
+                         deadlineMonotonicMs: Long, isCurrent: () -> Boolean) {
+        removeCallbacks(expire)
+        deadlineMs = deadlineMonotonicMs
+        leaseIsCurrent = isCurrent
+        this.points = newPoints?.takeIf { it.size == 8 && it.all(Float::isFinite) }?.clone()
         this.isHeld = isHeld
+        if (points == null || SystemClock.elapsedRealtime() >= deadlineMs || !leaseIsCurrent()) {
+            clear()
+            return
+        }
+        scheduleExpiry()
         invalidate()
     }
 
+    private fun scheduleExpiry() {
+        postDelayed(expire, (deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+    }
+
     fun clear() {
+        removeCallbacks(expire)
         points = null
         isHeld = false
+        deadlineMs = 0L
+        leaseIsCurrent = { false }
         invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        clear()
+        super.onDetachedFromWindow()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (SystemClock.elapsedRealtime() >= deadlineMs || !leaseIsCurrent()) {
+            if (points != null) clear()
+            return
+        }
         val p = points ?: return
         path.reset()
         path.moveTo(p[0], p[1])

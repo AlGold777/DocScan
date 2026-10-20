@@ -21,12 +21,16 @@ data class LiveDetectionState(
     val rawScore: Double,
     val frameTimestampMonotonicMs: Long,
     val processedTimestampMonotonicMs: Long,
+    val publicationId: Long = 0L,
+    val visualDeadlineMonotonicMs: Long = frameTimestampMonotonicMs + DEFAULT_MAX_TTL_MS,
 ) {
     val isUsableForAgreement: Boolean
         get() = status == LiveDetectionStatus.CONFIRMED && quadInNormalizedViewPort != null
 
     fun isFresh(nowMonotonicMs: Long, maxTtlMs: Long = DEFAULT_MAX_TTL_MS): Boolean {
-        return (nowMonotonicMs - frameTimestampMonotonicMs) in 0..maxTtlMs
+        return nowMonotonicMs >= frameTimestampMonotonicMs &&
+            nowMonotonicMs - frameTimestampMonotonicMs < maxTtlMs &&
+            nowMonotonicMs < visualDeadlineMonotonicMs
     }
 
     override fun equals(other: Any?): Boolean {
@@ -44,6 +48,8 @@ data class LiveDetectionState(
         if (rawScore != other.rawScore) return false
         if (frameTimestampMonotonicMs != other.frameTimestampMonotonicMs) return false
         if (processedTimestampMonotonicMs != other.processedTimestampMonotonicMs) return false
+        if (publicationId != other.publicationId) return false
+        if (visualDeadlineMonotonicMs != other.visualDeadlineMonotonicMs) return false
         return true
     }
 
@@ -56,11 +62,13 @@ data class LiveDetectionState(
         result = 31 * result + rawScore.hashCode()
         result = 31 * result + frameTimestampMonotonicMs.hashCode()
         result = 31 * result + processedTimestampMonotonicMs.hashCode()
+        result = 31 * result + publicationId.hashCode()
+        result = 31 * result + visualDeadlineMonotonicMs.hashCode()
         return result
     }
 
     companion object {
-        const val DEFAULT_MAX_TTL_MS = 300L
+        const val DEFAULT_MAX_TTL_MS = 200L
 
         fun empty(generationId: Long = 0L) = LiveDetectionState(
             generationId = generationId,
@@ -95,6 +103,7 @@ class DocumentLiveDetectionCoordinator(
     private var confirmedTimestampMs: Long? = null
     private var confirmedScore = 0.0
     private var lastFrameTimestampMs: Long? = null
+    private var publicationSequence = 0L
 
     fun currentGeneration(): Long = currentGenerationId
 
@@ -114,6 +123,17 @@ class DocumentLiveDetectionCoordinator(
     }
 
     fun getPublishedState(): LiveDetectionState = synchronized(lock) { publishedState.detached() }
+
+    /** Used both at UI submission and onDraw; old callbacks cannot clear or revive a newer lease. */
+    fun isCurrent(state: LiveDetectionState): Boolean = synchronized(lock) {
+        state.generationId == currentGenerationId && state.publicationId == publishedState.publicationId &&
+            state.analysisSpec == publishedState.analysisSpec
+    }
+
+    fun canDisplay(state: LiveDetectionState, nowMonotonicMs: Long = clock()): Boolean = synchronized(lock) {
+        isCurrent(state) && state.status in setOf(LiveDetectionStatus.CONFIRMED, LiveDetectionStatus.HELD) &&
+            state.quadInBufferPixels != null && state.isFresh(nowMonotonicMs, maxTtlMs)
+    }
 
     fun captureSnapshot(): LiveDetectionState = synchronized(lock) {
         val state = publishedState.detached()
@@ -137,12 +157,14 @@ class DocumentLiveDetectionCoordinator(
             return@synchronized publishedState.detached()
         }
         activeSpec = spec
-        if (frameTimestampMonotonicMs < 0 || !rawScore.isFinite() ||
-            processedTimestampMonotonicMs - frameTimestampMonotonicMs !in 0..maxTtlMs) {
-            return@synchronized onFrameMissing(currentGenerationId, processedTimestampMonotonicMs)
-        }
+        // Reject late/duplicate events before validating their payload. A bad old result must
+        // never erase a newer detection or move the frame watermark to its completion time.
         if (lastFrameTimestampMs?.let { frameTimestampMonotonicMs <= it } == true)
             return@synchronized publishedState.detached()
+        if (frameTimestampMonotonicMs < 0 || !rawScore.isFinite() ||
+            processedTimestampMonotonicMs - frameTimestampMonotonicMs !in 0 until maxTtlMs) {
+            return@synchronized onFrameMissing(currentGenerationId, frameTimestampMonotonicMs)
+        }
         if (lastFrameTimestampMs?.let { frameTimestampMonotonicMs - it > maxTtlMs } == true)
             resetTracking()
         lastFrameTimestampMs = frameTimestampMonotonicMs
@@ -167,7 +189,12 @@ class DocumentLiveDetectionCoordinator(
         }
         if (reference != null) {
             val agreement = if (confirmedAgreement?.agrees == true) confirmedAgreement else provisionalAgreement!!
-            val smoothed = applyEma(reference, rawBufferPoints, agreement.relativeCornerShift.toFloat())
+            val proposed = applyEma(reference, rawBufferPoints, agreement.relativeCornerShift.toFloat())
+            // Reject a filter-induced non-convex shape rather than failing the camera session.
+            val smoothed = try {
+                CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(proposed, spec)
+                proposed
+            } catch (_: IllegalArgumentException) { rawBufferPoints.clone() }
             confirmedPoints = smoothed
             confirmedQuad = CameraGeometryTransform.analysisBufferQuadToNormalizedViewPort(smoothed, spec)
             confirmedTimestampMs = frameTimestampMonotonicMs
@@ -208,7 +235,7 @@ class DocumentLiveDetectionCoordinator(
     }
 
     private fun isRecent(timestamp: Long?, now: Long): Boolean =
-        timestamp != null && now - timestamp in 0..maxTtlMs
+        timestamp != null && now - timestamp in 0 until maxTtlMs
 
     private fun advanceGeneration(): Long {
         currentGenerationId = generationSequence.incrementAndGet()
@@ -235,7 +262,9 @@ class DocumentLiveDetectionCoordinator(
 
     private fun state(status: LiveDetectionStatus, spec: AnalysisBufferSpec?, points: FloatArray?,
                       quad: CropQuadrilateral?, score: Double, timestamp: Long, processed: Long) =
-        LiveDetectionState(currentGenerationId, status, spec, points?.clone(), quad, score, timestamp, processed)
+        LiveDetectionState(currentGenerationId, status, spec, points?.clone(), quad, score, timestamp, processed,
+            publicationId = ++publicationSequence,
+            visualDeadlineMonotonicMs = if (timestamp > Long.MAX_VALUE - maxTtlMs) Long.MAX_VALUE else timestamp + maxTtlMs)
 
     private fun LiveDetectionState.detached() = copy(quadInBufferPixels = quadInBufferPixels?.clone())
 

@@ -1,0 +1,160 @@
+> Task :core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:processResources NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :app:processDebugNavigationResources
+> Task :app:compileDebugNavigationResources
+> Task :app:generateDebugResValues
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:javaPreCompileDebug
+> Task :app:checkDebugAndroidTestAarMetadata
+> Task :app:processDebugAndroidTestNavigationResources
+> Task :app:compileDebugAndroidTestNavigationResources
+> Task :app:generateDebugAndroidTestResValues
+> Task :app:mapDebugAndroidTestSourceSetPaths
+> Task :app:generateDebugAndroidTestResources
+> Task :app:mergeDebugAndroidTestResources
+> Task :app:processDebugAndroidTestManifest
+> Task :app:javaPreCompileDebugAndroidTest
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugResources
+> Task :app:processDebugAndroidTestResources
+> Task :app:mergeDebugAssets
+> Task :app:desugarDebugFileDependencies
+> Task :app:mergeDebugJniLibFolders
+> Task :app:checkDebugDuplicateClasses
+> Task :app:compressDebugAssets
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:mergeDebugAndroidTestShaders
+> Task :app:compileDebugAndroidTestShaders NO-SOURCE
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:processDebugManifestForPackage
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:processDebugResources
+> Task :core:generateMainDocScanDatabaseInterface
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :app:mergeExtDexDebug
+
+> Task :core:compileKotlin
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/core/src/main/kotlin/app/docscan/core/ocr/HocrParser.kt:21:34 Type annotation class 'org.jspecify.annotations.Nullable' of the inferred type is inaccessible. Check the module classpath for missing or conflicting dependencies. This will become an error in language version 2.4. See https://youtrack.jetbrains.com/issue/KT-80247.
+
+> Task :core:compileJava NO-SOURCE
+> Task :core:classes UP-TO-DATE
+> Task :core:jar
+> Task :app:mergeDebugNativeLibs
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libc++_shared.so, libimage_processing_util_jni.so, libjpeg.so, libleptonica.so, libopencv_java4.so, libpngx.so, libtesseract.so. Run with --info option to learn more.
+
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:mergeLibDexDebug
+
+> Task :app:compileDebugKotlin
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/CropSelectionView.kt:127:22 'fun setBoundsInParent(p0: Rect!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/CropSelectionView.kt:147:22 'fun setBoundsInParent(p0: Rect!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/DocumentCapturePolicy.kt:21:57 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LiveDetectionState'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:72:59 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Bitmap'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:72:77 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Bitmap'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:78:37 Unnecessary safe call on a non-null receiver of type 'ImageView'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3631:69 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3631:101 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3631:135 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4499:69 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4499:101 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4499:135 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/ResultIteratorLayoutExtractor.kt:67:33 Unnecessary non-null assertion (!!) on a non-null receiver of type 'BlockDraft'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:87:33 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:89:62 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:97:77 Redundant call of conversion method.
+
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:processDebugJavaRes
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+
+> Task :app:compileDebugAndroidTestKotlin
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/MultiImageImportPickerInstrumentedTest.kt:2257:44 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/MultiImageImportPickerInstrumentedTest.kt:2533:33 'fun setNonStrokingColor(p0: Int, p1: Int, p2: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/MultiImageImportPickerInstrumentedTest.kt:2537:37 'fun setNonStrokingColor(p0: Int, p1: Int, p2: Int): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/OcrQualityTestSupport.kt:98:46 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/OcrQualityTestSupport.kt:101:54 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/OcrQualityTestSupport.kt:109:50 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:181:95 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:234:76 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:250:92 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:265:93 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:280:80 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:289:98 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:304:92 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:322:95 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:337:21 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ActivityScenario<ProductActivity>'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:339:95 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:377:95 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/ProductActivityCaptureAndReorderInstrumentedTest.kt:445:97 No cast needed.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:951:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1163:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1285:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1463:25 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ActivityScenario<ProductActivity>'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1497:21 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ActivityScenario<ProductActivity>'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1547:25 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ActivityScenario<ProductActivity>'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1585:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1595:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1692:44 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1776:25 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ActivityScenario<ProductActivity>'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1820:117 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1821:109 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1823:76 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1824:77 Unnecessary non-null assertion (!!) on a non-null receiver of type 'File'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1870:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:1949:84 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:2009:84 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafExportGatewayIntegrationInstrumentedTest.kt:2067:84 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafPickerTestActions.kt:176:44 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafProviderCapabilityProbeInstrumentedTest.kt:106:66 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Uri'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafProviderCapabilityProbeInstrumentedTest.kt:130:62 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Uri'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SafProviderCapabilityProbeInstrumentedTest.kt:178:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SaveSetupInstrumentedTest.kt:171:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+w: file:///private/tmp/docscan-dbq-baseline-20261020/source/app/src/androidTest/kotlin/app/docscan/android/SaveSetupInstrumentedTest.kt:376:102 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+
+> Task :app:compileDebugAndroidTestJavaWithJavac
+> Task :app:dexBuilderDebugAndroidTest
+> Task :app:mergeDebugAndroidTestGlobalSynthetics
+> Task :app:processDebugAndroidTestJavaRes
+> Task :app:mergeDebugAndroidTestJavaResource
+> Task :app:mergeProjectDexDebugAndroidTest
+> Task :app:packageDebugAndroidTest
+> Task :app:createDebugAndroidTestApkListingFileRedirect
+> Task :app:connectedDebugAndroidTest
+Starting 0 tests on DocScanMvpTest_API_36.1(AVD) - 16
+
+Finished 0 tests on DocScanMvpTest_API_36.1(AVD) - 16
+
+> Task :app:connectedDebugAndroidTest FAILED
+71 actionable tasks: 71 executed

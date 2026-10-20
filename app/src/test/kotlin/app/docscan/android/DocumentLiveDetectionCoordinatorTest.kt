@@ -278,4 +278,147 @@ class DocumentLiveDetectionCoordinatorTest {
         assertEquals(LiveDetectionStatus.EXPIRED, expiredSnapshot.status)
         assertFalse(expiredSnapshot.isUsableForAgreement)
     }
+
+    @Test
+    fun `ut11 malformed duplicate or out of order frame cannot erase a newer publication`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        coordinator.onFrameDetected(generation, now, candidatePoints1, 0.85, spec)
+
+        now = 1_100L
+        val newest = coordinator.onFrameDetected(generation, now, candidatePointsClose, 0.87, spec)
+        assertEquals(LiveDetectionStatus.CONFIRMED, newest.status)
+        val beforeLateResult = coordinator.getPublishedState()
+
+        // Timestamp 1,050 is older than the newest 1,100 frame, and the payload is malformed.
+        val lateMalformed = coordinator.onFrameDetected(
+            generationId = generation,
+            frameTimestampMonotonicMs = 1_050L,
+            rawBufferPoints = floatArrayOf(1f, 2f),
+            rawScore = Double.NaN,
+            spec = spec,
+            processedTimestampMonotonicMs = 1_120L,
+        )
+
+        assertEquals(LiveDetectionStatus.CONFIRMED, coordinator.getPublishedState().status)
+        assertEquals(beforeLateResult.publicationId, coordinator.getPublishedState().publicationId)
+        assertEquals(beforeLateResult, coordinator.getPublishedState())
+        assertEquals(beforeLateResult, lateMalformed)
+        assertTrue(coordinator.isCurrent(newest))
+    }
+
+    @Test
+    fun `ut13 default visual lease expires exactly at 200 milliseconds without a new callback`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        coordinator.onFrameDetected(generation, now, candidatePoints1, 0.85, spec)
+
+        now = 1_050L
+        val confirmed = coordinator.onFrameDetected(generation, now, candidatePointsClose, 0.87, spec)
+        assertEquals(1_250L, confirmed.visualDeadlineMonotonicMs)
+        assertEquals(LiveDetectionState.DEFAULT_MAX_TTL_MS, 200L)
+        assertTrue(coordinator.canDisplay(confirmed, nowMonotonicMs = 1_249L))
+        assertFalse(coordinator.canDisplay(confirmed, nowMonotonicMs = 1_250L))
+    }
+
+    @Test
+    fun `ut14 delayed UI lease from an older publication cannot display after a newer one`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        coordinator.onFrameDetected(generation, now, candidatePoints1, 0.85, spec)
+
+        now = 1_050L
+        val olderPublication = coordinator.onFrameDetected(generation, now, candidatePointsClose, 0.87, spec)
+        assertTrue(coordinator.canDisplay(olderPublication, nowMonotonicMs = now))
+
+        now = 1_100L
+        val newerPublication = coordinator.onFrameDetected(generation, now, candidatePointsClose, 0.88, spec)
+        assertNotEquals(olderPublication.publicationId, newerPublication.publicationId)
+        assertFalse(coordinator.isCurrent(olderPublication))
+        assertFalse(coordinator.canDisplay(olderPublication, nowMonotonicMs = now))
+        assertTrue(coordinator.canDisplay(newerPublication, nowMonotonicMs = now))
+    }
+
+    @Test
+    fun `ut15 invalidation keeps a confirmed old publication from being displayed after mode returns`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val oldGeneration = coordinator.currentGeneration()
+        coordinator.onFrameDetected(oldGeneration, now, candidatePoints1, 0.85, spec)
+        now = 1_050L
+        val oldPublication = coordinator.onFrameDetected(oldGeneration, now, candidatePointsClose, 0.87, spec)
+        assertTrue(coordinator.canDisplay(oldPublication, now))
+
+        coordinator.invalidate()
+        val newGeneration = coordinator.currentGeneration()
+        assertFalse(coordinator.isCurrent(oldPublication))
+        assertFalse(coordinator.canDisplay(oldPublication, now))
+
+        now = 1_100L
+        val newFirst = coordinator.onFrameDetected(newGeneration, now, candidatePoints1, 0.85, spec)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, newFirst.status)
+        assertFalse(coordinator.canDisplay(oldPublication, now))
+    }
+
+    @Test
+    fun `ut16 geometry change rejects old space publication and old callbacks`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        val oldGeneration = requireNotNull(coordinator.generationForFrame(spec, generation))
+        coordinator.onFrameDetected(oldGeneration, now, candidatePoints1, 0.85, spec)
+        now = 1_050L
+        val oldPublication = coordinator.onFrameDetected(oldGeneration, now, candidatePointsClose, 0.87, spec)
+        assertTrue(coordinator.canDisplay(oldPublication, now))
+
+        val changedSpec = AnalysisBufferSpec(
+            bufferWidth = 1920,
+            bufferHeight = 1080,
+            cropRect = BufferRect(left = 240, top = 0, right = 1680, bottom = 1080),
+            rotationDegrees = 90,
+        )
+        val changedGeneration = requireNotNull(coordinator.generationForFrame(changedSpec, oldGeneration))
+        assertNotEquals(oldGeneration, changedGeneration)
+        assertFalse(coordinator.canDisplay(oldPublication, now))
+        val stale = coordinator.onFrameDetected(oldGeneration, now + 10L, candidatePoints1, 0.9, spec)
+        assertEquals(LiveDetectionStatus.IDLE, stale.status)
+        assertFalse(coordinator.isCurrent(oldPublication))
+    }
+
+    @Test
+    fun `ut17 detector result processed at the ttl boundary is discarded instead of promoted`() {
+        val now = 1_200L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        coordinator.onFrameDetected(generation, 1_000L, candidatePoints1, 0.85, spec,
+            processedTimestampMonotonicMs = 1_000L)
+
+        val late = coordinator.onFrameDetected(generation, 1_001L, candidatePointsClose, 0.87, spec,
+            processedTimestampMonotonicMs = 1_201L)
+
+        assertEquals(LiveDetectionStatus.EXPIRED, late.status)
+        assertFalse(late.isUsableForAgreement)
+        assertFalse(coordinator.canDisplay(late, nowMonotonicMs = now))
+        assertEquals(generation, late.generationId)
+    }
+
+    @Test
+    fun `ut20 input and returned coordinate arrays cannot mutate published state`() {
+        var now = 1_000L
+        val coordinator = DocumentLiveDetectionCoordinator(clock = { now })
+        val generation = coordinator.currentGeneration()
+        val submitted = candidatePoints1.clone()
+        val originalFirstX = submitted[0]
+
+        val returned = coordinator.onFrameDetected(generation, now, submitted, 0.85, spec)
+        submitted[0] = -500f
+        returned.quadInBufferPixels!![0] = -600f
+
+        val published = coordinator.getPublishedState()
+        assertEquals(originalFirstX, published.quadInBufferPixels!![0], 0f)
+        assertEquals(LiveDetectionStatus.PROVISIONAL, published.status)
+    }
 }

@@ -54,7 +54,7 @@ class DocumentCapturePolicyTest {
     }
 
     @Test
-    fun `one bad live corner vetoes automatic rectification`() {
+    fun `one bad live corner vetoes automatic rectification when spatial and temporal match are verified`() {
         val oneBadCorner = CropQuadrilateral(
             topLeft = NormalizedCropPoint(0.48, 0.12),
             topRight = NormalizedCropPoint(0.90, 0.10),
@@ -66,13 +66,56 @@ class DocumentCapturePolicyTest {
             DocumentCaptureDecision.BOUNDARIES_DISAGREE,
             document,
             live(quad = oneBadCorner),
+            compatibility = LiveStillCompatibility(
+                sameFieldOfViewVerified = true,
+                exposureTimestampMonotonicMs = shutterTimeMs,
+            ),
         )
+    }
+
+    @Test
+    fun `bad live boundary does not veto a good still when correspondence is unproven`() {
+        val oneBadCorner = CropQuadrilateral(
+            topLeft = NormalizedCropPoint(0.48, 0.12),
+            topRight = NormalizedCropPoint(0.90, 0.10),
+            bottomRight = NormalizedCropPoint(0.90, 0.90),
+            bottomLeft = NormalizedCropPoint(0.10, 0.90),
+        )
+
+        assertDecision(
+            DocumentCaptureDecision.RECTIFY_STILL,
+            document,
+            live(quad = oneBadCorner),
+        )
+    }
+
+    @Test
+    fun `bad live boundary does not veto when exposure is unknown stale or field of view is unverified`() {
+        val oneBadCorner = CropQuadrilateral(
+            topLeft = NormalizedCropPoint(0.48, 0.12),
+            topRight = NormalizedCropPoint(0.90, 0.10),
+            bottomRight = NormalizedCropPoint(0.90, 0.90),
+            bottomLeft = NormalizedCropPoint(0.10, 0.90),
+        )
+        val badLive = live(quad = oneBadCorner)
+
+        for (compatibility in listOf(
+            LiveStillCompatibility(true, null),
+            LiveStillCompatibility(true, shutterTimeMs - 301L),
+            LiveStillCompatibility(false, shutterTimeMs),
+        )) {
+            assertEquals(
+                DocumentCaptureDecision.RECTIFY_STILL,
+                DocumentCapturePolicy.decide(document, badLive, compatibleJpeg, generation, shutterTimeMs, compatibility),
+            )
+        }
     }
 
     private fun assertDecision(
         expected: DocumentCaptureDecision,
         stillQuad: CropQuadrilateral?,
         live: LiveDetectionState?,
+        compatibility: LiveStillCompatibility? = null,
     ) {
         assertEquals(
             expected,
@@ -82,6 +125,7 @@ class DocumentCapturePolicyTest {
                 jpeg = compatibleJpeg,
                 generationAtShutter = generation,
                 shutterTimestampMs = shutterTimeMs,
+                compatibility = compatibility,
             ),
         )
     }

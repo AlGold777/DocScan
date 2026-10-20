@@ -1,0 +1,5 @@
+APK metadata checked with Android build-tools 36.1.0 aapt and apksigner; verification executed under Android Studio bundled JBR.
+
+Debug: package=app.docscan.scanner; versionName=0.4.280; versionCode=399; ABI=arm64-v8a,armeabi-v7a,x86,x86_64; v2 verified; signer=Android Debug; cert SHA-256=05264cc16207662c151bd405fd645e4f1be11afe99f6fc2554f8672efc705488; APK SHA-256=fab07e05768a9cf480ddfa7c0886c02555194c7061adc1628257e8eb6f1e638c.
+Release: package=app.docscan.scanner; versionName=0.4.280; versionCode=399; ABI=arm64-v8a; v2 verified; signer DN=CN=DocScan Release, OU=Product; cert SHA-256=af0ccc128ebb99b01280fe64613986c8475c45ab041e3030bf285293785625c7; APK SHA-256=f24feede330084caac57997c58289c91309f644aad2f388564ef70cee697a9ac.
+No signing secrets included.

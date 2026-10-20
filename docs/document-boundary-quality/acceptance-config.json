@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "specification": "DBQ-2026-10-1.0",
+  "thresholds": {
+    "AC01": {"minIoU": 0.97, "maxCornerError": 0.01},
+    "AC02": {"minSuccess": 0.95},
+    "AC03": {"minSuccessEachDifficultGroup": 0.90},
+    "AC04": {"minTimeWeightedConfirmedPrecision": 0.99},
+    "AC05": {"maxFalseLockEpisodesPer10MinUpper95": 1},
+    "AC06": {"maxObservedFalseFullConfirmationOutOfFrame": 0},
+    "AC07": {"maxDisplayedJitterRms": 0.0015, "maxP95DisplayedJump": 0.005},
+    "AC08": {"maxP95StaticOverlayCornerError": 0.01},
+    "AC09": {"maxP95CaptureToPresentMsUpper95": 150},
+    "AC10": {"maxP95DynamicLagMsUpper95": 150},
+    "AC11": {"maxP95ReacquisitionMs": 400},
+    "AC12": {"maxVisualEvidenceAgeMs": 200},
+    "AC13": {"maxP95ReceiptSideError": 0.02},
+    "AC14": {"maxObservedRequiredContentLosses": 0},
+    "AC15": {"durationMin": 10, "maxFinalThirdP95Ratio": 1.20},
+    "AC16": {"pssBytes": null, "modelPackageBytes": null, "coldStartMs": null, "energyPerMin": null, "status": "OPEN"},
+    "AC17": {"minPartialEpisodesSafelyHiddenIn200Ms": 0.95},
+    "AC18": {"maxFalsePartialEligibleTime": 0.02},
+    "AC19": {"minPartialEpisodesRecognizedIn400Ms": 0.90, "minEpisodeDurationMs": 500}
+  },
+  "engineeringDefaults": {"maxVisualAgeMs": 200, "maxSemanticAgeMs": 500, "predictionEnabled": false, "confirmationDetections": 2},
+  "corpusManifestSha256": null,
+  "splitManifestSha256": null,
+  "annotationManifestSha256": null,
+  "finalProtocolFreeze": "OPEN_PENDING_CORPUS_AND_PHYSICAL_BASELINE",
+  "physicalSchedule": "AFTER_FULL_IMPLEMENTATION_PER_OWNER"
+}

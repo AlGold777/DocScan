@@ -1,0 +1,134 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.13/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :core:generateMainDocScanDatabaseInterface UP-TO-DATE
+> Task :core:compileKotlin UP-TO-DATE
+> Task :core:compileJava NO-SOURCE
+> Task :core:processResources NO-SOURCE
+> Task :core:classes UP-TO-DATE
+> Task :core:jar UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug UP-TO-DATE
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug UP-TO-DATE
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:buildKotlinToolingMetadata
+> Task :app:processReleaseNavigationResources
+> Task :app:generateReleaseResValues
+> Task :app:compileReleaseNavigationResources
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:mergeReleaseNativeLibs
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :app:parseReleaseLocalResources
+> Task :app:mergeReleaseResources
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libc++_shared.so, libimage_processing_util_jni.so, libjpeg.so, libleptonica.so, libopencv_java4.so, libpngx.so, libtesseract.so. Run with --info option to learn more.
+
+> Task :app:processReleaseMainManifest
+> Task :app:extractReleaseNativeSymbolTables
+> Task :app:processReleaseManifest
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:desugarReleaseFileDependencies
+> Task :app:javaPreCompileRelease
+> Task :app:mergeReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseAssets
+> Task :app:processReleaseManifestForPackage
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:extractProguardFiles
+> Task :app:collectReleaseDependencies
+> Task :app:compressReleaseAssets
+> Task :app:sdkReleaseDependencyData
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :app:processReleaseResources
+> Task :app:optimizeReleaseResources
+> Task :app:mergeExtDexRelease
+
+> Task :app:compileReleaseKotlin
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/CropSelectionView.kt:127:22 'fun setBoundsInParent(p0: Rect!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/CropSelectionView.kt:147:22 'fun setBoundsInParent(p0: Rect!): Unit' is deprecated. Deprecated in Java.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/DocumentCapturePolicy.kt:32:57 Unnecessary non-null assertion (!!) on a non-null receiver of type 'LiveDetectionState'.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:72:59 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Bitmap'.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:72:77 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Bitmap'.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/InsetDialogHost.kt:78:37 Unnecessary safe call on a non-null receiver of type 'ImageView'.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3639:69 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3639:101 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:3639:135 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4507:69 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4507:101 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ProductActivity.kt:4507:135 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/ResultIteratorLayoutExtractor.kt:67:33 Unnecessary non-null assertion (!!) on a non-null receiver of type 'BlockDraft'.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:87:33 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:89:62 Redundant call of conversion method.
+w: file:///private/tmp/docscan-dbq-0.4.280-validation/source/app/src/main/kotlin/app/docscan/android/WorkspaceHomeAdapter.kt:97:77 Redundant call of conversion method.
+
+> Task :app:compileReleaseJavaWithJavac NO-SOURCE
+> Task :app:dexBuilderRelease
+> Task :app:mergeReleaseGlobalSynthetics
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:processReleaseJavaRes
+> Task :app:mergeReleaseJavaResource
+> Task :app:mergeDexRelease
+> Task :app:compileReleaseArtProfile
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintVitalReportRelease
+> Task :app:lintVitalRelease
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect
+> Task :app:assembleRelease
+
+BUILD SUCCESSFUL in 33s
+90 actionable tasks: 49 executed, 41 up-to-date

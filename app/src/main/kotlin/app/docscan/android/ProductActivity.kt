@@ -288,6 +288,8 @@ class ProductActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        liveDetectionCoordinator.invalidate()
+        if (::documentOverlayView.isInitialized) documentOverlayView.clear()
         pageViewer?.dismiss()
         if (::dialogHost.isInitialized) dialogHost.dismissAll()
         cameraProvider?.unbindAll()
@@ -2647,7 +2649,10 @@ class ProductActivity : AppCompatActivity() {
                             if (!isDocumentMode || !::documentOverlayView.isInitialized ||
                                 frameGeneration != liveDetectionCoordinator.currentGeneration() ||
                                 isFinishing || isDestroyed) return@runOnUiThread
-                            if (!showOverlay) {
+                            // A callback may spend its entire evidence lifetime waiting for main.
+                            // An older queued callback must not clear a more recent publication.
+                            if (!liveDetectionCoordinator.isCurrent(liveState)) return@runOnUiThread
+                            if (!showOverlay || !liveDetectionCoordinator.canDisplay(liveState)) {
                                 documentOverlayView.clear()
                             } else {
                                 val targetTransform = previewView.outputTransform
@@ -2655,7 +2660,10 @@ class ProductActivity : AppCompatActivity() {
                                     try {
                                         val coordinateTransform = CoordinateTransform(sourceTransform, targetTransform)
                                         coordinateTransform.mapPoints(pointsToMap)
-                                        documentOverlayView.setPolygonPixels(pointsToMap, isHeld = isHeld)
+                                        documentOverlayView.setPolygonPixels(pointsToMap, isHeld = isHeld,
+                                            deadlineMonotonicMs = liveState.visualDeadlineMonotonicMs,
+                                            isCurrent = { isDocumentMode && !isFinishing && !isDestroyed &&
+                                                liveDetectionCoordinator.canDisplay(liveState) })
                                     } catch (transformError: Throwable) {
                                         documentOverlayView.clear()
                                         android.util.Log.w("DocScan", "CoordinateTransform mapping failed", transformError)
