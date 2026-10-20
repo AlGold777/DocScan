@@ -23,8 +23,8 @@ android {
         applicationId = "app.docscan.scanner"
         minSdk = 29
         targetSdk = 35
-        versionCode = 401
-        versionName = "0.4.282"
+        versionCode = 402
+        versionName = "0.4.283"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

@@ -247,6 +247,7 @@ class ProductActivity : AppCompatActivity() {
                 if (initialized.startupIntegrityBlocked) {
                     workspaceActionBlocked = true
                     runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
                         lockWorkspace(getString(
                             R.string.workspace_integrity_blocked,
                             initialized.startupIntegrityFindingCount,
@@ -257,6 +258,7 @@ class ProductActivity : AppCompatActivity() {
                 val projection = initialized.workspaceProjection()
                 updateRecentDocuments(initialized)
                 runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
                     status.text = when {
                         initialized.failedCommittedSaveCandidateCleanupsAtStartup > 0 ->
                             getString(R.string.local_candidate_cleanup_pending)
@@ -282,11 +284,13 @@ class ProductActivity : AppCompatActivity() {
                         initialized.resumeIncompletePdfImports((application as DocScanApplication).heavyWorkScheduler) {
                                 name, completed, total ->
                             runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
                                 status.text = getString(R.string.resuming_pdf_import, name, completed, total)
                             }
                         }
                     } catch (failure: Exception) {
                         runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
                             if (!isFinishing) recordError(getString(
                                 R.string.resume_pdf_import_failed,
                                 failure.message ?: failure.javaClass.simpleName,
@@ -298,10 +302,11 @@ class ProductActivity : AppCompatActivity() {
                         refreshed.pages.filter { it.recognizedText == null && it.artifactState == "COMMITTED" }
                             .forEach { scheduleOcr(initialized, it) }
                     }
-                    runOnUiThread { if (!isFinishing) renderPages(refreshed) }
+                    runOnUiThread { if (!isFinishing && !isDestroyed) renderPages(refreshed) }
                 }
             } catch (failure: Exception) {
                 runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
                     lockWorkspace(getString(R.string.storage_error, failure.message ?: failure.javaClass.simpleName))
                 }
             }
@@ -1177,6 +1182,17 @@ class ProductActivity : AppCompatActivity() {
             addView(ocrLangButton, matchWrap())
         }
         workspaceMenu.addView(ocrCard, LinearLayout.LayoutParams(-1, -2))
+
+        // Keep the existing confirmed action reachable from the workspace menu.
+        clearWorkspaceButton.apply {
+            background = modernButtonDrawable(normalBg = 0xFF7F1D1D.toInt(), pressedBg = 0xFF991B1B.toInt(), radiusDp = 12)
+            setTextColor(Color.WHITE)
+            isAllCaps = false
+            minHeight = dp(46)
+        }
+        workspaceMenu.addView(clearWorkspaceButton, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(12)
+        })
     }
 
     private fun updateOcrLangButtonText(target: Button? = if (::ocrLangButton.isInitialized) ocrLangButton else null) {
@@ -1385,6 +1401,7 @@ class ProductActivity : AppCompatActivity() {
     }
 
     private fun refreshDestinationGrantStatus(activeStorage: ProductStorage) {
+        if (isFinishing || isDestroyed) return
         io.execute {
             val grant = activeStorage.destinationGrant()
             if (grant == null) {
@@ -3344,12 +3361,19 @@ class ProductActivity : AppCompatActivity() {
     private fun deleteWorkspacePage(page: app.docscan.core.store.StoredPage) {
         val activeStorage = storage ?: return
         if (!beginExternalWorkflow()) return
+        val released = AtomicBoolean(false)
+        fun releaseOperation() {
+            if (released.compareAndSet(false, true)) externalWorkflowRunning.set(false)
+        }
         io.execute {
             try {
                 (application as DocScanApplication).cancelOcrForPages(listOf(page.pageId))
                 val receipt = activeStorage.deletePage(page)
                 val projection = activeStorage.workspaceProjection()
                 runOnUiThread {
+                    // The mutation is committed; Undo must be actionable as soon as it is shown.
+                    releaseOperation()
+                    setWorkspaceInteractionEnabled(true)
                     status.text = getString(R.string.page_deleted)
                     renderPages(projection)
                     Snackbar.make(dialogHost.foregroundView ?: root, R.string.page_deleted, 2_000)
@@ -3361,7 +3385,7 @@ class ProductActivity : AppCompatActivity() {
                     status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                 }
             } finally {
-                externalWorkflowRunning.set(false)
+                releaseOperation()
                 val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
                 runOnUiThread {
                     setWorkspaceInteractionEnabled(true)
@@ -3446,6 +3470,10 @@ class ProductActivity : AppCompatActivity() {
     private fun deleteSinglePage(pageId: app.docscan.core.model.PageId) {
         val activeStorage = storage ?: return
         if (!beginExternalWorkflow()) return
+        val released = AtomicBoolean(false)
+        fun releaseOperation() {
+            if (released.compareAndSet(false, true)) externalWorkflowRunning.set(false)
+        }
         io.execute {
             try {
                 val projection = activeStorage.workspaceProjection()
@@ -3454,6 +3482,9 @@ class ProductActivity : AppCompatActivity() {
                 val receipt = activeStorage.deletePages(listOf(target))
                 val refreshed = activeStorage.workspaceProjection()
                 runOnUiThread {
+                    // The mutation is committed; Undo must be actionable as soon as it is shown.
+                    releaseOperation()
+                    setWorkspaceInteractionEnabled(true)
                     status.text = getString(R.string.pages_deleted, 1)
                     renderPages(refreshed)
                     Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, 1), 2_000)
@@ -3465,7 +3496,7 @@ class ProductActivity : AppCompatActivity() {
                     status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                 }
             } finally {
-                externalWorkflowRunning.set(false)
+                releaseOperation()
                 val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
                 runOnUiThread {
                     setWorkspaceInteractionEnabled(true)
@@ -3486,6 +3517,10 @@ class ProductActivity : AppCompatActivity() {
     private fun deletePageBatch(clearAll: Boolean) {
         val activeStorage = storage ?: return
         if (!beginExternalWorkflow()) return
+        val released = AtomicBoolean(false)
+        fun releaseOperation() {
+            if (released.compareAndSet(false, true)) externalWorkflowRunning.set(false)
+        }
         io.execute {
             try {
                 val projection = activeStorage.workspaceProjection()
@@ -3498,6 +3533,9 @@ class ProductActivity : AppCompatActivity() {
                 val receipt = activeStorage.deletePages(targets)
                 val refreshed = activeStorage.workspaceProjection()
                 runOnUiThread {
+                    // The mutation is committed; Undo must be actionable as soon as it is shown.
+                    releaseOperation()
+                    setWorkspaceInteractionEnabled(true)
                     status.text = getString(R.string.pages_deleted, receipt.pageIds.size)
                     renderPages(refreshed)
                     Snackbar.make(dialogHost.foregroundView ?: root, getString(R.string.pages_deleted, receipt.pageIds.size), 2_000)
@@ -3509,7 +3547,7 @@ class ProductActivity : AppCompatActivity() {
                     status.text = getString(R.string.capture_error, failure.message ?: failure.javaClass.simpleName)
                 }
             } finally {
-                externalWorkflowRunning.set(false)
+                releaseOperation()
                 val refreshed = runCatching { activeStorage.workspaceProjection() }.getOrNull()
                 runOnUiThread {
                     setWorkspaceInteractionEnabled(true)

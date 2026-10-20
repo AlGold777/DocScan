@@ -260,3 +260,14 @@ DocScan поддерживает открытие и модификацию ра
 ### Источники камеры
 
 Защитные ссылки `CAPTURE_SOURCE` принадлежат ImageVersion съёмки и указывают на полный JPEG. Они отличаются от current/Undo ссылок производных изображений и проверяются startup-аудитом. Схема БД остаётся 13: используется существующая ArtifactReference, новых таблиц/колонок нет. GC освобождает источники после окончательной потери восстановления удалённой страницы; неопределённое/откатившееся время не уничтожает восстановимые байты.
+
+### Lifecycle and workspace actions (0.4.283)
+
+Deferred startup UI callbacks check Activity destruction before starting camera,
+requesting permissions or submitting destination refresh to its owned executor.
+The workspace menu attaches the existing confirmed Clear action; per-page deletion
+continues through the Home rail or page viewer trash, without a duplicate page list.
+
+Successful deletion releases the interaction slot before showing Undo, after the
+storage mutation has committed. Further storage operations remain serialized on
+the same IO executor; the final refresh no longer creates an inert Undo window.

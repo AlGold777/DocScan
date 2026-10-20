@@ -127,3 +127,12 @@ ABIs present. Production packages contain no ONNX model or ORT runtime.
 Details: [artifact verification](runs/validation-0.4.282/apk-artifacts.md).
 The source tag `stage-dbq-source-0.4.282` preserves the exact build source.
 This is a software delivery, not full specification acceptance.
+
+## Continued implementation — 0.4.283
+
+The previous report was intermediate. The startup-destroy regression and immediate
+batch-delete/Clear/Undo regression now pass after restoring attached Clear UI and
+fixing the operation-slot release race. The native OCR deletion scenario remains
+failing and under investigation. Separate software gaps remain in per-frame
+tracking trace, temporal/crop evaluators, thrown-error visibility and production
+PARTIAL evidence; these are not deferred as hardware-only requirements.

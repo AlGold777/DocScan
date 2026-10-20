@@ -120,3 +120,21 @@ resource budgets and final corpus are not yet qualified.
 * Final debug/release 0.4.282 built from c7852be. APK signatures, package,
   code401, aliases, ABI set and absence of production ONNX/ORT verified.
   Artifact hashes and reproducible commands are in runs/validation-0.4.282/apk-artifacts.md.
+
+## 0.4.283 — resumed software implementation
+
+The owner's status question did not cancel implementation; the previous delivery
+was an intermediate point, not completion. Phone checks remain deferred.
+
+* Restored the existing confirmed Clear action to the actual workspace menu.
+* Startup UI callbacks reject work after Activity destruction. A deterministic
+  storage-provider-latch regression passed on the explicitly selected emulator.
+* Successful deletion releases its interaction slot exactly once before exposing
+  Undo. Immediate Undo, batch metadata/order restoration, Clear Cancel and confirmed
+  Clear/Undo passed without waiting around the old inert-action race.
+* The OCR delete/cancel/undo route now uses the actual viewer trash, revealing a
+  further failing scenario that remains under investigation. No blanket green-suite
+  claim is made. External emulator overlays and harness retries remain in evidence.
+* Independent spec audit identified software work still needed: per-frame tracker
+  trace, thrown-error visibility, a producing PARTIAL policy and temporal/crop
+  metrics. These are implementation gaps, distinct from final physical gates.

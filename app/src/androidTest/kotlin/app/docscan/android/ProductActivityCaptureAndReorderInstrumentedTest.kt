@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ScrollView
 import android.widget.CheckBox
+import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.rule.GrantPermissionRule
 import app.docscan.core.model.ImageVersionId
@@ -698,6 +699,12 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             val activeScenario = requireNotNull(scenario)
             awaitCaptureReady(activeScenario)
             activeScenario.onActivity { it.renderPages(storage.workspaceProjection()) }
+            var clearDuringBatch: View? = null
+            activeScenario.onActivity { activity ->
+                clearDuringBatch = ProductActivity::class.java.getDeclaredField("clearWorkspaceButton")
+                    .apply { isAccessible = true }.get(activity) as? View
+                assertNotNull("The Activity owns the Clear control used by its menu", clearDuringBatch)
+            }
             activeScenario.onActivity { activity ->
                 val deleteSelected = findViewByTag(activity.window.decorView, "docscan-delete-selected-button")
                     ?: throw AssertionError("Delete Selected control is missing")
@@ -705,10 +712,9 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
                 assertTrue("Delete Selected control accepts a click", deleteSelected.performClick())
                 val save = findViewByTag(activity.window.decorView, "docscan-save-button")
                     ?: throw AssertionError("Save control is missing")
-                val clear = findViewByTag(activity.window.decorView, "docscan-clear-workspace-button")
-                    ?: throw AssertionError("Clear control is missing")
                 assertFalse("Save is disabled as soon as the batch mutation acquires the operation slot", save.isEnabled)
-                assertFalse("Clear is disabled while Delete owns the operation slot", clear.isEnabled)
+                assertFalse("Clear remains disabled while Delete owns the operation slot",
+                    requireNotNull(clearDuringBatch).isEnabled)
                 assertFalse("Duplicate Delete is disabled while the first batch is in flight", deleteSelected.isEnabled)
             }
             awaitCondition("Batch Delete removes only explicitly selected Pages") {
@@ -720,8 +726,10 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             val device = UiDevice.getInstance(instrumentation)
             val undoLabel = context.getString(R.string.undo_delete)
             val batchUndo = device.wait(Until.findObject(By.text(undoLabel)), 5_000L)
-            assertNotNull("Batch Delete offers one Undo action", batchUndo)
-            batchUndo!!.click()
+            assertNotNull("Batch Delete offers one Undo action; active tree=${activeWindowTextInventory(instrumentation)}",
+                batchUndo)
+            assertTrue("Batch Undo action is enabled while visible", batchUndo!!.isEnabled)
+            batchUndo.click()
             awaitCondition("Batch Undo restores all original Page identities") {
                 storage.workspaceProjection().pages.map { it.pageId } == originalPages.map { it.pageId }
             }
@@ -737,12 +745,13 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
 
             storage.setAllVisiblePagesSelected(false)
             activeScenario.onActivity { it.renderPages(storage.workspaceProjection()) }
+            openWorkspaceMenuForTest(activeScenario)
             var deleteDisabled = false
             var clearEnabled = false
             activeScenario.onActivity { activity ->
                 deleteDisabled = findViewByTag(activity.window.decorView, "docscan-delete-selected-button")
                     ?.isEnabled == false
-                clearEnabled = findViewByTag(activity.window.decorView, "docscan-clear-workspace-button")
+                clearEnabled = findViewByTag(nativeWorkspaceRoot(activity), "docscan-clear-workspace-button")
                     ?.isEnabled == true
             }
             assertTrue("Delete Selected is disabled with no explicit selection", deleteDisabled)
@@ -750,8 +759,9 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
 
             val pagesBeforeClear = storage.workspaceProjection().pages
             activeScenario.onActivity { activity ->
-                val clearButton = findViewByTag(activity.window.decorView, "docscan-clear-workspace-button")
+                val clearButton = findViewByTag(nativeWorkspaceRoot(activity), "docscan-clear-workspace-button")
                     ?: throw AssertionError("Clear Workspace control is missing")
+                assertTrue("Clear is attached to the visible workspace menu", clearButton.isAttachedToWindow && clearButton.isShown)
                 assertTrue("Clear Workspace control accepts a click", clearButton.performClick())
             }
             val cancel = device.wait(Until.findObject(By.res("android", "button2")), 5_000L)
@@ -762,8 +772,9 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             assertEquals(activeUnselected.pageId, storage.workspaceProjection().activePageId)
 
             activeScenario.onActivity { activity ->
-                val clearButton = findViewByTag(activity.window.decorView, "docscan-clear-workspace-button")
+                val clearButton = findViewByTag(nativeWorkspaceRoot(activity), "docscan-clear-workspace-button")
                     ?: throw AssertionError("Clear Workspace control is missing")
+                assertTrue("Clear is attached to the visible workspace menu", clearButton.isAttachedToWindow && clearButton.isShown)
                 assertTrue("Clear Workspace can be confirmed in a second operation", clearButton.performClick())
             }
             val confirm = device.wait(Until.findObject(By.res("android", "button1")), 5_000L)
@@ -774,7 +785,8 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             }
             val clearUndo = device.wait(Until.findObject(By.text(undoLabel)), 5_000L)
             assertNotNull("Clear offers one Undo action for the complete batch", clearUndo)
-            clearUndo!!.click()
+            assertTrue("Clear Undo action is enabled while visible", clearUndo!!.isEnabled)
+            clearUndo.click()
             awaitCondition("Clear Undo restores the full Page order") {
                 storage.workspaceProjection().pages.map { it.pageId } == pagesBeforeClear.map { it.pageId }
             }
@@ -836,26 +848,29 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             val activeScenario = requireNotNull(scenario)
             awaitCaptureReady(activeScenario)
             assertTrue("The first Page reaches native OCR progress", firstOcrProgress.await(90, TimeUnit.SECONDS))
-            openWorkspaceMenuForTest(activeScenario)
             val device = UiDevice.getInstance(instrumentation)
+            storage.setActivePage(deletingPage.pageId)
+            activeScenario.onActivity { it.renderPages(storage.workspaceProjection()) }
+            val pageThumbnailTag = WorkspaceHomeAdapter.HOME_THUMBNAIL_TAG_PREFIX + deletingPage.pageId.value
             activeScenario.onActivity { activity ->
-                val delete = findViewByTag(
-                    nativeWorkspaceRoot(activity),
-                    ProductActivity.WORKSPACE_PAGE_DELETE_BUTTON_TAG_PREFIX + deletingPage.pageId.value,
-                ) ?: throw AssertionError("Direct Delete action for the OCR Page is missing")
-                assertTrue(delete.isEnabled)
-                assertTrue(delete.performClick())
+                val thumbnail = findViewByTag(activity.window.decorView, pageThumbnailTag)
+                    ?: throw AssertionError("The OCR Page must be attached to the visible Home rail")
+                assertTrue("Home thumbnail is attached and shown", thumbnail.isAttachedToWindow && thumbnail.isShown)
+                assertTrue("Active Home thumbnail opens its viewer", thumbnail.performClick())
             }
-            awaitCondition("Delete removes the targeted Page while native OCR is held") {
-                storage.workspaceProjection().pages.map { it.pageId } == listOf(survivingPage.pageId, queuedPage.pageId)
-            }
+            assertTrue("The viewer exposes its attached per-Page Delete action",
+                device.wait(Until.hasObject(By.desc(context.getString(R.string.delete_page))), 5_000L))
+            device.findObject(By.desc(context.getString(R.string.delete_page))).click()
+            awaitPageDeleteWithDiagnostics(activeScenario, storage, listOf(survivingPage.pageId, queuedPage.pageId))
             assertTrue("Undo remains available while source bytes remain retained",
                 storage.artifactPath(deletingPage.artifactRelativePath).toFile().isFile)
             awaitCondition("Direct Delete offers Undo") {
                 device.wait(Until.hasObject(By.text(context.getString(R.string.undo_delete))), 100L)
             }
             nextProgressGate.set(clearOcrProgress to clearOcrContinue)
-            device.findObject(By.text(context.getString(R.string.undo_delete))).click()
+            val directUndo = device.findObject(By.text(context.getString(R.string.undo_delete)))
+            assertTrue("Direct Delete Undo action is enabled while visible", directUndo.isEnabled)
+            directUndo.click()
             awaitCondition("Undo restores the deleted Page") {
                 storage.workspaceProjection().pages.any { it.pageId == deletingPage.pageId }
             }
@@ -863,9 +878,11 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             assertTrue("Queued OCR for a surviving Page begins after the deleted Page is canceled",
                 clearOcrProgress.await(90, TimeUnit.SECONDS))
 
+            openWorkspaceMenuForTest(activeScenario)
             activeScenario.onActivity { activity ->
-                val clear = findViewByTag(activity.window.decorView, "docscan-clear-workspace-button")
+                val clear = findViewByTag(nativeWorkspaceRoot(activity), "docscan-clear-workspace-button")
                     ?: throw AssertionError("Clear control is missing")
+                assertTrue("Clear is attached to the visible workspace menu", clear.isAttachedToWindow && clear.isShown)
                 assertTrue(clear.isEnabled)
                 assertTrue(clear.performClick())
             }
@@ -887,7 +904,9 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
             awaitCondition("Clear offers one Undo action") {
                 device.wait(Until.hasObject(By.text(context.getString(R.string.undo_delete))), 100L)
             }
-            device.findObject(By.text(context.getString(R.string.undo_delete))).click()
+            val clearUndo = device.findObject(By.text(context.getString(R.string.undo_delete)))
+            assertTrue("Clear Undo action is enabled while visible", clearUndo.isEnabled)
+            clearUndo.click()
             awaitCondition("Clear Undo restores the workspace and restarts OCR for its Pages") {
                 val restored = storage.workspaceProjection().pages.associateBy { it.pageId }
                 restored.keys == fixtures.map { it.pageId }.toSet()
@@ -1289,6 +1308,23 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
         return null
     }
 
+    private fun activeWindowTextInventory(instrumentation: Instrumentation): String {
+        val root = instrumentation.uiAutomation.rootInActiveWindow ?: return "<no active accessibility window>"
+        val entries = mutableListOf<String>()
+        fun visit(node: AccessibilityNodeInfo) {
+            val text = node.text?.toString()?.trim().orEmpty()
+            val description = node.contentDescription?.toString()?.trim().orEmpty()
+            if (text.isNotEmpty() || description.isNotEmpty()) {
+                val bounds = android.graphics.Rect().also(node::getBoundsInScreen)
+                entries += "${node.className} text=$text desc=$description visible=${node.isVisibleToUser} bounds=$bounds"
+            }
+            for (index in 0 until node.childCount) node.getChild(index)?.let(::visit)
+        }
+        visit(root)
+        root.recycle()
+        return entries.joinToString(" | ")
+    }
+
     private fun findViewerView(activity: ProductActivity, tag: String): View? {
         val dialogField = ProductActivity::class.java.getDeclaredField("pageViewer").apply { isAccessible = true }
         val dialog = dialogField.get(activity) as? androidx.appcompat.app.AlertDialog ?: return null
@@ -1322,4 +1358,37 @@ class ProductActivityCaptureAndReorderInstrumentedTest {
         }
         throw AssertionError(description)
     }
+
+    private fun awaitPageDeleteWithDiagnostics(
+        scenario: ActivityScenario<ProductActivity>,
+        storage: ProductStorage,
+        expectedPageIds: List<app.docscan.core.model.PageId>,
+    ) {
+        val deadline = SystemClock.uptimeMillis() + 15_000L
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (storage.workspaceProjection().pages.map { it.pageId } == expectedPageIds) return
+            SystemClock.sleep(50L)
+        }
+        var activityState = "<activity unavailable>"
+        scenario.onActivity { activity ->
+            val busy = ProductActivity::class.java.getDeclaredField("externalWorkflowRunning")
+                .apply { isAccessible = true }.get(activity) as AtomicBoolean
+            val blocked = ProductActivity::class.java.getDeclaredField("workspaceActionBlocked")
+                .apply { isAccessible = true }.getBoolean(activity)
+            val status = ProductActivity::class.java.getDeclaredField("status")
+                .apply { isAccessible = true }.get(activity) as TextView
+            activityState = "busy=${busy.get()} blocked=$blocked status=${status.text}"
+        }
+        val threadDump = Thread.getAllStackTraces().entries
+            .sortedBy { it.key.name }
+            .joinToString("\n") { (thread, trace) ->
+                "${thread.name} [${thread.state}]\n" + trace.take(10).joinToString("\n") { "  at $it" }
+            }
+        throw AssertionError(
+            "Delete did not remove target under native OCR hold; " +
+                "pageIds=${storage.workspaceProjection().pages.map { it.pageId }}; " +
+                "$activityState\nthreads:\n$threadDump",
+        )
+    }
+
 }

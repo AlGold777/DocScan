@@ -9,9 +9,12 @@ import java.io.File
 import java.lang.reflect.Field
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -21,6 +24,77 @@ import org.junit.runner.RunWith
 /** Exercises the real Activity destroy path while its serialized pipeline lazy initializer is in flight. */
 @RunWith(AndroidJUnit4::class)
 class DocumentBoundaryLifecycleInstrumentedTest {
+    @Test
+    fun delayedStartupUiCallbackDoesNotSubmitDestinationWorkAfterDestroy() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val app = context.applicationContext as DocScanApplication
+        val hadCameraPermission = context.checkSelfPermission(Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        val suffix = System.nanoTime().toString()
+        val databaseName = "dbq-startup-lifecycle-$suffix.db"
+        val artifactDirectory = "dbq-startup-lifecycle-$suffix"
+        val storage = ProductStorage(context, databaseName, artifactDirectory)
+        val previousOverride = app.productStorageOverrideForTest
+        val previousProvider = app.productStorageProviderForTest
+        val providerEntered = CountDownLatch(1)
+        val releaseProvider = CountDownLatch(1)
+        val postDestroyIo = RecordingExecutorService()
+        var scenario: ActivityScenario<ProductActivity>? = null
+        var originalIo: ExecutorService? = null
+
+        try {
+            app.productStorageOverrideForTest = null
+            app.productStorageProviderForTest = {
+                providerEntered.countDown()
+                check(releaseProvider.await(10, TimeUnit.SECONDS)) { "Test did not release startup storage provider" }
+                storage
+            }
+            if (hadCameraPermission) {
+                instrumentation.uiAutomation.revokeRuntimePermission(context.packageName, Manifest.permission.CAMERA)
+            }
+
+            scenario = ActivityScenario.launch(ProductActivity::class.java)
+            assertTrue("Startup reaches the controlled storage provider", providerEntered.await(10, TimeUnit.SECONDS))
+            val activeScenario = requireNotNull(scenario)
+            activeScenario.onActivity { activity ->
+                originalIo = reflectedField(activity, "io") as ExecutorService
+                // The startup provider is holding the original executor's only task. Replace the
+                // Activity's destination-work executor with a recorder before destroying it.
+                ProductActivity::class.java.getDeclaredField("io").apply { isAccessible = true }
+                    .set(activity, postDestroyIo)
+            }
+
+            activeScenario.close()
+            scenario = null
+            assertTrue("onDestroy shuts down the Activity-owned replacement executor", postDestroyIo.isShutdown)
+            requireNotNull(originalIo).shutdown()
+            releaseProvider.countDown()
+            assertTrue("The held startup I/O task drains after provider release",
+                requireNotNull(originalIo).awaitTermination(10, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+
+            assertEquals("A destroyed Activity must not submit SAF grant work from delayed startup UI", 0,
+                postDestroyIo.executeCount.get())
+            assertTrue("Camera permission remains revoked; delayed startup did not launch the permission flow",
+                context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
+        } finally {
+            releaseProvider.countDown()
+            runCatching { scenario?.close() }
+            originalIo?.shutdownNow()
+            app.productStorageProviderForTest = previousProvider
+            app.productStorageOverrideForTest = previousOverride
+            storage.close()
+            context.deleteDatabase(databaseName)
+            context.noBackupFilesDir.resolve(artifactDirectory).deleteRecursively()
+            if (hadCameraPermission) {
+                runCatching {
+                    instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.CAMERA)
+                }
+            }
+        }
+    }
+
     @Test
     fun destroyQueuesPipelineCloseBehindAnInFlightLazyInitialization() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -153,6 +227,22 @@ class DocumentBoundaryLifecycleInstrumentedTest {
     }
 
     private fun writerOf(owner: Any): ExecutorService = reflectedField(owner, "writer") as ExecutorService
+
+    private class RecordingExecutorService : AbstractExecutorService() {
+        val executeCount = AtomicInteger()
+        @Volatile private var stopped = false
+
+        override fun execute(command: Runnable) {
+            executeCount.incrementAndGet()
+            command.run()
+        }
+
+        override fun shutdown() { stopped = true }
+        override fun shutdownNow(): MutableList<Runnable> { stopped = true; return mutableListOf() }
+        override fun isShutdown(): Boolean = stopped
+        override fun isTerminated(): Boolean = stopped
+        override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = stopped
+    }
 
     private fun awaitShutdownDecision(executor: ExecutorService) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
